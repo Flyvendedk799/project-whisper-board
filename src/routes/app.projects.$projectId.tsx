@@ -138,7 +138,7 @@ function ProjectPage() {
               <Card className="divide-y">
                 {milestones.data!.map((m) => (
                   <div key={m.id} className="flex items-center gap-3 p-4">
-                    <StatusPill tone={m.status === "completed" ? "success" : m.status === "in_progress" ? "info" : "default"}>{m.status.replace("_", " ")}</StatusPill>
+                    <StatusPill tone={m.status === "done" ? "success" : m.status === "in_progress" ? "info" : "default"}>{m.status.replace("_", " ")}</StatusPill>
                     <span className="flex-1">{m.title}</span>
                     {m.due_date && <span className="text-xs text-muted-foreground">due {m.due_date}</span>}
                   </div>
@@ -219,7 +219,7 @@ function NewTicketButton({ projectId, reporterId, onCreated }: { projectId: stri
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState<"bug" | "feature" | "question" | "feedback" | "change">("bug");
+  const [type, setType] = useState<"bug" | "feature" | "question" | "feedback" | "change_request">("bug");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [busy, setBusy] = useState(false);
@@ -280,7 +280,7 @@ function NewTicketButton({ projectId, reporterId, onCreated }: { projectId: stri
                   <SelectItem value="feature">Feature</SelectItem>
                   <SelectItem value="question">Question</SelectItem>
                   <SelectItem value="feedback">Feedback</SelectItem>
-                  <SelectItem value="change">Change</SelectItem>
+                  <SelectItem value="change_request">Change</SelectItem>
                 </SelectContent>
               </Select>
             </div>
