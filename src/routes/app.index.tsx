@@ -35,8 +35,7 @@ function Home() {
       const { data, error } = await supabase
         .from("tickets")
         .select("id,title,status,priority,project_id,updated_at")
-        .neq("status", "done")
-        .neq("status", "closed")
+        .not("status", "in", "(done,wont_fix)")
         .order("updated_at", { ascending: false })
         .limit(8);
       if (error) throw error;
