@@ -75,9 +75,23 @@ function LoginPage() {
             {busy ? "..." : mode === "password" ? "Sign in" : "Send magic link"}
           </Button>
         </form>
-        <p className="text-center text-sm text-muted-foreground">
-          New here? <Link to="/signup" className="text-primary underline">Create an account</Link>
-        </p>
+        <div className="text-center text-sm text-muted-foreground space-y-1">
+          <p>New here? <Link to="/signup" className="text-primary underline">Create an account</Link></p>
+          <p>
+            <button
+              type="button"
+              className="text-primary underline"
+              onClick={async () => {
+                if (!email) return toast.error("Enter your email first");
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/reset-password`,
+                });
+                if (error) return toast.error(error.message);
+                toast.success("Password reset email sent");
+              }}
+            >Forgot password?</button>
+          </p>
+        </div>
       </Card>
     </div>
   );
