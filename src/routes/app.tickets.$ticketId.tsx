@@ -260,6 +260,36 @@ function AISummaryButton({ ticketId, onDone }: { ticketId: string; onDone: () =>
   );
 }
 
+function AutoTriageButton({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const fn = useServerFn(autoTriageTicket);
+  return (
+    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { const r = await fn({ data: { ticketId } }); toast.success(`Suggests: ${r.type} / ${r.priority}`); onDone(); }
+      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    }}>
+      <Wand2 className="h-4 w-4 mr-1.5" />{busy ? "Triaging…" : "Auto-triage"}
+    </Button>
+  );
+}
+
+function ScreenshotAIButton({ ticketId, attachments, onDone }: { ticketId: string; attachments: any[]; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const fn = useServerFn(analyzeScreenshot);
+  const firstImage = attachments.find((a) => a.mime_type?.startsWith("image/"));
+  if (!firstImage) return null;
+  return (
+    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { await fn({ data: { ticketId, attachmentId: firstImage.id } }); toast.success("Analyzed"); onDone(); }
+      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    }}>
+      <ImageIcon className="h-4 w-4 mr-1.5" />{busy ? "Analyzing…" : "Analyze screenshot"}
+    </Button>
+  );
+}
+
 function AttachmentTile({ att }: { att: any }) {
   const [url, setUrl] = useState<string | null>(null);
   const sign = useServerFn(signedAttachmentUrl);
