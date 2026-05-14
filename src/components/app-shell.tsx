@@ -1,8 +1,10 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { FolderKanban, Inbox, Settings, LogOut, Home, Sparkles } from "lucide-react";
+import { FolderKanban, Inbox, Settings, LogOut, Home, Sparkles, Bell } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
