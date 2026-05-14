@@ -13,7 +13,7 @@ import { Sparkles, Wand2, ArrowLeft, Image as ImageIcon, Video, FileText } from 
 import { toast } from "sonner";
 import { TicketAttachmentsField, type DraftAttachment } from "@/components/ticket-attachments-field";
 import { signedAttachmentUrl } from "@/lib/admin.functions";
-import { summarizeTicket, draftReply } from "@/lib/ai.functions";
+import { summarizeTicket, draftReply, autoTriageTicket, analyzeScreenshot } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   component: TicketPage,
@@ -173,6 +173,14 @@ function TicketPage() {
                 </Select>
               </div>
               <AISummaryButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              <AutoTriageButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              <ScreenshotAIButton ticketId={ticketId} attachments={attachments.data ?? []} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              {t.ai_screenshot_analysis && (
+                <div className="text-xs text-muted-foreground border-l-2 border-primary/40 pl-2 italic">{t.ai_screenshot_analysis}</div>
+              )}
+              {t.ai_suggested_type && (
+                <div className="text-xs text-muted-foreground">AI suggests: <b>{t.ai_suggested_type}</b> · <b>{t.ai_suggested_priority}</b></div>
+              )}
             </Card>
           )}
         </aside>
