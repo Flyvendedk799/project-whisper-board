@@ -17,6 +17,9 @@ import { Plus, UserPlus, Paperclip, Video } from "lucide-react";
 import { toast } from "sonner";
 import { TicketAttachmentsField, type DraftAttachment } from "@/components/ticket-attachments-field";
 import { inviteClient } from "@/lib/admin.functions";
+import { MeetingsTab } from "@/components/meetings-tab";
+import { UpdatesTab } from "@/components/updates-tab";
+import { BillingTab } from "@/components/billing-tab";
 
 export const Route = createFileRoute("/app/projects/$projectId")({
   component: ProjectPage,
@@ -109,7 +112,10 @@ function ProjectPage() {
         <Tabs defaultValue="tickets">
           <TabsList>
             <TabsTrigger value="tickets">Tickets ({tickets.data?.length ?? 0})</TabsTrigger>
+            <TabsTrigger value="updates">Updates</TabsTrigger>
+            <TabsTrigger value="meetings">Meetings</TabsTrigger>
             <TabsTrigger value="milestones">Milestones</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
             <TabsTrigger value="people">People</TabsTrigger>
           </TabsList>
 
@@ -130,6 +136,9 @@ function ProjectPage() {
             )}
           </TabsContent>
 
+          <TabsContent value="updates" className="mt-6"><UpdatesTab projectId={projectId} /></TabsContent>
+          <TabsContent value="meetings" className="mt-6"><MeetingsTab projectId={projectId} /></TabsContent>
+
           <TabsContent value="milestones" className="mt-6 space-y-3">
             {isAdmin && <NewMilestoneRow projectId={projectId} onCreated={() => qc.invalidateQueries({ queryKey: ["milestones", projectId] })} />}
             {(milestones.data?.length ?? 0) === 0 ? (
@@ -146,6 +155,8 @@ function ProjectPage() {
               </Card>
             )}
           </TabsContent>
+
+          <TabsContent value="billing" className="mt-6"><BillingTab projectId={projectId} currency={p.currency} /></TabsContent>
 
           <TabsContent value="people" className="mt-6">
             <Card className="divide-y">

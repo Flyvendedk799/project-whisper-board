@@ -1,8 +1,10 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { FolderKanban, Inbox, Settings, LogOut, Home, Sparkles } from "lucide-react";
+import { FolderKanban, Inbox, Settings, LogOut, Home, Sparkles, Bell } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -63,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function PageHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+export function PageHeader({ title, description, action }: { title: string; description?: any; action?: React.ReactNode }) {
   return (
     <div className="border-b bg-background/60 backdrop-blur sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-8 py-6 flex items-end justify-between gap-4">
@@ -71,9 +73,38 @@ export function PageHeader({ title, description, action }: { title: string; desc
           <h1 className="font-display text-3xl">{title}</h1>
           {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
         </div>
-        {action}
+        <div className="flex items-center gap-2">
+          {action}
+          <NotificationBell />
+        </div>
       </div>
     </div>
+  );
+}
+
+function NotificationBell() {
+  const { user } = useAuth();
+  const { data } = useQuery({
+    queryKey: ["notif-count", user?.id],
+    enabled: !!user,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .is("read_at", null);
+      return count ?? 0;
+    },
+  });
+  return (
+    <Button variant="ghost" size="icon" asChild className="relative">
+      <Link to="/app/inbox">
+        <Bell className="h-4 w-4" />
+        {(data ?? 0) > 0 && (
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
+        )}
+      </Link>
+    </Button>
   );
 }
 

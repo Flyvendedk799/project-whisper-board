@@ -13,7 +13,7 @@ import { Sparkles, Wand2, ArrowLeft, Image as ImageIcon, Video, FileText } from 
 import { toast } from "sonner";
 import { TicketAttachmentsField, type DraftAttachment } from "@/components/ticket-attachments-field";
 import { signedAttachmentUrl } from "@/lib/admin.functions";
-import { summarizeTicket, draftReply } from "@/lib/ai.functions";
+import { summarizeTicket, draftReply, autoTriageTicket, analyzeScreenshot } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   component: TicketPage,
@@ -173,6 +173,14 @@ function TicketPage() {
                 </Select>
               </div>
               <AISummaryButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              <AutoTriageButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              <ScreenshotAIButton ticketId={ticketId} attachments={attachments.data ?? []} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
+              {t.ai_screenshot_analysis && (
+                <div className="text-xs text-muted-foreground border-l-2 border-primary/40 pl-2 italic">{t.ai_screenshot_analysis}</div>
+              )}
+              {t.ai_suggested_type && (
+                <div className="text-xs text-muted-foreground">AI suggests: <b>{t.ai_suggested_type}</b> · <b>{t.ai_suggested_priority}</b></div>
+              )}
             </Card>
           )}
         </aside>
@@ -248,6 +256,36 @@ function AISummaryButton({ ticketId, onDone }: { ticketId: string; onDone: () =>
       } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
     }}>
       <Sparkles className="h-4 w-4 mr-1.5" />{busy ? "Summarizing…" : "Summarize thread"}
+    </Button>
+  );
+}
+
+function AutoTriageButton({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const fn = useServerFn(autoTriageTicket);
+  return (
+    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { const r = await fn({ data: { ticketId } }); toast.success(`Suggests: ${r.type} / ${r.priority}`); onDone(); }
+      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    }}>
+      <Wand2 className="h-4 w-4 mr-1.5" />{busy ? "Triaging…" : "Auto-triage"}
+    </Button>
+  );
+}
+
+function ScreenshotAIButton({ ticketId, attachments, onDone }: { ticketId: string; attachments: any[]; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const fn = useServerFn(analyzeScreenshot);
+  const firstImage = attachments.find((a) => a.mime_type?.startsWith("image/"));
+  if (!firstImage) return null;
+  return (
+    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { await fn({ data: { ticketId, attachmentId: firstImage.id } }); toast.success("Analyzed"); onDone(); }
+      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    }}>
+      <ImageIcon className="h-4 w-4 mr-1.5" />{busy ? "Analyzing…" : "Analyze screenshot"}
     </Button>
   );
 }
