@@ -79,7 +79,7 @@ export function OnboardingWizard() {
       reporter_id: user.id,
       title: ticketTitle,
       description: ticketDesc || null,
-      type: "task",
+      type: "feature",
       priority: "medium",
     });
     setBusy(false);
