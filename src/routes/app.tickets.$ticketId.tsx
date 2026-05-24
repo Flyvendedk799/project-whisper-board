@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { TicketAttachmentsField, type DraftAttachment } from "@/components/ticket-attachments-field";
 import { signedAttachmentUrl } from "@/lib/admin.functions";
 import { summarizeTicket, draftReply, autoTriageTicket, analyzeScreenshot } from "@/lib/ai.functions";
+import { notifyTicketComment } from "@/lib/notifications.functions";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   component: TicketPage,
@@ -96,7 +97,7 @@ function TicketPage() {
           </Button>
         }
       />
-      <div className="max-w-6xl mx-auto px-8 py-8 grid lg:grid-cols-[1fr_280px] gap-8">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-8 grid lg:grid-cols-[1fr_280px] gap-6 md:gap-8">
         <div className="space-y-6 min-w-0">
           <Card className="p-5">
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -195,6 +196,7 @@ function CommentBox({ ticketId, authorId, isAdmin, onSent }: { ticketId: string;
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const draftReplyFn = useServerFn(draftReply);
+  const notify = useServerFn(notifyTicketComment);
 
   async function send() {
     if (!body.trim() && drafts.length === 0) return;
@@ -211,6 +213,9 @@ function CommentBox({ ticketId, authorId, isAdmin, onSent }: { ticketId: string;
         ticket_id: ticketId, uploader_id: authorId, storage_bucket: d.bucket, storage_path: path,
         file_name: d.file.name, mime_type: d.file.type, size_bytes: d.file.size, is_recording: d.bucket === "recordings",
       });
+    }
+    if (!internal) {
+      notify({ data: { ticketId } }).catch(() => {});
     }
     setBody(""); setDrafts([]); setInternal(false); setBusy(false); onSent();
   }

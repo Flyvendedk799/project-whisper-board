@@ -39,7 +39,7 @@ function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" description="Your profile and account." />
-      <div className="max-w-2xl mx-auto px-8 py-10 space-y-6">
+      <div className="max-w-2xl mx-auto px-4 md:px-8 py-8 md:py-10 space-y-6">
         <Card className="p-6 space-y-4">
           <h3 className="font-display text-xl">Profile</h3>
           <div className="space-y-2"><Label>Email</Label><Input value={user?.email ?? ""} disabled /></div>

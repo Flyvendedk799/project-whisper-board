@@ -57,19 +57,29 @@ function ProjectsPage() {
           )
         }
       />
-      <div className="max-w-6xl mx-auto px-8 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-10">
         {projects.isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <Card key={i} className="p-5 h-32 animate-pulse" />)}
+          </div>
         ) : (projects.data?.length ?? 0) === 0 ? (
-          <Card className="p-12 text-center">
+          <Card className="p-10 md:p-12 text-center">
             <h3 className="font-display text-2xl">No projects yet</h3>
-            <p className="text-sm text-muted-foreground mt-2">{isAdmin ? "Create your first project to start tracking work." : "You haven't been added to any project yet."}</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">{isAdmin ? "Create your first project to start tracking work, tickets, and milestones." : "You haven't been added to any project yet. Your provider will invite you soon."}</p>
+            {isAdmin && (
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button className="mt-5"><Plus className="h-4 w-4 mr-1.5" />Create your first project</Button>
+                </DialogTrigger>
+                <NewProjectDialog onCreated={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["projects-all"] }); qc.invalidateQueries({ queryKey: ["projects"] }); }} />
+              </Dialog>
+            )}
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.data!.map((p) => (
               <Link key={p.id} to="/app/projects/$projectId" params={{ projectId: p.id }}>
-                <Card className="p-5 h-full hover:border-foreground/20 transition-colors">
+                <Card className="p-5 h-full hover:border-foreground/20 hover:shadow-sm transition-all">
                   <div className="flex items-center justify-between mb-2">
                     <StatusPill>{p.status.replace("_", " ")}</StatusPill>
                     <span className="text-xs text-muted-foreground">{p.progress}%</span>

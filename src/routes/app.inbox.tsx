@@ -36,7 +36,7 @@ function Inbox() {
   return (
     <>
       <PageHeader title="Inbox" description="Notifications and updates across your projects." />
-      <div className="max-w-3xl mx-auto px-8 py-10">
+      <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 md:py-10">
         {(notifs.data?.length ?? 0) === 0 ? (
           <Card className="p-12 text-center">
             <Bell className="h-8 w-8 mx-auto text-muted-foreground" />
