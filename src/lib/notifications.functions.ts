@@ -41,7 +41,7 @@ export const notifyTicketComment = createServerFn({ method: "POST" })
 
     const rows = Array.from(recipientSet).map((uid) => ({
       user_id: uid,
-      kind: "ticket_comment" as const,
+      kind: "comment" as const,
       title: `${authorLabel} replied`,
       body: `On "${t.title}"`,
       link: `/app/tickets/${t.id}`,
