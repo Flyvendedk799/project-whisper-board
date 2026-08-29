@@ -73,4 +73,4 @@ jobs:
 
       - name: Run schema assertions
         if: steps.changed.outputs.run == 'true'
-        run: supabase db execute --local --file supabase/tests/schema_assertions.sql
+        run: psql "$(supabase status -o env | grep DB_URL | cut -d= -f2- | tr -d '\"')" -v ON_ERROR_STOP=1 -f supabase/tests/schema_assertions.sql
