@@ -1,6 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
 import { AppError, DataError } from "@/lib/errors";
 import { captureError } from "@/lib/providers";
+import { insertAttachment, removeStorageObject, uploadToStorage } from "@/data/mutations";
 import type { TicketAttachment } from "@/data/types";
 
 /**
@@ -89,7 +89,7 @@ export function slugifyFileName(name: string): string {
   return (
     trimmed
       .normalize("NFKD")
-      .replace(/[^\w.\-]+/g, "-")
+      .replace(/[^\w.-]+/g, "-")
       .replace(/-{2,}/g, "-")
       .replace(/^[-.]+/, "")
       .toLowerCase() || "file"
@@ -139,43 +139,37 @@ export async function uploadDrafts(
 
     const path = attachmentPath(userId, ticketId, draft.file.name);
 
-    const { error: uploadError } = await supabase.storage
-      .from(draft.bucket)
-      .upload(path, draft.file, { contentType: draft.file.type || "application/octet-stream" });
+    const { error: uploadError } = await uploadToStorage(draft.bucket, path, draft.file);
 
     if (uploadError) {
       failed.push({ name: draft.file.name, reason: uploadError.message });
       return;
     }
 
-    const { data, error: insertError } = await supabase
-      .from("ticket_attachments")
-      .insert({
-        ticket_id: ticketId,
-        uploader_id: userId,
-        storage_bucket: draft.bucket,
-        storage_path: path,
-        file_name: draft.file.name,
-        mime_type: draft.file.type || null,
-        size_bytes: draft.file.size,
-        is_recording: draft.bucket === "recordings",
-        kind: draft.kind,
-        annotations: (draft.annotations ?? null) as never,
-        width: draft.width ?? null,
-        height: draft.height ?? null,
-        duration_ms: draft.durationMs ?? null,
-        has_audio: draft.hasAudio ?? null,
-        source_attachment_id: draft.sourceDraftId
-          ? (rowIdByDraftId.get(draft.sourceDraftId) ?? null)
-          : null,
-      })
-      .select("*")
-      .single();
+    const { data, error: insertError } = await insertAttachment({
+      ticket_id: ticketId,
+      uploader_id: userId,
+      storage_bucket: draft.bucket,
+      storage_path: path,
+      file_name: draft.file.name,
+      mime_type: draft.file.type || null,
+      size_bytes: draft.file.size,
+      is_recording: draft.bucket === "recordings",
+      kind: draft.kind,
+      annotations: (draft.annotations ?? null) as never,
+      width: draft.width ?? null,
+      height: draft.height ?? null,
+      duration_ms: draft.durationMs ?? null,
+      has_audio: draft.hasAudio ?? null,
+      source_attachment_id: draft.sourceDraftId
+        ? (rowIdByDraftId.get(draft.sourceDraftId) ?? null)
+        : null,
+    });
 
     if (insertError || !data) {
       // The file is in the bucket but nothing references it. Take it back out
       // rather than leaving an orphan nobody can find or delete.
-      const { error: cleanupError } = await supabase.storage.from(draft.bucket).remove([path]);
+      const { error: cleanupError } = await removeStorageObject(draft.bucket, [path]);
       if (cleanupError) {
         captureError(new DataError("storage.remove", cleanupError), {
           scope: "upload",

@@ -90,6 +90,7 @@ export function installClientDiagnostics(): () => void {
   installed = true;
 
   const originalConsole = {
+    // eslint-disable-next-line no-console -- capturing the original to restore it
     log: console.log.bind(console),
     warn: console.warn.bind(console),
     error: console.error.bind(console),
@@ -144,6 +145,7 @@ export function installClientDiagnostics(): () => void {
   };
 
   return () => {
+    // eslint-disable-next-line no-console -- restoring what we replaced
     console.log = originalConsole.log;
     console.warn = originalConsole.warn;
     console.error = originalConsole.error;

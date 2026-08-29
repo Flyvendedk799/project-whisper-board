@@ -1,93 +1,138 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { Card } from "@/components/ui/card";
+import { Megaphone, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { EmptyState, StatusPill } from "@/components/app-shell";
+import { QueryState } from "@/components/query-state";
+import { useAuth } from "@/components/auth-provider";
+import { useServerAction } from "@/lib/use-server-action";
 import { postUpdate } from "@/lib/meetings.functions";
+import { projectUpdatesQuery } from "@/data/projects";
+import { qk } from "@/data/keys";
+import { UPDATE_KIND_LABEL } from "@/data/enums";
+import { formatRelative, initials } from "@/lib/utils-format";
 
+/**
+ * The project's activity feed.
+ *
+ * It used to contain only what the owner remembered to write. Now milestones,
+ * quotes, invoices and meetings post themselves from the database, so a client
+ * checking in sees progress without anyone having to narrate it.
+ */
 export function UpdatesTab({ projectId }: { projectId: string }) {
   const { isAdmin } = useAuth();
-  const qc = useQueryClient();
-  const updates = useQuery({
-    queryKey: ["updates", projectId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("project_updates")
-        .select("*,author:author_id(full_name,email)")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as any[];
+  const updates = useQuery(projectUpdatesQuery(projectId));
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+
+  const post = useServerAction(useServerFn(postUpdate), {
+    label: "updates.post",
+    success: "Posted",
+    invalidate: [qk.projectUpdates(projectId)],
+    onSuccess: () => {
+      setTitle("");
+      setBody("");
     },
   });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["updates", projectId] });
 
   return (
     <div className="space-y-4">
-      {isAdmin && <NewUpdateForm projectId={projectId} onPosted={refresh} />}
-      {(updates.data?.length ?? 0) === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          No updates posted yet.
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {updates.data!.map((u) => (
-            <Card key={u.id} className="p-5">
-              <div className="text-xs text-muted-foreground mb-1">
-                {u.author?.full_name ?? u.author?.email ?? "System"} ·{" "}
-                {new Date(u.created_at).toLocaleString()}
+      {isAdmin && (
+        <Card className="p-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              post.fire({ projectId, title: title.trim(), body: body.trim() || undefined });
+            }}
+            className="space-y-3"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="update-title">Post an update</Label>
+              <Input
+                id="update-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Shipped the new checkout"
+              />
+            </div>
+            {title && (
+              <div className="space-y-1.5">
+                <Label htmlFor="update-body" className="sr-only">
+                  Details
+                </Label>
+                <Textarea
+                  id="update-body"
+                  rows={3}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Anything worth adding."
+                />
               </div>
-              {u.title && <h4 className="font-medium">{u.title}</h4>}
-              {u.body && <p className="text-sm mt-2 whitespace-pre-wrap">{u.body}</p>}
-            </Card>
-          ))}
-        </div>
+            )}
+            <Button type="submit" size="sm" disabled={post.busy || !title.trim()}>
+              <Send className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {post.busy ? "Posting…" : "Post"}
+            </Button>
+          </form>
+        </Card>
       )}
+
+      <QueryState
+        query={updates}
+        errorTitle="Couldn't load the feed"
+        empty={
+          <Card>
+            <EmptyState
+              icon={Megaphone}
+              title="Nothing yet"
+              description={
+                isAdmin
+                  ? "Milestones, quotes and payments post here on their own. Anything else, write it above."
+                  : "Progress on this project will show up here."
+              }
+            />
+          </Card>
+        }
+      >
+        {(data) => (
+          <ol className="space-y-3">
+            {data.map((update) => (
+              <li key={update.id}>
+                <Card className="p-4">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span
+                      className="grid h-6 w-6 place-items-center rounded-full bg-accent text-[10px]"
+                      aria-hidden="true"
+                    >
+                      {update.author
+                        ? initials(update.author.full_name ?? update.author.email)
+                        : "•"}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {update.author?.full_name ?? update.author?.email ?? "Consflow"}
+                    </span>
+                    <span>{UPDATE_KIND_LABEL[update.kind]}</span>
+                    <span aria-hidden="true">·</span>
+                    <time dateTime={update.created_at}>{formatRelative(update.created_at)}</time>
+                    {update.kind !== "post" && <StatusPill>Automatic</StatusPill>}
+                  </div>
+                  {update.title && <h3 className="font-medium">{update.title}</h3>}
+                  {update.body && (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {update.body}
+                    </p>
+                  )}
+                </Card>
+              </li>
+            ))}
+          </ol>
+        )}
+      </QueryState>
     </div>
-  );
-}
-
-function NewUpdateForm({ projectId, onPosted }: { projectId: string; onPosted: () => void }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const post = useServerFn(postUpdate);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) return;
-    setBusy(true);
-    try {
-      await post({ data: { projectId, title, body: body || undefined } });
-      toast.success("Update posted");
-      setTitle("");
-      setBody("");
-      onPosted();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form onSubmit={submit} className="space-y-2">
-      <Input placeholder="Update title…" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Textarea
-        rows={3}
-        placeholder="What's new on this project?"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-      />
-      <div className="flex justify-end">
-        <Button type="submit" disabled={busy}>
-          {busy ? "Posting…" : "Post update"}
-        </Button>
-      </div>
-    </form>
   );
 }

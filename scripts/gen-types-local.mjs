@@ -20,10 +20,14 @@ const OUT = "src/integrations/supabase/types.ts";
 
 const q = (sql) =>
   JSON.parse(
-    execFileSync("psql", [CONN, "-Atqc", `select coalesce(json_agg(t), '[]'::json) from (${sql}) t`], {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    }).trim(),
+    execFileSync(
+      "psql",
+      [CONN, "-Atqc", `select coalesce(json_agg(t), '[]'::json) from (${sql}) t`],
+      {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    ).trim(),
   );
 
 const enums = q(`
@@ -230,7 +234,9 @@ for (const f of functions) {
     : (SQL_TO_TS[ret] ?? "unknown");
   out.push(
     `      ${key(f.name)}: {`,
-    args.length ? `        Args: { ${args.join("; ")} };` : "        Args: Record<PropertyKey, never>;",
+    args.length
+      ? `        Args: { ${args.join("; ")} };`
+      : "        Args: Record<PropertyKey, never>;",
     `        Returns: ${retTs}${f.returns.startsWith("SETOF ") ? "[]" : ""};`,
     "      };",
   );
@@ -240,7 +246,15 @@ out.push("    };", "    Enums: {");
 for (const e of enums) {
   out.push(`      ${key(e.name)}: ${e.values.map((v) => JSON.stringify(v)).join(" | ")};`);
 }
-out.push("    };", "    CompositeTypes: {", "      [_ in never]: never;", "    };", "  };", "};", "");
+out.push(
+  "    };",
+  "    CompositeTypes: {",
+  "      [_ in never]: never;",
+  "    };",
+  "  };",
+  "};",
+  "",
+);
 
 // The helper types below Database are static Supabase boilerplate; keep the
 // copy that is already in the repo rather than reimplementing it.

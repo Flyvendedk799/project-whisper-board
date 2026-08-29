@@ -93,18 +93,32 @@ export function useServerAction<TInput, TOutput>(
  * writes in this codebase from failing silently — a rejected status update used
  * to leave the dropdown snapping back with no explanation.
  */
-export function useDataMutation<TInput, TOutput>(
+/**
+ * PostgREST resolves to a union — a row with no error, or an error with no row.
+ * Inferring the row type through that union directly collapses to `never`, so
+ * the whole response is inferred and the row type read back off it.
+ */
+type PostgrestOutcome = { data: unknown; error: unknown };
+type RowOf<T extends PostgrestOutcome> = NonNullable<T["data"]>;
+
+export function useDataMutation<TInput, TResult extends PostgrestOutcome>(
   op: string,
-  fn: (input: TInput) => PromiseLike<{ data: TOutput; error: unknown }>,
-  options: Omit<ServerActionOptions<TInput, TOutput>, "label"> = {},
-): ServerAction<TInput, TOutput> {
+  fn: (input: TInput) => PromiseLike<TResult>,
+  options: Omit<ServerActionOptions<TInput, RowOf<TResult>>, "label"> = {},
+): ServerAction<TInput, RowOf<TResult>> {
   const wrapped = useCallback(
-    async ({ data: input }: { data: TInput }): Promise<TOutput> => {
+    async ({ data: input }: { data: TInput }): Promise<RowOf<TResult>> => {
       const { data, error } = await fn(input);
       if (error) {
         throw new DataError(op, error as { message: string; code?: string; details?: string });
       }
-      return data;
+      // PostgREST types `data` as nullable even on the success branch. A write
+      // that reports no error and returns nothing is a real anomaly, not
+      // something to hand to a caller expecting a row.
+      if (data == null) {
+        throw new DataError(op, { message: "The write reported success but returned nothing." });
+      }
+      return data as RowOf<TResult>;
     },
     [fn, op],
   );
