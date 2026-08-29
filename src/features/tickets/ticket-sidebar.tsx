@@ -17,6 +17,7 @@ import {
 import { StatusPill } from "@/components/app-shell";
 import { useServerAction } from "@/lib/use-server-action";
 import { linkTickets, unlinkTickets, updateTicket } from "@/lib/tickets.functions";
+import { notifyTicketChanged } from "@/lib/notifications.functions";
 import { autoTriageTicket, summarizeTicket } from "@/lib/ai.functions";
 import { startTimer, stopTimer } from "@/lib/time.functions";
 import { ticketRelationsQuery } from "@/data/tickets";
@@ -41,9 +42,18 @@ import type { RelationWithTicket, TicketDetail } from "@/data/types";
 export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
   const invalidate = [qk.ticket(ticket.id), qk.tickets()];
 
+  const notify = useServerFn(notifyTicketChanged);
+
   const update = useServerAction(useServerFn(updateTicket), {
     label: "tickets.update",
     invalidate,
+    onSuccess: (result) => {
+      // Only a change the client would want to hear about, and never at the
+      // cost of the update itself if the notification cannot be delivered.
+      for (const summary of result.notable ?? []) {
+        void notify({ data: { ticketId: ticket.id, summary } }).catch(() => {});
+      }
+    },
   });
 
   const people = useQuery(workspacePeopleQuery());

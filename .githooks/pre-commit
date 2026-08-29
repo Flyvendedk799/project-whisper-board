@@ -3,7 +3,10 @@
 # Keeps the two cheap gates local so CI is never the first thing to tell you.
 set -e
 
+# Generated files are formatted but not linted — eslint ignores them, and
+# passing an ignored path to it is itself a warning.
 staged=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
+lintable=$(printf '%s\n' "$staged" | grep -vE '(routeTree\.gen\.ts|integrations/supabase/types\.ts)$' || true)
 [ -z "$staged" ] && exit 0
 
 echo "→ prettier"
@@ -11,7 +14,7 @@ echo "$staged" | xargs npx prettier --write
 echo "$staged" | xargs git add
 
 echo "→ eslint"
-echo "$staged" | xargs npx eslint --max-warnings=0
+[ -n "$lintable" ] && printf '%s\n' "$lintable" | xargs npx eslint --max-warnings=0
 
 echo "→ tsc"
 npx tsc --noEmit

@@ -33,3 +33,7 @@ dist-ssr
 
 # Local secrets
 .env
+
+# Playwright
+playwright-report/
+test-results/

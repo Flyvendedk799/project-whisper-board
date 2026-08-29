@@ -140,9 +140,26 @@ export const updateTicket = createServerFn({ method: "POST" })
 
       if (Object.keys(patch).length === 0) return { ok: true };
 
+      const { data: before } = await context.supabase
+        .from("tickets")
+        .select("status, priority, eta_date")
+        .eq("id", ticketId)
+        .maybeSingle();
+
       const { error } = await context.supabase.from("tickets").update(patch).eq("id", ticketId);
       if (error) throw error;
-      return { ok: true };
+
+      // Only the changes a client would care about hearing. A retitle or an
+      // internal estimate is not one of them.
+      const notable: string[] = [];
+      if (fields.status && before && fields.status !== before.status) {
+        notable.push(`moved it to ${fields.status.replace(/_/g, " ")}`);
+      }
+      if (fields.etaDate !== undefined && before && fields.etaDate !== before.eta_date) {
+        notable.push(fields.etaDate ? `set an ETA of ${fields.etaDate}` : "removed the ETA");
+      }
+
+      return { ok: true, notable };
     }),
   );
 

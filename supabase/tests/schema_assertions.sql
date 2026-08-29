@@ -216,6 +216,29 @@ select assert(
 );
 
 -- ---------------------------------------------------------------------------
+\echo 'activity feed'
+-- ---------------------------------------------------------------------------
+select assert(
+  (select count(*) from public.project_updates
+   where project_id = 'bbbbbbbb-0000-0000-0000-000000000001' and kind = 'ticket_opened') = 2,
+  'opening a ticket posts it to the project feed'
+);
+select assert(
+  (select count(*) from public.project_updates
+   where project_id = 'bbbbbbbb-0000-0000-0000-000000000001' and kind = 'ticket_closed') = 1,
+  'and closing it posts once, on the transition'
+);
+
+-- Moving between two closed statuses is not a second closure.
+update public.tickets set status = 'done' where id = 'cccccccc-0000-0000-0000-000000000002';
+update public.tickets set status = 'wont_fix' where id = 'cccccccc-0000-0000-0000-000000000002';
+select assert(
+  (select count(*) from public.project_updates
+   where project_id = 'bbbbbbbb-0000-0000-0000-000000000001' and kind = 'ticket_closed') = 2,
+  'moving between two closed statuses does not post a second time'
+);
+
+-- ---------------------------------------------------------------------------
 \echo 'project progress'
 -- ---------------------------------------------------------------------------
 insert into public.milestones (id, project_id, title, position) values
