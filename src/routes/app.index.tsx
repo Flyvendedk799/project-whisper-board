@@ -1,159 +1,401 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { PageHeader, StatusPill, EmptyState, ListSkeleton } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Bug,
+  Clock,
+  FolderKanban,
+  Inbox,
+  MessageSquareWarning,
+  Receipt,
+  Timer,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, FolderKanban, Bug, Inbox as InboxIcon } from "lucide-react";
+import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
+import { QueryState } from "@/components/query-state";
+import { SectionBoundary } from "@/components/error-boundary";
+import { useAuth } from "@/components/auth-provider";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
+import { ProjectTimeline } from "@/features/projects/project-timeline";
+import { TicketRow } from "@/features/tickets/ticket-row";
+import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
+import { projectListQuery, projectMilestonesQuery } from "@/data/projects";
+import { projectInvoicesQuery, outstandingCents } from "@/data/billing";
+import { projectMeetingsQuery, upcomingMeetingsQuery } from "@/data/meetings";
+import { projectTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
+import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
+import { formatCents, formatRelative } from "@/lib/utils-format";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import type { TicketFilters } from "@/data/filters";
 
 export const Route = createFileRoute("/app/")({
-  component: Home,
+  component: HomePage,
 });
 
-function Home() {
+function HomePage() {
   const { user, isAdmin } = useAuth();
-
-  const projectsQ = useQuery({
-    queryKey: ["projects", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id,title,status,progress,updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(6);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const ticketsQ = useQuery({
-    queryKey: ["tickets-open", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("id,title,status,priority,project_id,updated_at")
-        .not("status", "in", "(done,wont_fix)")
-        .order("updated_at", { ascending: false })
-        .limit(8);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const noProjects = !projectsQ.isLoading && (projectsQ.data?.length ?? 0) === 0;
-  const showOnboarding = isAdmin && noProjects;
-
   const greeting = greet(user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there");
 
   return (
     <>
       <PageHeader
         title={greeting}
-        description={isAdmin ? "Here's the state of your client work." : "Welcome to your client portal."}
+        description={
+          isAdmin ? "Where your client work stands." : "Your projects and what's happening."
+        }
       />
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-10 space-y-10 md:space-y-12">
-        {showOnboarding && <OnboardingWizard />}
-
-        {!showOnboarding && (
-          <>
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-xl md:text-2xl">Recent projects</h2>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/app/projects">All <ArrowRight className="h-4 w-4 ml-1" /></Link>
-                </Button>
-              </div>
-              {projectsQ.isLoading ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
-                </div>
-              ) : noProjects ? (
-                <Card>
-                  <EmptyState
-                    icon={FolderKanban}
-                    title="No projects yet"
-                    description={isAdmin ? "Create your first client project to get started." : "Your provider hasn't shared a project with you yet — sit tight."}
-                    action={isAdmin && <Button asChild><Link to="/app/projects">Create a project</Link></Button>}
-                  />
-                </Card>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {projectsQ.data!.map((p) => (
-                    <Link key={p.id} to="/app/projects/$projectId" params={{ projectId: p.id }}>
-                      <Card className="p-5 h-full hover:border-foreground/20 hover:shadow-sm transition-all">
-                        <div className="flex items-center justify-between mb-2">
-                          <StatusPill tone={statusTone(p.status)}>{p.status.replace("_", " ")}</StatusPill>
-                          <span className="text-xs text-muted-foreground">{p.progress}%</span>
-                        </div>
-                        <h3 className="font-display text-xl">{p.title}</h3>
-                        <div className="mt-4 h-1.5 bg-muted rounded overflow-hidden">
-                          <div className="h-full bg-primary transition-all" style={{ width: `${p.progress}%` }} />
-                        </div>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section>
-              <h2 className="font-display text-xl md:text-2xl mb-4">Open tickets</h2>
-              {ticketsQ.isLoading ? (
-                <ListSkeleton rows={4} />
-              ) : (ticketsQ.data?.length ?? 0) === 0 ? (
-                <Card>
-                  <EmptyState
-                    icon={InboxIcon}
-                    title="No open tickets"
-                    description={isAdmin ? "Quiet day. Tickets your clients open will appear here." : "Nothing to see — when you report something, it'll show up here."}
-                    action={!isAdmin && projectsQ.data?.[0] && (
-                      <Button asChild>
-                        <Link to="/app/projects/$projectId" params={{ projectId: projectsQ.data[0].id }}>
-                          <Bug className="h-4 w-4 mr-1.5" />Report something
-                        </Link>
-                      </Button>
-                    )}
-                  />
-                </Card>
-              ) : (
-                <Card className="divide-y">
-                  {ticketsQ.data!.map((t) => (
-                    <Link key={t.id} to="/app/tickets/$ticketId" params={{ ticketId: t.id }} className="flex items-center gap-3 p-4 hover:bg-accent/40">
-                      <StatusPill tone={priorityTone(t.priority)}>{t.priority}</StatusPill>
-                      <span className="flex-1 truncate">{t.title}</span>
-                      <StatusPill>{t.status.replace("_", " ")}</StatusPill>
-                    </Link>
-                  ))}
-                </Card>
-              )}
-            </section>
-          </>
-        )}
+      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+        {isAdmin ? <AdminHome /> : <ClientHome />}
       </div>
     </>
   );
 }
 
-function greet(name: string) {
-  const h = new Date().getHours();
-  const prefix = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  return `${prefix}, ${name}`;
+/**
+ * The cockpit.
+ *
+ * Home used to be six recent projects and eight open tickets — the same list
+ * you would get anywhere. What the person running the workspace needs first is
+ * what is late, what nobody has answered, and what is owed. Every tile links
+ * into the queue with the filters that produced its number, so a count is
+ * always one click from the tickets behind it.
+ */
+function AdminHome() {
+  const { user } = useAuth();
+  const viewerId = user?.id ?? "";
+
+  const counts = useQuery({ ...ticketCountsQuery(viewerId), enabled: Boolean(viewerId) });
+  const projects = useQuery(projectListQuery());
+  const meetings = useQuery(upcomingMeetingsQuery());
+
+  const recent = useInfiniteQuery({
+    ...ticketListQuery({ sort: "updated" }, viewerId),
+    enabled: Boolean(viewerId),
+  });
+  const recentRows = (recent.data?.pages[0]?.rows ?? []).slice(0, 6);
+
+  const noProjects = projects.isSuccess && projects.data.length === 0;
+  if (noProjects) return <OnboardingWizard />;
+
+  return (
+    <div className="space-y-8">
+      <section aria-labelledby="needs-you">
+        <h2 id="needs-you" className="mb-3 font-display text-xl">
+          Needs you
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Tile
+            label="Overdue"
+            value={counts.data?.breached}
+            loading={counts.isPending}
+            icon={AlertTriangle}
+            tone={counts.data?.breached ? "destructive" : "default"}
+            to={{ sla: "breached", sort: "sla" }}
+          />
+          <Tile
+            label="Due soon"
+            value={counts.data?.atRisk}
+            loading={counts.isPending}
+            icon={Clock}
+            tone={counts.data?.atRisk ? "warning" : "default"}
+            to={{ sla: "at_risk", sort: "sla" }}
+          />
+          <Tile
+            label="Awaiting a first reply"
+            value={counts.data?.awaiting}
+            loading={counts.isPending}
+            icon={MessageSquareWarning}
+            to={{ awaiting: true, sort: "oldest" }}
+          />
+          <Tile
+            label="Unassigned"
+            value={counts.data?.unassigned}
+            loading={counts.isPending}
+            icon={UserRound}
+            to={{ assignee: "unassigned" }}
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <section aria-labelledby="recent-activity">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="recent-activity" className="font-display text-xl">
+              Latest activity
+            </h2>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/app/triage">
+                Open the queue
+                <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          </div>
+
+          <QueryState
+            query={recent}
+            errorTitle="Couldn't load recent tickets"
+            empty={
+              <Card>
+                <EmptyState
+                  icon={Inbox}
+                  title="Nothing yet"
+                  description="Tickets your clients open will land here."
+                />
+              </Card>
+            }
+          >
+            {() => (
+              <div className="overflow-hidden rounded-lg border">
+                <ul>
+                  {recentRows.map((ticket) => (
+                    <li key={ticket.id}>
+                      <TicketRow ticket={ticket} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </QueryState>
+        </section>
+
+        <div className="space-y-6">
+          <SectionBoundary label="money">
+            <MoneyCard projects={projects.data ?? []} />
+          </SectionBoundary>
+
+          <section aria-labelledby="upcoming">
+            <h2 id="upcoming" className="mb-3 font-display text-xl">
+              Coming up
+            </h2>
+            <Card className="divide-y">
+              {(meetings.data ?? []).length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">Nothing scheduled.</p>
+              ) : (
+                (meetings.data ?? []).map((meeting) => (
+                  <div key={meeting.id} className="p-3">
+                    <p className="truncate text-sm font-medium">{meeting.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatRelative(meeting.scheduled_at)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </Card>
+          </section>
+
+          <section aria-labelledby="active-projects">
+            <h2 id="active-projects" className="mb-3 font-display text-xl">
+              Projects
+            </h2>
+            <Card className="divide-y">
+              {(projects.data ?? []).slice(0, 6).map((project) => (
+                <Link
+                  key={project.id}
+                  to="/app/projects/$projectId"
+                  params={{ projectId: project.id }}
+                  className="block p-3 hover:bg-accent/40"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-sm">{project.title}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {project.progress}%
+                    </span>
+                  </div>
+                  <ProgressBar
+                    value={project.progress}
+                    label={`${project.title} progress`}
+                    className="mt-1.5"
+                  />
+                </Link>
+              ))}
+            </Card>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function statusTone(s: string): "default" | "success" | "warning" | "info" {
-  if (s === "live" || s === "completed") return "success";
-  if (s === "in_progress") return "info";
-  if (s === "on_hold") return "warning";
-  return "default";
+function MoneyCard({ projects }: { projects: Array<{ id: string; currency: string }> }) {
+  // One project's invoices is the common case; more than a handful and this
+  // belongs on its own page rather than the dashboard.
+  const first = projects[0];
+  const invoices = useQuery({ ...projectInvoicesQuery(first?.id ?? ""), enabled: Boolean(first) });
+  const time = useQuery({ ...projectTimeQuery(first?.id ?? ""), enabled: Boolean(first) });
+
+  const owed = (invoices.data ?? [])
+    .filter((invoice) => invoice.status === "sent" || invoice.status === "overdue")
+    .reduce((total, invoice) => total + outstandingCents(invoice), 0);
+
+  const thisWeek = (time.data ?? []).filter(
+    (entry) => new Date(entry.started_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+  );
+
+  if (!first) return null;
+
+  return (
+    <section aria-labelledby="money">
+      <h2 id="money" className="mb-3 font-display text-xl">
+        Money and time
+      </h2>
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center gap-2.5">
+          <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-sm">
+            <strong className="tabular-nums">{formatCents(owed, first.currency)}</strong>{" "}
+            <span className="text-muted-foreground">outstanding</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Timer className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-sm">
+            <strong className="tabular-nums">{formatMinutes(totalMinutes(thisWeek))}</strong>{" "}
+            <span className="text-muted-foreground">logged this week</span>
+          </span>
+        </div>
+      </Card>
+    </section>
+  );
 }
-function priorityTone(p: string): "default" | "warning" | "destructive" | "info" {
-  if (p === "urgent") return "destructive";
-  if (p === "high") return "warning";
-  if (p === "low") return "info";
-  return "default";
+
+function ClientHome() {
+  const projects = useQuery(projectListQuery());
+  const first = projects.data?.[0];
+
+  const milestones = useQuery({
+    ...projectMilestonesQuery(first?.id ?? ""),
+    enabled: Boolean(first),
+  });
+  const meetings = useQuery({ ...projectMeetingsQuery(first?.id ?? ""), enabled: Boolean(first) });
+  const invoices = useQuery({ ...projectInvoicesQuery(first?.id ?? ""), enabled: Boolean(first) });
+
+  return (
+    <QueryState
+      query={projects}
+      errorTitle="Couldn't load your projects"
+      empty={
+        <Card>
+          <EmptyState
+            icon={FolderKanban}
+            title="Nothing shared with you yet"
+            description="Once you're added to a project it'll appear here."
+          />
+        </Card>
+      }
+    >
+      {(data) => (
+        <div className="space-y-8">
+          {first && (
+            <SectionBoundary label="client-timeline">
+              <ProjectTimeline
+                project={first}
+                milestones={milestones.data ?? []}
+                meetings={meetings.data ?? []}
+                invoices={invoices.data ?? []}
+              />
+            </SectionBoundary>
+          )}
+
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-xl">
+                {data.length > 1 ? "Your projects" : "Your project"}
+              </h2>
+              <Button size="sm" asChild>
+                <Link to="/app/report">
+                  <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Report something
+                </Link>
+              </Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {data.map((project) => (
+                <Link
+                  key={project.id}
+                  to="/app/projects/$projectId"
+                  params={{ projectId: project.id }}
+                >
+                  <Card className="h-full p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
+                        {PROJECT_STATUS_LABEL[project.status]}
+                      </StatusPill>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {project.progress}%
+                      </span>
+                    </div>
+                    <h3 className="font-display text-xl">{project.title}</h3>
+                    <ProgressBar
+                      value={project.progress}
+                      label={`${project.title} progress`}
+                      className="mt-4"
+                    />
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+    </QueryState>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  loading,
+  icon: Icon,
+  tone = "default",
+  to,
+}: {
+  label: string;
+  value: number | undefined;
+  loading: boolean;
+  icon: typeof AlertTriangle;
+  tone?: "default" | "warning" | "destructive";
+  to: Partial<TicketFilters>;
+}) {
+  const colour =
+    tone === "destructive"
+      ? "text-destructive"
+      : tone === "warning"
+        ? "text-warning"
+        : "text-foreground";
+
+  return (
+    <Link to="/app/triage" search={{ sort: "updated", ...to }}>
+      <Card className="h-full p-4 transition-colors hover:border-foreground/20">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+          {label}
+        </div>
+        {loading ? (
+          <Skeleton className="mt-2 h-8 w-12" />
+        ) : (
+          <p className={`mt-1 font-display text-3xl tabular-nums ${value ? colour : ""}`}>
+            {value ?? 0}
+          </p>
+        )}
+      </Card>
+    </Link>
+  );
+}
+
+function greet(name: string) {
+  const hour = new Date().getHours();
+  const prefix =
+    hour < 5
+      ? "Still up"
+      : hour < 12
+        ? "Good morning"
+        : hour < 18
+          ? "Good afternoon"
+          : "Good evening";
+  return `${prefix}, ${name}`;
 }

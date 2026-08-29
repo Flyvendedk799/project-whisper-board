@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in · ClientDesk" }] }),
+  head: () => ({ meta: [{ title: "Sign in · Consflow" }] }),
   component: LoginPage,
 });
 
@@ -45,7 +45,7 @@ function LoginPage() {
     <div className="min-h-screen grid place-items-center px-4">
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-display">ClientDesk</h1>
+          <h1 className="text-3xl font-display">Consflow</h1>
           <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
         </div>
         <div className="flex gap-1 p-1 bg-muted rounded-md text-sm">
@@ -53,22 +53,38 @@ function LoginPage() {
             type="button"
             onClick={() => setMode("password")}
             className={`flex-1 py-1.5 rounded ${mode === "password" ? "bg-background shadow-sm" : ""}`}
-          >Password</button>
+          >
+            Password
+          </button>
           <button
             type="button"
             onClick={() => setMode("magic")}
             className={`flex-1 py-1.5 rounded ${mode === "magic" ? "bg-background shadow-sm" : ""}`}
-          >Magic link</button>
+          >
+            Magic link
+          </button>
         </div>
         <form onSubmit={mode === "password" ? handlePassword : handleMagic} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           {mode === "password" && (
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
           )}
           <Button type="submit" className="w-full" disabled={busy}>
@@ -76,7 +92,12 @@ function LoginPage() {
           </Button>
         </form>
         <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>New here? <Link to="/signup" className="text-primary underline">Create an account</Link></p>
+          <p>
+            New here?{" "}
+            <Link to="/signup" className="text-primary underline">
+              Create an account
+            </Link>
+          </p>
           <p>
             <button
               type="button"
@@ -89,7 +110,9 @@ function LoginPage() {
                 if (error) return toast.error(error.message);
                 toast.success("Password reset email sent");
               }}
-            >Forgot password?</button>
+            >
+              Forgot password?
+            </button>
           </p>
         </div>
       </Card>

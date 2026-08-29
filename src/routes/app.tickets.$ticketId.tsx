@@ -1,333 +1,343 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { PageHeader, StatusPill } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
+import { ArrowLeft, CalendarClock, Send, Sparkles, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Wand2, ArrowLeft, Image as ImageIcon, Video, FileText } from "lucide-react";
-import { toast } from "sonner";
-import { TicketAttachmentsField, type DraftAttachment } from "@/components/ticket-attachments-field";
-import { signedAttachmentUrl } from "@/lib/admin.functions";
-import { summarizeTicket, draftReply, autoTriageTicket, analyzeScreenshot } from "@/lib/ai.functions";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader, StatusPill } from "@/components/app-shell";
+import { QueryState } from "@/components/query-state";
+import { SectionBoundary } from "@/components/error-boundary";
+import { useAuth } from "@/components/auth-provider";
+import { AttachmentGrid } from "@/features/tickets/attachment-tile";
+import { CaptureContextPanel } from "@/features/tickets/capture-context-panel";
+import { SlaBadge } from "@/features/tickets/sla-badge";
+import { TicketSidebar } from "@/features/tickets/ticket-sidebar";
+import { TicketTimeline } from "@/features/tickets/ticket-timeline";
+import { CaptureDropzone } from "@/features/capture/capture-dropzone";
+import { useServerAction } from "@/lib/use-server-action";
+import { addComment } from "@/lib/tickets.functions";
+import { draftReply } from "@/lib/ai.functions";
 import { notifyTicketComment } from "@/lib/notifications.functions";
+import { describeOutcome, newDraftId, uploadDrafts, type DraftAttachment } from "@/lib/upload";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  ticketAttachmentsQuery,
+  ticketCommentsQuery,
+  ticketContextQuery,
+  ticketEventsQuery,
+  ticketQuery,
+} from "@/data/tickets";
+import { qk } from "@/data/keys";
+import {
+  TICKET_PRIORITY_LABEL,
+  TICKET_PRIORITY_TONE,
+  TICKET_STATUS_LABEL,
+  TICKET_STATUS_TONE,
+  TICKET_TYPE_LABEL,
+} from "@/data/enums";
+import { formatDate } from "@/lib/utils-format";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   component: TicketPage,
 });
 
-const STATUSES = ["open", "triaged", "in_progress", "in_review", "done", "wont_fix"] as const;
-
 function TicketPage() {
   const { ticketId } = Route.useParams();
   const { user, isAdmin } = useAuth();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
-  const ticket = useQuery({
-    queryKey: ["ticket", ticketId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("*,project:project_id(id,title),reporter:reporter_id(full_name,email)")
-        .eq("id", ticketId)
-        .single();
-      if (error) throw error;
-      return data as any;
-    },
-  });
+  const ticket = useQuery(ticketQuery(ticketId));
+  const comments = useQuery(ticketCommentsQuery(ticketId));
+  const events = useQuery(ticketEventsQuery(ticketId));
+  const attachments = useQuery(ticketAttachmentsQuery(ticketId));
+  const context = useQuery({ ...ticketContextQuery(ticketId), enabled: isAdmin });
 
-  const comments = useQuery({
-    queryKey: ["comments", ticketId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ticket_comments")
-        .select("*,author:author_id(full_name,email)")
-        .eq("ticket_id", ticketId)
-        .order("created_at");
-      if (error) throw error;
-      return data as any[];
-    },
-  });
-
-  const attachments = useQuery({
-    queryKey: ["attachments", ticketId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ticket_attachments")
-        .select("*")
-        .eq("ticket_id", ticketId)
-        .order("created_at");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Realtime updates
+  // Realtime finally works: the tables are in the publication, and the socket's
+  // token is re-armed on refresh by the auth provider.
   useEffect(() => {
-    const ch = supabase
+    const channel = supabase
       .channel(`ticket:${ticketId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ticket_comments", filter: `ticket_id=eq.${ticketId}` }, () => {
-        qc.invalidateQueries({ queryKey: ["comments", ticketId] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "tickets", filter: `id=eq.${ticketId}` }, () => {
-        qc.invalidateQueries({ queryKey: ["ticket", ticketId] });
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "ticket_comments",
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        () => void queryClient.invalidateQueries({ queryKey: qk.ticketComments(ticketId) }),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "ticket_events",
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        () => void queryClient.invalidateQueries({ queryKey: qk.ticketEvents(ticketId) }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tickets", filter: `id=eq.${ticketId}` },
+        () => void queryClient.invalidateQueries({ queryKey: qk.ticket(ticketId) }),
+      )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [ticketId, qc]);
 
-  if (ticket.isLoading) return <div className="p-10 text-muted-foreground">Loading…</div>;
-  if (!ticket.data) return <div className="p-10">Ticket not found.</div>;
+    return () => void supabase.removeChannel(channel);
+  }, [ticketId, queryClient]);
 
-  const t = ticket.data;
   return (
-    <>
-      <PageHeader
-        title={t.title}
-        description={
-          <>Reported by {t.reporter?.full_name ?? t.reporter?.email ?? "—"} · in <Link to="/app/projects/$projectId" params={{ projectId: t.project.id }} className="underline">{t.project.title}</Link></> as any
-        }
-        action={
-          <Button variant="ghost" asChild>
-            <Link to="/app/projects/$projectId" params={{ projectId: t.project.id }}><ArrowLeft className="h-4 w-4 mr-1" />Back</Link>
-          </Button>
-        }
-      />
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-8 grid lg:grid-cols-[1fr_280px] gap-6 md:gap-8">
-        <div className="space-y-6 min-w-0">
-          <Card className="p-5">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <StatusPill tone={priorityTone(t.priority)}>{t.priority}</StatusPill>
-              <StatusPill>{t.type}</StatusPill>
-              <StatusPill tone={statusTone(t.status)}>{t.status.replace("_", " ")}</StatusPill>
+    <QueryState query={ticket} errorTitle="Couldn't load this ticket">
+      {(t) => (
+        <>
+          <PageHeader
+            title={t.title}
+            description={
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <span className="font-mono">#{t.ticket_number}</span>
+                <span aria-hidden="true">·</span>
+                <span>Reported by {t.reporter?.full_name ?? t.reporter?.email ?? "someone"}</span>
+                {t.project && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <Link
+                      to="/app/projects/$projectId"
+                      params={{ projectId: t.project.id }}
+                      className="underline underline-offset-2"
+                    >
+                      {t.project.title}
+                    </Link>
+                  </>
+                )}
+              </span>
+            }
+            action={
+              <Button variant="ghost" asChild>
+                <Link to={isAdmin ? "/app/triage" : "/app/tickets"}>
+                  <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+                  Back
+                </Link>
+              </Button>
+            }
+          />
+
+          <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:px-8 md:py-8 lg:grid-cols-[1fr_300px] lg:gap-8">
+            <div className="min-w-0 space-y-6">
+              <Card className="space-y-3 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill tone={TICKET_PRIORITY_TONE[t.priority]}>
+                    {TICKET_PRIORITY_LABEL[t.priority]}
+                  </StatusPill>
+                  <StatusPill>{TICKET_TYPE_LABEL[t.type]}</StatusPill>
+                  <StatusPill tone={TICKET_STATUS_TONE[t.status]}>
+                    {TICKET_STATUS_LABEL[t.status]}
+                  </StatusPill>
+                  <SlaBadge dueAt={t.sla_due_at} status={t.status} />
+                  {t.labels.map((label) => (
+                    <StatusPill key={label}>{label}</StatusPill>
+                  ))}
+                </div>
+
+                {t.description ? (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.description}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No description.</p>
+                )}
+
+                {t.eta_date && (
+                  <p className="flex items-center gap-1.5 rounded-md bg-accent/40 p-2.5 text-sm">
+                    <CalendarClock className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    We&rsquo;re aiming to have this done by{" "}
+                    <strong>{formatDate(t.eta_date)}</strong>.
+                  </p>
+                )}
+              </Card>
+
+              {(attachments.data?.length ?? 0) > 0 && (
+                <SectionBoundary label="attachments">
+                  <section className="space-y-3">
+                    <h2 className="font-display text-xl">What they sent</h2>
+                    <AttachmentGrid attachments={attachments.data ?? []} />
+                  </section>
+                </SectionBoundary>
+              )}
+
+              {isAdmin && context.data && (
+                <SectionBoundary label="capture-context">
+                  <CaptureContextPanel context={context.data} />
+                </SectionBoundary>
+              )}
+
+              {isAdmin && t.ai_summary && (
+                <Card className="bg-accent/40 p-4 sm:p-5">
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-medium">
+                    <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                    Summary
+                  </h2>
+                  <p className="whitespace-pre-wrap text-sm">{t.ai_summary}</p>
+                </Card>
+              )}
+
+              <section className="space-y-4">
+                <h2 className="font-display text-2xl">Conversation</h2>
+                <SectionBoundary label="timeline">
+                  <TicketTimeline
+                    comments={comments.data ?? []}
+                    events={events.data ?? []}
+                    showInternal={isAdmin}
+                  />
+                </SectionBoundary>
+                {user && <CommentBox ticketId={ticketId} userId={user.id} isAdmin={isAdmin} />}
+              </section>
             </div>
-            {t.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.description}</p> : <p className="text-sm text-muted-foreground">No description</p>}
-          </Card>
 
-          {(attachments.data?.length ?? 0) > 0 && (
-            <Card className="p-5 space-y-3">
-              <h3 className="font-medium text-sm">Attachments</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {attachments.data!.map((a) => <AttachmentTile key={a.id} att={a} />)}
-              </div>
-            </Card>
-          )}
-
-          {isAdmin && t.ai_summary && (
-            <Card className="p-5 bg-accent/40">
-              <div className="flex items-center gap-2 text-sm font-medium mb-2"><Sparkles className="h-4 w-4 text-primary" />AI summary</div>
-              <p className="text-sm whitespace-pre-wrap">{t.ai_summary}</p>
-            </Card>
-          )}
-
-          <div className="space-y-4">
-            <h3 className="font-display text-2xl">Conversation</h3>
-            {(comments.data?.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">No comments yet.</p>}
-            {comments.data?.map((c) => (
-              <div key={c.id} className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-accent grid place-items-center text-xs shrink-0">
-                  {(c.author?.full_name ?? c.author?.email ?? "?").charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <span className="font-medium text-foreground">{c.author?.full_name ?? c.author?.email}</span>
-                    <span>·</span>
-                    <span>{new Date(c.created_at).toLocaleString()}</span>
-                    {c.is_internal && <StatusPill tone="warning">Internal</StatusPill>}
-                  </div>
-                  <Card className="p-3 text-sm whitespace-pre-wrap">{c.body}</Card>
-                </div>
-              </div>
-            ))}
-            <CommentBox ticketId={ticketId} authorId={user!.id} isAdmin={!!isAdmin} onSent={() => qc.invalidateQueries({ queryKey: ["comments", ticketId] })} />
+            {isAdmin && user && (
+              <aside>
+                <SectionBoundary label="ticket-sidebar">
+                  <TicketSidebar ticket={t} userId={user.id} />
+                </SectionBoundary>
+              </aside>
+            )}
           </div>
-        </div>
-
-        <aside className="space-y-4">
-          {isAdmin && (
-            <Card className="p-4 space-y-3">
-              <h4 className="text-sm font-medium">Manage</h4>
-              <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <Select value={t.status} onValueChange={async (v) => {
-                  await supabase.from("tickets").update({ status: v as any }).eq("id", ticketId);
-                  qc.invalidateQueries({ queryKey: ["ticket", ticketId] });
-                }}>
-                  <SelectTrigger className="mt-1" /><SelectContent>
-                    {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Priority</label>
-                <Select value={t.priority} onValueChange={async (v) => {
-                  await supabase.from("tickets").update({ priority: v as any }).eq("id", ticketId);
-                  qc.invalidateQueries({ queryKey: ["ticket", ticketId] });
-                }}>
-                  <SelectTrigger className="mt-1" /><SelectContent>
-                    {["low", "medium", "high", "urgent"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <AISummaryButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
-              <AutoTriageButton ticketId={ticketId} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
-              <ScreenshotAIButton ticketId={ticketId} attachments={attachments.data ?? []} onDone={() => qc.invalidateQueries({ queryKey: ["ticket", ticketId] })} />
-              {t.ai_screenshot_analysis && (
-                <div className="text-xs text-muted-foreground border-l-2 border-primary/40 pl-2 italic">{t.ai_screenshot_analysis}</div>
-              )}
-              {t.ai_suggested_type && (
-                <div className="text-xs text-muted-foreground">AI suggests: <b>{t.ai_suggested_type}</b> · <b>{t.ai_suggested_priority}</b></div>
-              )}
-            </Card>
-          )}
-        </aside>
-      </div>
-    </>
+        </>
+      )}
+    </QueryState>
   );
 }
 
-function CommentBox({ ticketId, authorId, isAdmin, onSent }: { ticketId: string; authorId: string; isAdmin: boolean; onSent: () => void }) {
+function CommentBox({
+  ticketId,
+  userId,
+  isAdmin,
+}: {
+  ticketId: string;
+  userId: string;
+  isAdmin: boolean;
+}) {
   const [body, setBody] = useState("");
   const [internal, setInternal] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
-  const draftReplyFn = useServerFn(draftReply);
+  const [uploading, setUploading] = useState(false);
+
   const notify = useServerFn(notifyTicketComment);
 
-  async function send() {
-    if (!body.trim() && drafts.length === 0) return;
-    setBusy(true);
-    if (body.trim()) {
-      const { error } = await supabase.from("ticket_comments").insert({ ticket_id: ticketId, author_id: authorId, body, is_internal: internal });
-      if (error) { setBusy(false); return toast.error(error.message); }
-    }
-    for (const d of drafts) {
-      const path = `${ticketId}/${crypto.randomUUID()}-${d.file.name}`;
-      const { error: upErr } = await supabase.storage.from(d.bucket).upload(path, d.file, { contentType: d.file.type });
-      if (upErr) { toast.error(upErr.message); continue; }
-      await supabase.from("ticket_attachments").insert({
-        ticket_id: ticketId, uploader_id: authorId, storage_bucket: d.bucket, storage_path: path,
-        file_name: d.file.name, mime_type: d.file.type, size_bytes: d.file.size, is_recording: d.bucket === "recordings",
-      });
-    }
-    if (!internal) {
-      notify({ data: { ticketId } }).catch(() => {});
-    }
-    setBody(""); setDrafts([]); setInternal(false); setBusy(false); onSent();
-  }
+  const post = useServerAction(useServerFn(addComment), {
+    label: "tickets.addComment",
+    invalidate: [qk.ticket(ticketId), qk.tickets()],
+  });
 
-  async function aiDraft() {
-    try {
-      const { reply } = await draftReplyFn({ data: { ticketId } });
-      setBody((b) => (b ? b + "\n\n" : "") + reply);
-    } catch (e: any) { toast.error(e.message); }
-  }
+  const draft = useServerAction(useServerFn(draftReply), {
+    label: "ai.draftReply",
+    errorMessage: "Couldn't draft a reply.",
+    onSuccess: (result) => setBody((current) => (current ? `${current}\n\n` : "") + result.reply),
+  });
+
+  const send = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!body.trim() && drafts.length === 0) return;
+
+    if (body.trim()) {
+      await post.run({ ticketId, body: body.trim(), isInternal: internal });
+    }
+
+    if (drafts.length > 0) {
+      setUploading(true);
+      const outcome = await uploadDrafts(ticketId, userId, drafts);
+      setUploading(false);
+      const problem = describeOutcome(outcome);
+      if (problem) toast.error(problem);
+    }
+
+    if (!internal && body.trim()) {
+      // Best effort: the comment is already saved, and failing to notify is not
+      // a reason to tell someone their reply did not send.
+      void notify({
+        data: { ticketId, excerpt: body.trim().slice(0, 200) },
+      }).catch(() => {});
+    }
+
+    setBody("");
+    setDrafts([]);
+    setInternal(false);
+  };
+
+  const busy = post.busy || uploading;
+  const placeholder = useMemo(
+    () => (isAdmin ? "Reply to the client…" : "Add anything else that might help…"),
+    [isAdmin],
+  );
 
   return (
-    <Card className="p-4 space-y-3">
-      <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="Write a reply…" />
-      <TicketAttachmentsField drafts={drafts} setDrafts={setDrafts} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 text-sm">
-          {isAdmin && (
-            <label className="flex items-center gap-1.5 text-muted-foreground">
-              <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
-              Internal note
-            </label>
-          )}
-          {isAdmin && <Button type="button" variant="ghost" size="sm" onClick={aiDraft}><Wand2 className="h-4 w-4 mr-1" />AI draft</Button>}
+    <Card className="space-y-3 p-4">
+      <form onSubmit={send} className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="reply" className="sr-only">
+            Your reply
+          </Label>
+          <Textarea
+            id="reply"
+            rows={3}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={placeholder}
+          />
         </div>
-        <Button onClick={send} disabled={busy}>{busy ? "Sending…" : "Send"}</Button>
-      </div>
+
+        <CaptureDropzone
+          drafts={drafts}
+          onAdd={(files) =>
+            setDrafts((prev) => [
+              ...prev,
+              ...files.map<DraftAttachment>((file) => ({
+                id: newDraftId(),
+                file,
+                bucket: file.type.startsWith("video/") ? "recordings" : "attachments",
+                kind: file.type.startsWith("image/") ? "image" : "file",
+              })),
+            ])
+          }
+          onRemove={(id) => setDrafts((prev) => prev.filter((d) => d.id !== id))}
+          label="Attach something"
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Checkbox
+                  checked={internal}
+                  onCheckedChange={(next) => setInternal(next === true)}
+                  id="internal"
+                />
+                <span>Internal note</span>
+              </label>
+            )}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={draft.busy}
+                onClick={() => draft.fire({ ticketId })}
+              >
+                <Wand2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                {draft.busy ? "Drafting…" : "Draft a reply"}
+              </Button>
+            )}
+          </div>
+
+          <Button type="submit" disabled={busy || (!body.trim() && drafts.length === 0)}>
+            <Send className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {busy ? "Sending…" : "Send"}
+          </Button>
+        </div>
+      </form>
     </Card>
   );
 }
-
-function AISummaryButton({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const summarize = useServerFn(summarizeTicket);
-  return (
-    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
-      setBusy(true);
-      try {
-        const { summary } = await summarize({ data: { ticketId } });
-        await supabase.from("tickets").update({ ai_summary: summary }).eq("id", ticketId);
-        toast.success("Summarized");
-        onDone();
-      } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
-    }}>
-      <Sparkles className="h-4 w-4 mr-1.5" />{busy ? "Summarizing…" : "Summarize thread"}
-    </Button>
-  );
-}
-
-function AutoTriageButton({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const fn = useServerFn(autoTriageTicket);
-  return (
-    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
-      setBusy(true);
-      try { const r = await fn({ data: { ticketId } }); toast.success(`Suggests: ${r.type} / ${r.priority}`); onDone(); }
-      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
-    }}>
-      <Wand2 className="h-4 w-4 mr-1.5" />{busy ? "Triaging…" : "Auto-triage"}
-    </Button>
-  );
-}
-
-function ScreenshotAIButton({ ticketId, attachments, onDone }: { ticketId: string; attachments: any[]; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const fn = useServerFn(analyzeScreenshot);
-  const firstImage = attachments.find((a) => a.mime_type?.startsWith("image/"));
-  if (!firstImage) return null;
-  return (
-    <Button variant="outline" className="w-full" disabled={busy} onClick={async () => {
-      setBusy(true);
-      try { await fn({ data: { ticketId, attachmentId: firstImage.id } }); toast.success("Analyzed"); onDone(); }
-      catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
-    }}>
-      <ImageIcon className="h-4 w-4 mr-1.5" />{busy ? "Analyzing…" : "Analyze screenshot"}
-    </Button>
-  );
-}
-
-function AttachmentTile({ att }: { att: any }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const sign = useServerFn(signedAttachmentUrl);
-  useEffect(() => {
-    sign({ data: { bucket: att.storage_bucket, path: att.storage_path } }).then((r) => setUrl(r.url)).catch(() => {});
-  }, [att.id]);
-
-  const isImage = att.mime_type?.startsWith("image/");
-  const isVideo = att.mime_type?.startsWith("video/") || att.is_recording;
-
-  return (
-    <a href={url ?? "#"} target="_blank" rel="noreferrer" className="block group">
-      <div className="aspect-video bg-muted rounded overflow-hidden grid place-items-center">
-        {url && isImage ? <img src={url} alt={att.file_name} className="w-full h-full object-cover" /> :
-         url && isVideo ? <video src={url} className="w-full h-full object-cover" /> :
-         <FileText className="h-8 w-8 text-muted-foreground" />}
-      </div>
-      <div className="text-xs mt-1 truncate group-hover:text-primary">{att.file_name}</div>
-    </a>
-  );
-}
-
-function statusTone(s: string): "default" | "success" | "info" | "warning" {
-  if (s === "done") return "success";
-  if (s === "in_progress" || s === "in_review") return "info";
-  if (s === "triaged") return "warning";
-  return "default";
-}
-function priorityTone(p: string): "default" | "warning" | "destructive" | "info" {
-  if (p === "urgent") return "destructive";
-  if (p === "high") return "warning";
-  if (p === "low") return "info";
-  return "default";
-}
-
-export { ImageIcon, Video };

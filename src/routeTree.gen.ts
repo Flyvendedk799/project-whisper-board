@@ -15,11 +15,15 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppTriageRouteImport } from './routes/app.triage'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppReportRouteImport } from './routes/app.report'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
+import { Route as AppTicketsIndexRouteImport } from './routes/app.tickets.index'
 import { Route as AppProjectsIndexRouteImport } from './routes/app.projects.index'
 import { Route as AppTicketsTicketIdRouteImport } from './routes/app.tickets.$ticketId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/app.projects.$projectId'
+import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -51,14 +55,29 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTriageRoute = AppTriageRouteImport.update({
+  id: '/triage',
+  path: '/triage',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportRoute = AppReportRouteImport.update({
+  id: '/report',
+  path: '/report',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
+  id: '/tickets/',
+  path: '/tickets/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
@@ -76,6 +95,11 @@ const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
+  id: '/api/webhooks/stripe',
+  path: '/api/webhooks/stripe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -84,11 +108,15 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/triage': typeof AppTriageRoute
   '/app/': typeof AppIndexRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects/': typeof AppProjectsIndexRoute
+  '/app/tickets/': typeof AppTicketsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -96,11 +124,15 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/triage': typeof AppTriageRoute
   '/app': typeof AppIndexRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects': typeof AppProjectsIndexRoute
+  '/app/tickets': typeof AppTicketsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -110,11 +142,15 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/triage': typeof AppTriageRoute
   '/app/': typeof AppIndexRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects/': typeof AppProjectsIndexRoute
+  '/app/tickets/': typeof AppTicketsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -125,11 +161,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/report'
     | '/app/settings'
+    | '/app/triage'
     | '/app/'
+    | '/api/webhooks/stripe'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects/'
+    | '/app/tickets/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -137,11 +177,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/report'
     | '/app/settings'
+    | '/app/triage'
     | '/app'
+    | '/api/webhooks/stripe'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects'
+    | '/app/tickets'
   id:
     | '__root__'
     | '/'
@@ -150,11 +194,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/report'
     | '/app/settings'
+    | '/app/triage'
     | '/app/'
+    | '/api/webhooks/stripe'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects/'
+    | '/app/tickets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -163,6 +211,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -209,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/triage': {
+      id: '/app/triage'
+      path: '/triage'
+      fullPath: '/app/triage'
+      preLoaderRoute: typeof AppTriageRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/settings': {
       id: '/app/settings'
       path: '/settings'
@@ -216,11 +272,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/report': {
+      id: '/app/report'
+      path: '/report'
+      fullPath: '/app/report'
+      preLoaderRoute: typeof AppReportRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/inbox': {
       id: '/app/inbox'
       path: '/inbox'
       fullPath: '/app/inbox'
       preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/tickets/': {
+      id: '/app/tickets/'
+      path: '/tickets'
+      fullPath: '/app/tickets/'
+      preLoaderRoute: typeof AppTicketsIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/projects/': {
@@ -244,25 +314,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/webhooks/stripe': {
+      id: '/api/webhooks/stripe'
+      path: '/api/webhooks/stripe'
+      fullPath: '/api/webhooks/stripe'
+      preLoaderRoute: typeof ApiWebhooksStripeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
+  AppReportRoute: typeof AppReportRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppTriageRoute: typeof AppTriageRoute
   AppIndexRoute: typeof AppIndexRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
   AppTicketsTicketIdRoute: typeof AppTicketsTicketIdRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
+  AppTicketsIndexRoute: typeof AppTicketsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
+  AppReportRoute: AppReportRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppTriageRoute: AppTriageRoute,
   AppIndexRoute: AppIndexRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
   AppTicketsTicketIdRoute: AppTicketsTicketIdRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
+  AppTicketsIndexRoute: AppTicketsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -273,7 +356,18 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

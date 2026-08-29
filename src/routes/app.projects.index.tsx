@@ -1,139 +1,167 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { PageHeader, StatusPill } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { FolderKanban, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
-import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
+import { QueryState } from "@/components/query-state";
+import { useAuth } from "@/components/auth-provider";
+import { useDataMutation } from "@/lib/use-server-action";
+import { projectListQuery } from "@/data/projects";
+import { createProject } from "@/data/mutations";
+import { qk } from "@/data/keys";
+import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
+import { formatDate } from "@/lib/utils-format";
 
 export const Route = createFileRoute("/app/projects/")({
   component: ProjectsPage,
 });
 
 function ProjectsPage() {
-  const { user, isAdmin } = useAuth();
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-
-  const projects = useQuery({
-    queryKey: ["projects-all", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id,title,description,status,progress,start_date,end_date,updated_at")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { isAdmin } = useAuth();
+  const projects = useQuery(projectListQuery());
 
   return (
     <>
       <PageHeader
         title="Projects"
-        description={isAdmin ? "All client engagements." : "Your projects."}
-        action={
-          isAdmin && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button><Plus className="h-4 w-4 mr-1.5" />New project</Button>
-              </DialogTrigger>
-              <NewProjectDialog
-                onCreated={() => {
-                  setOpen(false);
-                  qc.invalidateQueries({ queryKey: ["projects-all"] });
-                  qc.invalidateQueries({ queryKey: ["projects"] });
-                }}
-              />
-            </Dialog>
-          )
-        }
+        description={isAdmin ? "Every engagement you're running." : "What we're building for you."}
+        action={isAdmin ? <NewProjectButton /> : undefined}
       />
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-10">
-        {projects.isLoading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => <Card key={i} className="p-5 h-32 animate-pulse" />)}
-          </div>
-        ) : (projects.data?.length ?? 0) === 0 ? (
-          <Card className="p-10 md:p-12 text-center">
-            <h3 className="font-display text-2xl">No projects yet</h3>
-            <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">{isAdmin ? "Create your first project to start tracking work, tickets, and milestones." : "You haven't been added to any project yet. Your provider will invite you soon."}</p>
-            {isAdmin && (
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button className="mt-5"><Plus className="h-4 w-4 mr-1.5" />Create your first project</Button>
-                </DialogTrigger>
-                <NewProjectDialog onCreated={() => { setOpen(false); qc.invalidateQueries({ queryKey: ["projects-all"] }); qc.invalidateQueries({ queryKey: ["projects"] }); }} />
-              </Dialog>
-            )}
-          </Card>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.data!.map((p) => (
-              <Link key={p.id} to="/app/projects/$projectId" params={{ projectId: p.id }}>
-                <Card className="p-5 h-full hover:border-foreground/20 hover:shadow-sm transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <StatusPill>{p.status.replace("_", " ")}</StatusPill>
-                    <span className="text-xs text-muted-foreground">{p.progress}%</span>
-                  </div>
-                  <h3 className="font-display text-xl">{p.title}</h3>
-                  {p.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.description}</p>}
-                  <div className="mt-4 h-1.5 bg-muted rounded overflow-hidden">
-                    <div className="h-full bg-primary transition-all" style={{ width: `${p.progress}%` }} />
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
+
+      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+        <QueryState
+          query={projects}
+          errorTitle="Couldn't load projects"
+          empty={
+            <Card>
+              <EmptyState
+                icon={FolderKanban}
+                title="No projects yet"
+                description={
+                  isAdmin
+                    ? "Create one and invite your client — everything else hangs off it."
+                    : "Nothing has been shared with you yet."
+                }
+                action={isAdmin ? <NewProjectButton /> : undefined}
+              />
+            </Card>
+          }
+        >
+          {(data) => (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {data.map((project) => (
+                <Link
+                  key={project.id}
+                  to="/app/projects/$projectId"
+                  params={{ projectId: project.id }}
+                >
+                  <Card className="flex h-full flex-col p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
+                        {PROJECT_STATUS_LABEL[project.status]}
+                      </StatusPill>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {project.progress}%
+                      </span>
+                    </div>
+
+                    <h2 className="font-display text-xl">{project.title}</h2>
+                    {project.organization && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {project.organization.name}
+                      </p>
+                    )}
+                    {project.description && (
+                      <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">
+                        {project.description}
+                      </p>
+                    )}
+
+                    <ProgressBar
+                      value={project.progress}
+                      label={`${project.title} progress`}
+                      className="mt-4"
+                    />
+                    {project.end_date && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Target {formatDate(project.end_date)}
+                      </p>
+                    )}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </QueryState>
       </div>
     </>
   );
 }
 
-function NewProjectDialog({ onCreated }: { onCreated: () => void }) {
-  const { user } = useAuth();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
+function NewProjectButton() {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!user) return;
-    setBusy(true);
-    const { error } = await supabase.from("projects").insert({ title, description: description || null, created_by: user.id });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Project created");
-    setTitle("");
-    setDescription("");
-    onCreated();
-  }
+  const create = useDataMutation("projects.insert", createProject, {
+    success: "Project created",
+    invalidate: [qk.projects()],
+    onSuccess: (project) => {
+      setOpen(false);
+      void navigate({ to: "/app/projects/$projectId", params: { projectId: project.id } });
+    },
+  });
 
   return (
-    <DialogContent>
-      <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
-      <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="t">Title</Label>
-          <Input id="t" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="d">Description</Label>
-          <Textarea id="d" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={busy}>{busy ? "Creating…" : "Create project"}</Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          New project
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New project</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            void create.run({
+              title: String(form.get("title")),
+              description: String(form.get("description")) || null,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="project-title">Title</Label>
+            <Input id="project-title" name="title" required placeholder="Acme storefront" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="project-description">What is it?</Label>
+            <Textarea id="project-description" name="description" rows={3} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={create.busy}>
+              {create.busy ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

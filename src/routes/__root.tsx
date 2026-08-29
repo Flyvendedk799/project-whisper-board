@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -9,7 +9,9 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { Toaster } from "@/components/ui/sonner";
+import { AppProviders } from "@/components/app-providers";
+import { THEME_SCRIPT } from "@/components/theme-provider";
+import { captureError } from "@/lib/providers";
 
 function NotFoundComponent() {
   return (
@@ -34,8 +36,8 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
+  captureError(error, { scope: "route" });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -68,29 +70,35 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+const TITLE = "Consflow — Client portal & ticket platform";
+const DESCRIPTION =
+  "Consflow is where your clients report bugs with a screenshot and a screen recording, " +
+  "follow their project from quote to invoice, and where you run every engagement from one queue.";
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Project Flow Hub is a client-facing ticket platform for managing software development projects." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Project Flow Hub is a client-facing ticket platform for managing software development projects." },
+      { title: TITLE },
+      { name: "description", content: DESCRIPTION },
+      { name: "application-name", content: "Consflow" },
+      { name: "theme-color", content: "#faf6f0" },
+      { property: "og:site_name", content: "Consflow" },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Project Flow Hub is a client-facing ticket platform for managing software development projects." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f6559793-5814-4061-9e05-9462150d2da9/id-preview-372ec029--9953f29a-2af4-4874-a72b-c2e3bf7cafe7.lovable.app-1778719292261.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f6559793-5814-4061-9e05-9462150d2da9/id-preview-372ec029--9953f29a-2af4-4874-a72b-c2e3bf7cafe7.lovable.app-1778719292261.png" },
+      { property: "og:image", content: "/og.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: TITLE },
+      { name: "twitter:description", content: DESCRIPTION },
+      { name: "twitter:image", content: "/og.png" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,
@@ -101,11 +109,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the inline script below sets `class="dark"`
+    // before React sees the document, so the server markup will not match.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Blocking, before first paint. Without it every load flashes white
+            before the dark theme is applied. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>
+        <a
+          href="#main"
+          className="sr-only rounded-md focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-background focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring"
+        >
+          Skip to content
+        </a>
         {children}
         <Scripts />
       </body>
@@ -117,9 +136,8 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <AppProviders queryClient={queryClient}>
       <Outlet />
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    </AppProviders>
   );
 }

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/signup")({
-  head: () => ({ meta: [{ title: "Create account · ClientDesk" }] }),
+  head: () => ({ meta: [{ title: "Create account · Consflow" }] }),
   component: SignupPage,
 });
 
@@ -41,22 +41,45 @@ function SignupPage() {
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-display">Create your account</h1>
-          <p className="text-sm text-muted-foreground">The first account becomes the workspace admin.</p>
+          <p className="text-sm text-muted-foreground">
+            The first account becomes the workspace admin.
+          </p>
         </div>
         <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="name">Full name</Label>
+          <div className="space-y-2">
+            <Label htmlFor="name">Full name</Label>
             <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="space-y-2"><Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-          <div className="space-y-2"><Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "..." : "Create account"}</Button>
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? "..." : "Create account"}
+          </Button>
         </form>
         <p className="text-center text-sm text-muted-foreground">
-          Already have an account? <Link to="/login" className="text-primary underline">Sign in</Link>
+          Already have an account?{" "}
+          <Link to="/login" className="text-primary underline">
+            Sign in
+          </Link>
         </p>
       </Card>
     </div>

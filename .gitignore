@@ -30,3 +30,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local secrets
+.env
+
+# Playwright
+playwright-report/
+test-results/

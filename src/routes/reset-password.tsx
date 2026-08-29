@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Reset password · ClientDesk" }] }),
+  head: () => ({ meta: [{ title: "Reset password · Consflow" }] }),
   component: ResetPage,
 });
 
@@ -22,7 +22,9 @@ function ResetPage() {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
     });
-    supabase.auth.getSession().then(({ data }) => { if (data.session) setReady(true); });
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -41,14 +43,25 @@ function ResetPage() {
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-display">Set a new password</h1>
-          <p className="text-sm text-muted-foreground">{ready ? "Choose a strong password to finish." : "Open this page from the email link."}</p>
+          <p className="text-sm text-muted-foreground">
+            {ready ? "Choose a strong password to finish." : "Open this page from the email link."}
+          </p>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="p">New password</Label>
-            <Input id="p" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="p"
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-          <Button type="submit" className="w-full" disabled={busy || !ready}>{busy ? "…" : "Update password"}</Button>
+          <Button type="submit" className="w-full" disabled={busy || !ready}>
+            {busy ? "…" : "Update password"}
+          </Button>
         </form>
       </Card>
     </div>

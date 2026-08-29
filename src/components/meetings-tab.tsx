@@ -1,155 +1,362 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { Card } from "@/components/ui/card";
+import { CalendarPlus, Check, ExternalLink, Sparkles, Ticket, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { StatusPill } from "@/components/app-shell";
-import { CalendarPlus, Sparkles, Video, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
-import { createMeeting, saveMeetingNotes } from "@/lib/meetings.functions";
-import { meetingNotesToTickets } from "@/lib/ai.functions";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { EmptyState, StatusPill } from "@/components/app-shell";
+import { QueryState } from "@/components/query-state";
+import { useAuth } from "@/components/auth-provider";
+import { useServerAction } from "@/lib/use-server-action";
+import { createMeeting, saveMeetingNotes, commitActionItems } from "@/lib/meetings.functions";
+import { proposeActionItems, type ProposedActionItem } from "@/lib/ai.functions";
+import { projectMeetingsQuery } from "@/data/meetings";
+import { qk } from "@/data/keys";
+import { ACTION_ITEM_STATUS_LABEL, MEETING_STATUS_LABEL, MEETING_STATUS_TONE } from "@/data/enums";
+import { formatDate } from "@/lib/utils-format";
+import type { MeetingWithActionItems } from "@/data/types";
 
 export function MeetingsTab({ projectId }: { projectId: string }) {
   const { isAdmin } = useAuth();
-  const qc = useQueryClient();
-  const meetings = useQuery({
-    queryKey: ["meetings", projectId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("meetings")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("scheduled_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["meetings", projectId] });
+  const meetings = useQuery(projectMeetingsQuery(projectId));
 
   return (
     <div className="space-y-3">
-      {isAdmin && <NewMeetingButton projectId={projectId} onCreated={refresh} />}
-      {(meetings.data?.length ?? 0) === 0 ? (
-        <Card className="p-8 text-sm text-muted-foreground text-center">No meetings yet.</Card>
-      ) : (
-        <div className="space-y-3">
-          {meetings.data!.map((m) => (
-            <MeetingCard key={m.id} meeting={m} canEdit={!!isAdmin} onChanged={refresh} />
-          ))}
-        </div>
-      )}
+      {isAdmin && <NewMeetingButton projectId={projectId} />}
+
+      <QueryState
+        query={meetings}
+        errorTitle="Couldn't load meetings"
+        empty={
+          <Card>
+            <EmptyState
+              icon={CalendarPlus}
+              title="No meetings yet"
+              description={
+                isAdmin
+                  ? "Schedule one and the notes, decisions and follow-ups all land here."
+                  : "When a call is booked it'll show up here with the agenda."
+              }
+            />
+          </Card>
+        }
+      >
+        {(data) => (
+          <div className="space-y-3">
+            {data.map((meeting) => (
+              <MeetingCard
+                key={meeting.id}
+                meeting={meeting}
+                projectId={projectId}
+                canEdit={isAdmin}
+              />
+            ))}
+          </div>
+        )}
+      </QueryState>
     </div>
   );
 }
 
-function NewMeetingButton({ projectId, onCreated }: { projectId: string; onCreated: () => void }) {
+function NewMeetingButton({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [when, setWhen] = useState("");
-  const [duration, setDuration] = useState(30);
-  const [agenda, setAgenda] = useState("");
-  const [meetingUrl, setMeetingUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const fn = useServerFn(createMeeting);
+  const create = useServerAction(useServerFn(createMeeting), {
+    label: "meetings.create",
+    success: "Meeting scheduled",
+    invalidate: [qk.projectMeetings(projectId), qk.meetings()],
+    onSuccess: () => setOpen(false),
+  });
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await fn({ data: { projectId, title, scheduledAt: new Date(when).toISOString(), durationMinutes: duration, agenda: agenda || undefined, meetingUrl: meetingUrl || undefined } });
-      toast.success("Meeting scheduled");
-      setOpen(false); setTitle(""); setWhen(""); setAgenda(""); setMeetingUrl("");
-      onCreated();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
-  }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button><CalendarPlus className="h-4 w-4 mr-1.5" />Schedule meeting</Button>
+        <Button>
+          <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Schedule meeting
+        </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>New meeting</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <div><Label>Title</Label><Input required value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>When</Label><Input type="datetime-local" required value={when} onChange={(e) => setWhen(e.target.value)} /></div>
-            <div><Label>Duration (min)</Label><Input type="number" min={5} value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></div>
+        <DialogHeader>
+          <DialogTitle>New meeting</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            void create.run({
+              projectId,
+              title: String(form.get("title")),
+              scheduledAt: new Date(String(form.get("when"))).toISOString(),
+              durationMinutes: Number(form.get("duration")) || 30,
+              agenda: String(form.get("agenda")) || undefined,
+              meetingUrl: String(form.get("url")) || undefined,
+            });
+          }}
+          className="space-y-3"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="m-title">Title</Label>
+            <Input id="m-title" name="title" required placeholder="Sprint review" />
           </div>
-          <div><Label>Meeting link</Label><Input type="url" placeholder="https://meet.google.com/…" value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} /></div>
-          <div><Label>Agenda</Label><Textarea rows={3} value={agenda} onChange={(e) => setAgenda(e.target.value)} /></div>
-          <DialogFooter><Button type="submit" disabled={busy}>{busy ? "Scheduling…" : "Schedule"}</Button></DialogFooter>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="m-when">When</Label>
+              <Input id="m-when" name="when" type="datetime-local" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="m-duration">Minutes</Label>
+              <Input id="m-duration" name="duration" type="number" min={5} defaultValue={30} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="m-url">Meeting link</Label>
+            <Input id="m-url" name="url" type="url" placeholder="https://meet.google.com/…" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="m-agenda">Agenda</Label>
+            <Textarea id="m-agenda" name="agenda" rows={3} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={create.busy}>
+              {create.busy ? "Scheduling…" : "Schedule"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-function MeetingCard({ meeting, canEdit, onChanged }: { meeting: any; canEdit: boolean; onChanged: () => void }) {
+function MeetingCard({
+  meeting,
+  projectId,
+  canEdit,
+}: {
+  meeting: MeetingWithActionItems;
+  projectId: string;
+  canEdit: boolean;
+}) {
   const [notes, setNotes] = useState(meeting.notes ?? "");
-  const [busy, setBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
-  const save = useServerFn(saveMeetingNotes);
-  const extract = useServerFn(meetingNotesToTickets);
+  const [proposal, setProposal] = useState<ProposedActionItem[] | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
 
-  async function saveNotes(complete = false) {
-    setBusy(true);
-    try {
-      await save({ data: { meetingId: meeting.id, notes, markCompleted: complete } });
-      toast.success("Notes saved");
-      onChanged();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
-  }
-  async function aiExtract() {
-    setAiBusy(true);
-    try {
-      const r = await extract({ data: { meetingId: meeting.id } });
-      toast.success(`Created ${r.count} ticket${r.count === 1 ? "" : "s"} from notes`);
-      onChanged();
-    } catch (e: any) { toast.error(e.message); } finally { setAiBusy(false); }
-  }
+  const invalidate = [qk.projectMeetings(projectId), qk.tickets(), qk.projectUpdates(projectId)];
 
-  const date = new Date(meeting.scheduled_at);
+  const save = useServerAction(useServerFn(saveMeetingNotes), {
+    label: "meetings.saveNotes",
+    success: "Notes saved",
+    invalidate,
+  });
+
+  const propose = useServerAction(useServerFn(proposeActionItems), {
+    label: "ai.proposeActionItems",
+    errorMessage: "Couldn't pull action items out of those notes.",
+    onSuccess: (result) => {
+      setProposal(result.items);
+      setChosen(new Set(result.items.map((_, i) => i)));
+    },
+  });
+
+  const commit = useServerAction(useServerFn(commitActionItems), {
+    label: "meetings.commitActionItems",
+    success: (result) => `${result.created} ticket${result.created === 1 ? "" : "s"} created`,
+    invalidate,
+    onSuccess: () => {
+      setProposal(null);
+      setChosen(new Set());
+    },
+  });
+
+  const scheduled = new Date(meeting.scheduled_at);
+
   return (
-    <Card className="p-5 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <Card className="space-y-3 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h4 className="font-medium">{meeting.title}</h4>
-          <div className="text-xs text-muted-foreground mt-1">
-            {date.toLocaleString()} · {meeting.duration_minutes} min
-          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatDate(scheduled)} ·{" "}
+            {scheduled.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} ·{" "}
+            {meeting.duration_minutes} min
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusPill tone={meeting.status === "completed" ? "success" : "default"}>{meeting.status}</StatusPill>
+        <div className="flex shrink-0 items-center gap-2">
+          <StatusPill tone={MEETING_STATUS_TONE[meeting.status]}>
+            {MEETING_STATUS_LABEL[meeting.status]}
+          </StatusPill>
           {meeting.meeting_url && (
-            <Button variant="ghost" size="sm" asChild><a href={meeting.meeting_url} target="_blank" rel="noreferrer"><Video className="h-4 w-4 mr-1" />Join</a></Button>
+            <Button variant="ghost" size="sm" asChild>
+              <a href={meeting.meeting_url} target="_blank" rel="noreferrer">
+                <Video className="mr-1 h-4 w-4" aria-hidden="true" />
+                Join
+                <ExternalLink className="ml-1 h-3 w-3" aria-hidden="true" />
+              </a>
+            </Button>
           )}
         </div>
       </div>
-      {meeting.agenda && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{meeting.agenda}</p>}
-      {canEdit && (
+
+      {meeting.agenda && (
+        <p className="whitespace-pre-wrap text-sm text-muted-foreground">{meeting.agenda}</p>
+      )}
+
+      {meeting.meeting_action_items.length > 0 && (
+        <div className="rounded-md border p-3">
+          <h5 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            What we agreed
+          </h5>
+          <ul className="space-y-1.5">
+            {meeting.meeting_action_items.map((item) => (
+              <li key={item.id} className="flex items-start gap-2 text-sm">
+                <Ticket
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1">{item.title}</span>
+                <StatusPill>{ACTION_ITEM_STATUS_LABEL[item.status]}</StatusPill>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {canEdit ? (
         <>
-          <Textarea rows={5} placeholder="Meeting notes & decisions…" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <div className="flex gap-2 flex-wrap">
-            <Button size="sm" onClick={() => saveNotes(false)} disabled={busy}>{busy ? "Saving…" : "Save notes"}</Button>
-            <Button size="sm" variant="outline" onClick={() => saveNotes(true)} disabled={busy}>Mark completed</Button>
-            <Button size="sm" variant="ghost" onClick={aiExtract} disabled={aiBusy || !notes.trim()}>
-              <Sparkles className="h-4 w-4 mr-1" />{aiBusy ? "Extracting…" : "Notes → tickets"}
+          <div className="space-y-1.5">
+            <Label htmlFor={`notes-${meeting.id}`} className="sr-only">
+              Meeting notes
+            </Label>
+            <Textarea
+              id={`notes-${meeting.id}`}
+              rows={5}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="What was decided, and who's doing what."
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={save.busy}
+              onClick={() => save.fire({ meetingId: meeting.id, notes })}
+            >
+              {save.busy ? "Saving…" : "Save notes"}
+            </Button>
+            {meeting.status !== "completed" && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={save.busy}
+                onClick={() => save.fire({ meetingId: meeting.id, notes, markCompleted: true })}
+              >
+                Mark completed
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={propose.busy || !notes.trim()}
+              onClick={() => propose.fire({ meetingId: meeting.id })}
+            >
+              <Sparkles className="mr-1 h-4 w-4" aria-hidden="true" />
+              {propose.busy ? "Reading…" : "Find action items"}
             </Button>
           </div>
+
+          {/*
+            The previous version handed the model's output straight to the
+            tickets table with no confirmation, and then never rendered the
+            action items it created — so you could not see what it had done.
+            Nothing is created here until it has been read and ticked.
+          */}
+          {proposal && (
+            <div className="space-y-3 rounded-md border bg-accent/30 p-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                <h5 className="text-sm font-medium">
+                  {proposal.length} action item{proposal.length === 1 ? "" : "s"} — pick the real
+                  ones
+                </h5>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto h-6 w-6"
+                  aria-label="Dismiss suggestions"
+                  onClick={() => setProposal(null)}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              </div>
+
+              <ul className="space-y-2">
+                {proposal.map((item, index) => (
+                  <li key={index} className="flex items-start gap-2 rounded bg-background p-2">
+                    <Checkbox
+                      id={`item-${meeting.id}-${index}`}
+                      checked={chosen.has(index)}
+                      onCheckedChange={(next) =>
+                        setChosen((prev) => {
+                          const copy = new Set(prev);
+                          if (next === true) copy.add(index);
+                          else copy.delete(index);
+                          return copy;
+                        })
+                      }
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor={`item-${meeting.id}-${index}`}
+                      className="min-w-0 flex-1 cursor-pointer"
+                    >
+                      <span className="block text-sm font-medium">{item.title}</span>
+                      {item.description && (
+                        <span className="block text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                      )}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                size="sm"
+                disabled={commit.busy || chosen.size === 0}
+                onClick={() =>
+                  commit.fire({
+                    meetingId: meeting.id,
+                    items: [...chosen].sort().map((i) => proposal[i]),
+                  })
+                }
+              >
+                <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Create {chosen.size} ticket{chosen.size === 1 ? "" : "s"}
+              </Button>
+            </div>
+          )}
+
           {meeting.ai_summary && (
-            <div className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 italic">{meeting.ai_summary}</div>
+            <p className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">
+              {meeting.ai_summary}
+            </p>
           )}
         </>
+      ) : (
+        meeting.notes && <p className="whitespace-pre-wrap text-sm">{meeting.notes}</p>
       )}
-      {!canEdit && meeting.notes && <p className="text-sm whitespace-pre-wrap">{meeting.notes}</p>}
     </Card>
   );
 }
-
-export { ExternalLink };

@@ -2,9 +2,9 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* ClientDesk — Notion-style: warm cream, ink black, soft accent. */
+/* Consflow — Notion-style: warm cream, ink black, soft accent. */
 
 @theme inline {
   --font-display: "Instrument Serif", ui-serif, Georgia, serif;
@@ -56,6 +56,8 @@
 }
 
 :root {
+  color-scheme: light;
+
   --radius: 0.5rem;
 
   /* Cream paper, ink black */
@@ -106,6 +108,8 @@
 }
 
 .dark {
+  color-scheme: dark;
+
   --background: oklch(0.18 0.01 60);
   --foreground: oklch(0.96 0.008 80);
   --surface: oklch(0.21 0.01 60);
