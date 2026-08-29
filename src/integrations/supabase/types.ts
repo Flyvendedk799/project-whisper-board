@@ -678,45 +678,79 @@ export type Database = {
       }
       ticket_attachments: {
         Row: {
+          annotations: Json | null
+          checksum: string | null
           created_at: string
+          duration_ms: number | null
           file_name: string
+          has_audio: boolean | null
+          height: number | null
           id: string
           is_recording: boolean
+          kind: string
           mime_type: string | null
           size_bytes: number | null
+          source_attachment_id: string | null
           storage_bucket: string
           storage_path: string
+          thumbnail_path: string | null
           ticket_id: string
           uploader_id: string
+          width: number | null
           workspace_id: string
         }
         Insert: {
+          annotations?: Json | null
+          checksum?: string | null
           created_at?: string
+          duration_ms?: number | null
           file_name: string
+          has_audio?: boolean | null
+          height?: number | null
           id?: string
           is_recording?: boolean
+          kind?: string
           mime_type?: string | null
           size_bytes?: number | null
+          source_attachment_id?: string | null
           storage_bucket: string
           storage_path: string
+          thumbnail_path?: string | null
           ticket_id: string
           uploader_id: string
+          width?: number | null
           workspace_id?: string
         }
         Update: {
+          annotations?: Json | null
+          checksum?: string | null
           created_at?: string
+          duration_ms?: number | null
           file_name?: string
+          has_audio?: boolean | null
+          height?: number | null
           id?: string
           is_recording?: boolean
+          kind?: string
           mime_type?: string | null
           size_bytes?: number | null
+          source_attachment_id?: string | null
           storage_bucket?: string
           storage_path?: string
+          thumbnail_path?: string | null
           ticket_id?: string
           uploader_id?: string
+          width?: number | null
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ticket_attachments_source_attachment_id_fkey"
+            columns: ["source_attachment_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_attachments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ticket_attachments_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -726,6 +760,99 @@ export type Database = {
           },
           {
             foreignKeyName: "ticket_attachments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_capture_context: {
+        Row: {
+          app_version: string | null
+          browser: string | null
+          browser_version: string | null
+          console_log: Json | null
+          created_at: string
+          device_type: string | null
+          dpr: number | null
+          extra: Json | null
+          locale: string | null
+          network_errors: Json | null
+          online: boolean | null
+          os: string | null
+          page_title: string | null
+          referrer: string | null
+          screen_h: number | null
+          screen_w: number | null
+          ticket_id: string
+          timezone: string | null
+          url: string | null
+          user_agent: string | null
+          viewport_h: number | null
+          viewport_w: number | null
+          workspace_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          browser?: string | null
+          browser_version?: string | null
+          console_log?: Json | null
+          created_at?: string
+          device_type?: string | null
+          dpr?: number | null
+          extra?: Json | null
+          locale?: string | null
+          network_errors?: Json | null
+          online?: boolean | null
+          os?: string | null
+          page_title?: string | null
+          referrer?: string | null
+          screen_h?: number | null
+          screen_w?: number | null
+          ticket_id: string
+          timezone?: string | null
+          url?: string | null
+          user_agent?: string | null
+          viewport_h?: number | null
+          viewport_w?: number | null
+          workspace_id?: string
+        }
+        Update: {
+          app_version?: string | null
+          browser?: string | null
+          browser_version?: string | null
+          console_log?: Json | null
+          created_at?: string
+          device_type?: string | null
+          dpr?: number | null
+          extra?: Json | null
+          locale?: string | null
+          network_errors?: Json | null
+          online?: boolean | null
+          os?: string | null
+          page_title?: string | null
+          referrer?: string | null
+          screen_h?: number | null
+          screen_w?: number | null
+          ticket_id?: string
+          timezone?: string | null
+          url?: string | null
+          user_agent?: string | null
+          viewport_h?: number | null
+          viewport_w?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_capture_context_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_capture_context_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -850,6 +977,7 @@ export type Database = {
           priority: Database["public"]["Enums"]["ticket_priority"]
           project_id: string
           reporter_id: string | null
+          search_tsv: unknown
           status: Database["public"]["Enums"]["ticket_status"]
           ticket_number: number
           title: string
@@ -874,6 +1002,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["ticket_priority"]
           project_id: string
           reporter_id?: string | null
+          search_tsv?: unknown
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_number?: number
           title: string
@@ -898,6 +1027,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["ticket_priority"]
           project_id?: string
           reporter_id?: string | null
+          search_tsv?: unknown
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_number?: number
           title?: string
@@ -1051,6 +1181,10 @@ export type Database = {
       is_workspace_admin: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean
+      }
+      recompute_project_progress: {
+        Args: { _project_id: string }
+        Returns: undefined
       }
       user_workspace_ids: { Args: { _user_id: string }; Returns: string[] }
     }
