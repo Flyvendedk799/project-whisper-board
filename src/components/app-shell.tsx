@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/s
 import { Skeleton } from "@/components/ui/skeleton";
 import { unreadCountQuery } from "@/data/notifications";
 import { RunningTimerBar } from "@/features/time/running-timer-bar";
+import { CommandPalette } from "@/components/command-palette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
+      <CommandPalette />
       <RunningTimerBar />
       {!isAdmin && <ReportFab />}
     </div>
