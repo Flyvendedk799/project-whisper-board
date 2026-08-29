@@ -52,6 +52,104 @@ export type Database = {
           },
         ]
       }
+      app_errors: {
+        Row: {
+          context: Json | null
+          fingerprint: string
+          id: string
+          message: string
+          occurred_at: string
+          release: string | null
+          severity: string
+          side: string
+          stack: string | null
+          url: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          fingerprint: string
+          id?: string
+          message: string
+          occurred_at?: string
+          release?: string | null
+          severity?: string
+          side?: string
+          stack?: string | null
+          url?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          fingerprint?: string
+          id?: string
+          message?: string
+          occurred_at?: string
+          release?: string | null
+          severity?: string
+          side?: string
+          stack?: string | null
+          url?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_errors_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_line_items: {
+        Row: {
+          description: string
+          id: string
+          invoice_id: string
+          position: number
+          quantity: number
+          unit_price_cents: number
+          workspace_id: string
+        }
+        Insert: {
+          description: string
+          id?: string
+          invoice_id: string
+          position?: number
+          quantity?: number
+          unit_price_cents?: number
+          workspace_id?: string
+        }
+        Update: {
+          description?: string
+          id?: string
+          invoice_id?: string
+          position?: number
+          quantity?: number
+          unit_price_cents?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_line_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_line_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount_cents: number
@@ -59,12 +157,18 @@ export type Database = {
           currency: string
           due_date: string | null
           id: string
+          issued_at: string | null
           milestone_id: string | null
+          notes: string | null
           number: string | null
           paid_at: string | null
+          payment_link: string | null
           project_id: string
+          quote_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           stripe_payment_intent: string | null
+          subtotal_cents: number
+          tax_bps: number
           workspace_id: string
         }
         Insert: {
@@ -73,12 +177,18 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: string
+          issued_at?: string | null
           milestone_id?: string | null
+          notes?: string | null
           number?: string | null
           paid_at?: string | null
+          payment_link?: string | null
           project_id: string
+          quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           stripe_payment_intent?: string | null
+          subtotal_cents?: number
+          tax_bps?: number
           workspace_id?: string
         }
         Update: {
@@ -87,12 +197,18 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: string
+          issued_at?: string | null
           milestone_id?: string | null
+          notes?: string | null
           number?: string | null
           paid_at?: string | null
+          payment_link?: string | null
           project_id?: string
+          quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           stripe_payment_intent?: string | null
+          subtotal_cents?: number
+          tax_bps?: number
           workspace_id?: string
         }
         Relationships: [
@@ -108,6 +224,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
             referencedColumns: ["id"]
           },
           {
@@ -294,6 +417,47 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          channels: Json
+          digest_frequency: string
+          quiet_hours_end: number | null
+          quiet_hours_start: number | null
+          timezone: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channels?: Json
+          digest_frequency?: string
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          workspace_id?: string
+        }
+        Update: {
+          channels?: Json
+          digest_frequency?: string
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -372,6 +536,134 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "organizations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_messages: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          channel: string
+          created_at: string
+          error: string | null
+          id: string
+          provider: string | null
+          provider_message_id: string | null
+          related_id: string | null
+          related_type: string | null
+          scheduled_for: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["outbound_status"]
+          subject: string | null
+          template: string
+          to_address: string
+          to_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider?: string | null
+          provider_message_id?: string | null
+          related_id?: string | null
+          related_type?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["outbound_status"]
+          subject?: string | null
+          template: string
+          to_address: string
+          to_user_id?: string | null
+          workspace_id?: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          provider?: string | null
+          provider_message_id?: string | null
+          related_id?: string | null
+          related_type?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["outbound_status"]
+          subject?: string | null
+          template?: string
+          to_address?: string
+          to_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_messages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string
+          paid_at: string
+          provider: string
+          provider_ref: string | null
+          recorded_by: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id: string
+          paid_at?: string
+          provider?: string
+          provider_ref?: string | null
+          recorded_by?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id?: string
+          paid_at?: string
+          provider?: string
+          provider_ref?: string | null
+          recorded_by?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1427,6 +1719,7 @@ export type Database = {
         | "milestone"
         | "invoice"
         | "meeting"
+      outbound_status: "queued" | "sent" | "skipped" | "failed"
       project_status:
         | "discovery"
         | "proposal"
@@ -1602,6 +1895,7 @@ export const Constants = {
         "invoice",
         "meeting",
       ],
+      outbound_status: ["queued", "sent", "skipped", "failed"],
       project_status: [
         "discovery",
         "proposal",
