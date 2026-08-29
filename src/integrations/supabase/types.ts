@@ -676,6 +676,88 @@ export type Database = {
           },
         ]
       }
+      saved_views: {
+        Row: {
+          created_at: string
+          filters: Json
+          icon: string | null
+          id: string
+          is_shared: boolean
+          name: string
+          owner_id: string
+          position: number
+          scope: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          filters?: Json
+          icon?: string | null
+          id?: string
+          is_shared?: boolean
+          name: string
+          owner_id: string
+          position?: number
+          scope?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Update: {
+          created_at?: string
+          filters?: Json
+          icon?: string | null
+          id?: string
+          is_shared?: boolean
+          name?: string
+          owner_id?: string
+          position?: number
+          scope?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_views_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sla_policies: {
+        Row: {
+          first_response_minutes: number
+          id: string
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          resolution_minutes: number
+          workspace_id: string
+        }
+        Insert: {
+          first_response_minutes: number
+          id?: string
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          resolution_minutes: number
+          workspace_id?: string
+        }
+        Update: {
+          first_response_minutes?: number
+          id?: string
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          resolution_minutes?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sla_policies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_attachments: {
         Row: {
           annotations: Json | null
@@ -959,6 +1041,58 @@ export type Database = {
           },
         ]
       }
+      ticket_relations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          from_ticket_id: string
+          id: string
+          kind: Database["public"]["Enums"]["ticket_relation_kind"]
+          to_ticket_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          from_ticket_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["ticket_relation_kind"]
+          to_ticket_id: string
+          workspace_id?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          from_ticket_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["ticket_relation_kind"]
+          to_ticket_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_relations_from_ticket_id_fkey"
+            columns: ["from_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_relations_to_ticket_id_fkey"
+            columns: ["to_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_relations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           ai_screenshot_analysis: string | null
@@ -973,11 +1107,16 @@ export type Database = {
           due_date: string | null
           estimate_hours: number | null
           eta_date: string | null
+          first_response_at: string | null
           id: string
+          labels: string[]
           priority: Database["public"]["Enums"]["ticket_priority"]
           project_id: string
+          reopened_count: number
           reporter_id: string | null
+          resolved_at: string | null
           search_tsv: unknown
+          sla_due_at: string | null
           status: Database["public"]["Enums"]["ticket_status"]
           ticket_number: number
           title: string
@@ -998,11 +1137,16 @@ export type Database = {
           due_date?: string | null
           estimate_hours?: number | null
           eta_date?: string | null
+          first_response_at?: string | null
           id?: string
+          labels?: string[]
           priority?: Database["public"]["Enums"]["ticket_priority"]
           project_id: string
+          reopened_count?: number
           reporter_id?: string | null
+          resolved_at?: string | null
           search_tsv?: unknown
+          sla_due_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_number?: number
           title: string
@@ -1023,11 +1167,16 @@ export type Database = {
           due_date?: string | null
           estimate_hours?: number | null
           eta_date?: string | null
+          first_response_at?: string | null
           id?: string
+          labels?: string[]
           priority?: Database["public"]["Enums"]["ticket_priority"]
           project_id?: string
+          reopened_count?: number
           reporter_id?: string | null
+          resolved_at?: string | null
           search_tsv?: unknown
+          sla_due_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_number?: number
           title?: string
@@ -1045,6 +1194,83 @@ export type Database = {
           },
           {
             foreignKeyName: "tickets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          billable: boolean
+          created_at: string
+          duration_minutes: number | null
+          ended_at: string | null
+          id: string
+          invoice_id: string | null
+          note: string | null
+          project_id: string
+          rate_cents: number | null
+          started_at: string
+          ticket_id: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          billable?: boolean
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          note?: string | null
+          project_id: string
+          rate_cents?: number | null
+          started_at?: string
+          ticket_id?: string | null
+          user_id: string
+          workspace_id?: string
+        }
+        Update: {
+          billable?: boolean
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          note?: string | null
+          project_id?: string
+          rate_cents?: number | null
+          started_at?: string
+          ticket_id?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1210,6 +1436,12 @@ export type Database = {
         | "archived"
       quote_status: "draft" | "sent" | "accepted" | "declined" | "expired"
       ticket_priority: "low" | "medium" | "high" | "urgent"
+      ticket_relation_kind:
+        | "duplicate_of"
+        | "blocks"
+        | "blocked_by"
+        | "relates_to"
+        | "parent_of"
       ticket_status:
         | "open"
         | "triaged"
@@ -1380,6 +1612,13 @@ export const Constants = {
       ],
       quote_status: ["draft", "sent", "accepted", "declined", "expired"],
       ticket_priority: ["low", "medium", "high", "urgent"],
+      ticket_relation_kind: [
+        "duplicate_of",
+        "blocks",
+        "blocked_by",
+        "relates_to",
+        "parent_of",
+      ],
       ticket_status: [
         "open",
         "triaged",
