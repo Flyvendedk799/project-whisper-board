@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Paperclip } from "lucide-react";
 import { StatusPill } from "@/components/app-shell";
@@ -13,7 +14,13 @@ import {
 } from "@/data/enums";
 import type { TicketListRow } from "@/data/types";
 
-export function TicketRow({
+/**
+ * Memoised: the queue re-renders on every selection change and every keyboard
+ * move, and a page is forty of these. Only the props that affect the row are
+ * compared — the callback identity deliberately is not, because the parent
+ * recreates it per row.
+ */
+export const TicketRow = memo(function TicketRow({
   ticket,
   selected,
   onSelectedChange,
@@ -97,10 +104,10 @@ export function TicketRow({
       </Link>
     </div>
   );
-}
+});
 
 /** The same ticket as a card, for the board and for narrow screens. */
-export function TicketCard({ ticket }: { ticket: TicketListRow }) {
+export const TicketCard = memo(function TicketCard({ ticket }: { ticket: TicketListRow }) {
   return (
     <Link
       to="/app/tickets/$ticketId"
@@ -135,6 +142,6 @@ export function TicketCard({ ticket }: { ticket: TicketListRow }) {
       )}
     </Link>
   );
-}
+});
 
 export { Paperclip };
