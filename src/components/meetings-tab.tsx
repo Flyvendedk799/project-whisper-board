@@ -8,7 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { StatusPill } from "@/components/app-shell";
 import { CalendarPlus, Sparkles, Video, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -62,35 +69,99 @@ function NewMeetingButton({ projectId, onCreated }: { projectId: string; onCreat
     e.preventDefault();
     setBusy(true);
     try {
-      await fn({ data: { projectId, title, scheduledAt: new Date(when).toISOString(), durationMinutes: duration, agenda: agenda || undefined, meetingUrl: meetingUrl || undefined } });
+      await fn({
+        data: {
+          projectId,
+          title,
+          scheduledAt: new Date(when).toISOString(),
+          durationMinutes: duration,
+          agenda: agenda || undefined,
+          meetingUrl: meetingUrl || undefined,
+        },
+      });
       toast.success("Meeting scheduled");
-      setOpen(false); setTitle(""); setWhen(""); setAgenda(""); setMeetingUrl("");
+      setOpen(false);
+      setTitle("");
+      setWhen("");
+      setAgenda("");
+      setMeetingUrl("");
       onCreated();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button><CalendarPlus className="h-4 w-4 mr-1.5" />Schedule meeting</Button>
+        <Button>
+          <CalendarPlus className="h-4 w-4 mr-1.5" />
+          Schedule meeting
+        </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>New meeting</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>New meeting</DialogTitle>
+        </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div><Label>Title</Label><Input required value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>When</Label><Input type="datetime-local" required value={when} onChange={(e) => setWhen(e.target.value)} /></div>
-            <div><Label>Duration (min)</Label><Input type="number" min={5} value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></div>
+          <div>
+            <Label>Title</Label>
+            <Input required value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          <div><Label>Meeting link</Label><Input type="url" placeholder="https://meet.google.com/…" value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} /></div>
-          <div><Label>Agenda</Label><Textarea rows={3} value={agenda} onChange={(e) => setAgenda(e.target.value)} /></div>
-          <DialogFooter><Button type="submit" disabled={busy}>{busy ? "Scheduling…" : "Schedule"}</Button></DialogFooter>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>When</Label>
+              <Input
+                type="datetime-local"
+                required
+                value={when}
+                onChange={(e) => setWhen(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Duration (min)</Label>
+              <Input
+                type="number"
+                min={5}
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Meeting link</Label>
+            <Input
+              type="url"
+              placeholder="https://meet.google.com/…"
+              value={meetingUrl}
+              onChange={(e) => setMeetingUrl(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Agenda</Label>
+            <Textarea rows={3} value={agenda} onChange={(e) => setAgenda(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Scheduling…" : "Schedule"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-function MeetingCard({ meeting, canEdit, onChanged }: { meeting: any; canEdit: boolean; onChanged: () => void }) {
+function MeetingCard({
+  meeting,
+  canEdit,
+  onChanged,
+}: {
+  meeting: any;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
   const [notes, setNotes] = useState(meeting.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -103,7 +174,11 @@ function MeetingCard({ meeting, canEdit, onChanged }: { meeting: any; canEdit: b
       await save({ data: { meetingId: meeting.id, notes, markCompleted: complete } });
       toast.success("Notes saved");
       onChanged();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   }
   async function aiExtract() {
     setAiBusy(true);
@@ -111,7 +186,11 @@ function MeetingCard({ meeting, canEdit, onChanged }: { meeting: any; canEdit: b
       const r = await extract({ data: { meetingId: meeting.id } });
       toast.success(`Created ${r.count} ticket${r.count === 1 ? "" : "s"} from notes`);
       onChanged();
-    } catch (e: any) { toast.error(e.message); } finally { setAiBusy(false); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   const date = new Date(meeting.scheduled_at);
@@ -125,25 +204,51 @@ function MeetingCard({ meeting, canEdit, onChanged }: { meeting: any; canEdit: b
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusPill tone={meeting.status === "completed" ? "success" : "default"}>{meeting.status}</StatusPill>
+          <StatusPill tone={meeting.status === "completed" ? "success" : "default"}>
+            {meeting.status}
+          </StatusPill>
           {meeting.meeting_url && (
-            <Button variant="ghost" size="sm" asChild><a href={meeting.meeting_url} target="_blank" rel="noreferrer"><Video className="h-4 w-4 mr-1" />Join</a></Button>
+            <Button variant="ghost" size="sm" asChild>
+              <a href={meeting.meeting_url} target="_blank" rel="noreferrer">
+                <Video className="h-4 w-4 mr-1" />
+                Join
+              </a>
+            </Button>
           )}
         </div>
       </div>
-      {meeting.agenda && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{meeting.agenda}</p>}
+      {meeting.agenda && (
+        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{meeting.agenda}</p>
+      )}
       {canEdit && (
         <>
-          <Textarea rows={5} placeholder="Meeting notes & decisions…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <Textarea
+            rows={5}
+            placeholder="Meeting notes & decisions…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
           <div className="flex gap-2 flex-wrap">
-            <Button size="sm" onClick={() => saveNotes(false)} disabled={busy}>{busy ? "Saving…" : "Save notes"}</Button>
-            <Button size="sm" variant="outline" onClick={() => saveNotes(true)} disabled={busy}>Mark completed</Button>
-            <Button size="sm" variant="ghost" onClick={aiExtract} disabled={aiBusy || !notes.trim()}>
-              <Sparkles className="h-4 w-4 mr-1" />{aiBusy ? "Extracting…" : "Notes → tickets"}
+            <Button size="sm" onClick={() => saveNotes(false)} disabled={busy}>
+              {busy ? "Saving…" : "Save notes"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => saveNotes(true)} disabled={busy}>
+              Mark completed
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={aiExtract}
+              disabled={aiBusy || !notes.trim()}
+            >
+              <Sparkles className="h-4 w-4 mr-1" />
+              {aiBusy ? "Extracting…" : "Notes → tickets"}
             </Button>
           </div>
           {meeting.ai_summary && (
-            <div className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 italic">{meeting.ai_summary}</div>
+            <div className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 italic">
+              {meeting.ai_summary}
+            </div>
           )}
         </>
       )}

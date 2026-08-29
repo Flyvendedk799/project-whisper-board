@@ -54,7 +54,9 @@ function Home() {
     <>
       <PageHeader
         title={greeting}
-        description={isAdmin ? "Here's the state of your client work." : "Welcome to your client portal."}
+        description={
+          isAdmin ? "Here's the state of your client work." : "Welcome to your client portal."
+        }
       />
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-10 space-y-10 md:space-y-12">
         {showOnboarding && <OnboardingWizard />}
@@ -65,20 +67,34 @@ function Home() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-display text-xl md:text-2xl">Recent projects</h2>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link to="/app/projects">All <ArrowRight className="h-4 w-4 ml-1" /></Link>
+                  <Link to="/app/projects">
+                    All <ArrowRight className="h-4 w-4 ml-1" />
+                  </Link>
                 </Button>
               </div>
               {projectsQ.isLoading ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-32" />
+                  ))}
                 </div>
               ) : noProjects ? (
                 <Card>
                   <EmptyState
                     icon={FolderKanban}
                     title="No projects yet"
-                    description={isAdmin ? "Create your first client project to get started." : "Your provider hasn't shared a project with you yet — sit tight."}
-                    action={isAdmin && <Button asChild><Link to="/app/projects">Create a project</Link></Button>}
+                    description={
+                      isAdmin
+                        ? "Create your first client project to get started."
+                        : "Your provider hasn't shared a project with you yet — sit tight."
+                    }
+                    action={
+                      isAdmin && (
+                        <Button asChild>
+                          <Link to="/app/projects">Create a project</Link>
+                        </Button>
+                      )
+                    }
                   />
                 </Card>
               ) : (
@@ -87,12 +103,17 @@ function Home() {
                     <Link key={p.id} to="/app/projects/$projectId" params={{ projectId: p.id }}>
                       <Card className="p-5 h-full hover:border-foreground/20 hover:shadow-sm transition-all">
                         <div className="flex items-center justify-between mb-2">
-                          <StatusPill tone={statusTone(p.status)}>{p.status.replace("_", " ")}</StatusPill>
+                          <StatusPill tone={statusTone(p.status)}>
+                            {p.status.replace("_", " ")}
+                          </StatusPill>
                           <span className="text-xs text-muted-foreground">{p.progress}%</span>
                         </div>
                         <h3 className="font-display text-xl">{p.title}</h3>
                         <div className="mt-4 h-1.5 bg-muted rounded overflow-hidden">
-                          <div className="h-full bg-primary transition-all" style={{ width: `${p.progress}%` }} />
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${p.progress}%` }}
+                          />
                         </div>
                       </Card>
                     </Link>
@@ -110,20 +131,36 @@ function Home() {
                   <EmptyState
                     icon={InboxIcon}
                     title="No open tickets"
-                    description={isAdmin ? "Quiet day. Tickets your clients open will appear here." : "Nothing to see — when you report something, it'll show up here."}
-                    action={!isAdmin && projectsQ.data?.[0] && (
-                      <Button asChild>
-                        <Link to="/app/projects/$projectId" params={{ projectId: projectsQ.data[0].id }}>
-                          <Bug className="h-4 w-4 mr-1.5" />Report something
-                        </Link>
-                      </Button>
-                    )}
+                    description={
+                      isAdmin
+                        ? "Quiet day. Tickets your clients open will appear here."
+                        : "Nothing to see — when you report something, it'll show up here."
+                    }
+                    action={
+                      !isAdmin &&
+                      projectsQ.data?.[0] && (
+                        <Button asChild>
+                          <Link
+                            to="/app/projects/$projectId"
+                            params={{ projectId: projectsQ.data[0].id }}
+                          >
+                            <Bug className="h-4 w-4 mr-1.5" />
+                            Report something
+                          </Link>
+                        </Button>
+                      )
+                    }
                   />
                 </Card>
               ) : (
                 <Card className="divide-y">
                   {ticketsQ.data!.map((t) => (
-                    <Link key={t.id} to="/app/tickets/$ticketId" params={{ ticketId: t.id }} className="flex items-center gap-3 p-4 hover:bg-accent/40">
+                    <Link
+                      key={t.id}
+                      to="/app/tickets/$ticketId"
+                      params={{ ticketId: t.id }}
+                      className="flex items-center gap-3 p-4 hover:bg-accent/40"
+                    >
                       <StatusPill tone={priorityTone(t.priority)}>{t.priority}</StatusPill>
                       <span className="flex-1 truncate">{t.title}</span>
                       <StatusPill>{t.status.replace("_", " ")}</StatusPill>
@@ -141,7 +178,8 @@ function Home() {
 
 function greet(name: string) {
   const h = new Date().getHours();
-  const prefix = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const prefix =
+    h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   return `${prefix}, ${name}`;
 }
 

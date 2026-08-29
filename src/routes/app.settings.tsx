@@ -42,18 +42,34 @@ function SettingsPage() {
       <div className="max-w-2xl mx-auto px-4 md:px-8 py-8 md:py-10 space-y-6">
         <Card className="p-6 space-y-4">
           <h3 className="font-display text-xl">Profile</h3>
-          <div className="space-y-2"><Label>Email</Label><Input value={user?.email ?? ""} disabled /></div>
-          <div className="space-y-2"><Label>Full name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-          <div className="flex justify-end"><Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button></div>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input value={user?.email ?? ""} disabled />
+          </div>
+          <div className="space-y-2">
+            <Label>Full name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </Card>
         <Card className="p-6 space-y-3">
           <h3 className="font-display text-xl">Security</h3>
-          <p className="text-sm text-muted-foreground">Change your password by sending yourself a secure reset link.</p>
-          <Button variant="outline" onClick={sendReset}>Send password reset email</Button>
+          <p className="text-sm text-muted-foreground">
+            Change your password by sending yourself a secure reset link.
+          </p>
+          <Button variant="outline" onClick={sendReset}>
+            Send password reset email
+          </Button>
         </Card>
         <Card className="p-6 space-y-2">
           <h3 className="font-display text-xl">Role</h3>
-          <p className="text-sm text-muted-foreground">You are signed in as <strong>{isAdmin ? "Admin" : "Client"}</strong>.</p>
+          <p className="text-sm text-muted-foreground">
+            You are signed in as <strong>{isAdmin ? "Admin" : "Client"}</strong>.
+          </p>
         </Card>
       </div>
     </>

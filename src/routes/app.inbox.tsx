@@ -41,7 +41,9 @@ function Inbox() {
           <Card className="p-12 text-center">
             <Bell className="h-8 w-8 mx-auto text-muted-foreground" />
             <h3 className="font-display text-xl mt-3">All clear</h3>
-            <p className="text-sm text-muted-foreground mt-1">You'll see ticket activity, replies, and milestones here.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              You'll see ticket activity, replies, and milestones here.
+            </p>
           </Card>
         ) : (
           <Card className="divide-y">
@@ -50,10 +52,20 @@ function Inbox() {
                 <div className="flex-1">
                   <div className="text-sm font-medium">{n.title}</div>
                   {n.body && <div className="text-sm text-muted-foreground mt-0.5">{n.body}</div>}
-                  <div className="text-xs text-muted-foreground mt-1">{new Date(n.created_at).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {new Date(n.created_at).toLocaleString()}
+                  </div>
                 </div>
-                {n.link && <Button variant="ghost" size="sm" asChild><Link to={n.link as any}>Open</Link></Button>}
-                {!n.read_at && <Button variant="ghost" size="sm" onClick={() => markRead(n.id)}>Mark read</Button>}
+                {n.link && (
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to={n.link as any}>Open</Link>
+                  </Button>
+                )}
+                {!n.read_at && (
+                  <Button variant="ghost" size="sm" onClick={() => markRead(n.id)}>
+                    Mark read
+                  </Button>
+                )}
               </div>
             ))}
           </Card>

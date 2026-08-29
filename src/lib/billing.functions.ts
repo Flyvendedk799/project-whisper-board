@@ -11,17 +11,22 @@ const lineSchema = z.object({
 export const createQuote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({
-      projectId: z.string().uuid(),
-      title: z.string().min(1).max(200),
-      currency: z.string().min(3).max(3).default("USD"),
-      notes: z.string().max(5000).optional(),
-      lines: z.array(lineSchema).min(1).max(50),
-    }).parse(input),
+    z
+      .object({
+        projectId: z.string().uuid(),
+        title: z.string().min(1).max(200),
+        currency: z.string().min(3).max(3).default("USD"),
+        notes: z.string().max(5000).optional(),
+        lines: z.array(lineSchema).min(1).max(50),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const subtotal = data.lines.reduce((a, l) => a + Math.round(l.unit_price_cents * l.quantity), 0);
+    const subtotal = data.lines.reduce(
+      (a, l) => a + Math.round(l.unit_price_cents * l.quantity),
+      0,
+    );
     const { data: q, error } = await supabase
       .from("quotes")
       .insert({
@@ -79,14 +84,16 @@ export const respondQuote = createServerFn({ method: "POST" })
 export const createInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({
-      projectId: z.string().uuid(),
-      milestoneId: z.string().uuid().optional(),
-      amountCents: z.number().int().min(1).max(100_000_000),
-      currency: z.string().min(3).max(3).default("USD"),
-      dueDate: z.string().optional(),
-      number: z.string().min(1).max(50),
-    }).parse(input),
+    z
+      .object({
+        projectId: z.string().uuid(),
+        milestoneId: z.string().uuid().optional(),
+        amountCents: z.number().int().min(1).max(100_000_000),
+        currency: z.string().min(3).max(3).default("USD"),
+        dueDate: z.string().optional(),
+        number: z.string().min(1).max(50),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { data: inv, error } = await context.supabase

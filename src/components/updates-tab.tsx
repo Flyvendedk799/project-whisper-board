@@ -31,13 +31,16 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       {isAdmin && <NewUpdateForm projectId={projectId} onPosted={refresh} />}
       {(updates.data?.length ?? 0) === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">No updates posted yet.</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          No updates posted yet.
+        </Card>
       ) : (
         <div className="space-y-3">
           {updates.data!.map((u) => (
             <Card key={u.id} className="p-5">
               <div className="text-xs text-muted-foreground mb-1">
-                {u.author?.full_name ?? u.author?.email ?? "System"} · {new Date(u.created_at).toLocaleString()}
+                {u.author?.full_name ?? u.author?.email ?? "System"} ·{" "}
+                {new Date(u.created_at).toLocaleString()}
               </div>
               {u.title && <h4 className="font-medium">{u.title}</h4>}
               {u.body && <p className="text-sm mt-2 whitespace-pre-wrap">{u.body}</p>}
@@ -62,14 +65,29 @@ function NewUpdateForm({ projectId, onPosted }: { projectId: string; onPosted: (
     try {
       await post({ data: { projectId, title, body: body || undefined } });
       toast.success("Update posted");
-      setTitle(""); setBody(""); onPosted();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+      setTitle("");
+      setBody("");
+      onPosted();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <form onSubmit={submit} className="space-y-2">
       <Input placeholder="Update title…" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Textarea rows={3} placeholder="What's new on this project?" value={body} onChange={(e) => setBody(e.target.value)} />
-      <div className="flex justify-end"><Button type="submit" disabled={busy}>{busy ? "Posting…" : "Post update"}</Button></div>
+      <Textarea
+        rows={3}
+        placeholder="What's new on this project?"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+      />
+      <div className="flex justify-end">
+        <Button type="submit" disabled={busy}>
+          {busy ? "Posting…" : "Post update"}
+        </Button>
+      </div>
     </form>
   );
 }

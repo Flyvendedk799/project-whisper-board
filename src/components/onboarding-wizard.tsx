@@ -57,7 +57,10 @@ export function OnboardingWizard() {
   async function inviteAndContinue(e: React.FormEvent) {
     e.preventDefault();
     if (!projectId) return;
-    if (!clientEmail) { setStep(3); return; }
+    if (!clientEmail) {
+      setStep(3);
+      return;
+    }
     setBusy(true);
     try {
       await invite({ data: { email: clientEmail, projectId, fullName: clientName || undefined } });
@@ -95,7 +98,9 @@ export function OnboardingWizard() {
         <span className="font-medium">Let's get you set up</span>
       </div>
       <h2 className="font-display text-2xl md:text-3xl">Three quick steps</h2>
-      <p className="text-sm text-muted-foreground mt-1">Create a project, invite your client, drop in the first ticket.</p>
+      <p className="text-sm text-muted-foreground mt-1">
+        Create a project, invite your client, drop in the first ticket.
+      </p>
 
       <Stepper step={step} />
 
@@ -103,11 +108,24 @@ export function OnboardingWizard() {
         <form onSubmit={createProject} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="pt">Project title</Label>
-            <Input id="pt" placeholder="Acme website redesign" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} required />
+            <Input
+              id="pt"
+              placeholder="Acme website redesign"
+              value={projectTitle}
+              onChange={(e) => setProjectTitle(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pd">What's it about? <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea id="pd" rows={3} value={projectDesc} onChange={(e) => setProjectDesc(e.target.value)} />
+            <Label htmlFor="pd">
+              What's it about? <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
+            <Textarea
+              id="pd"
+              rows={3}
+              value={projectDesc}
+              onChange={(e) => setProjectDesc(e.target.value)}
+            />
           </div>
           <div className="flex justify-end">
             <Button type="submit" disabled={busy || !projectTitle.trim()}>
@@ -121,17 +139,30 @@ export function OnboardingWizard() {
         <form onSubmit={inviteAndContinue} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="ce">Client email</Label>
-            <Input id="ce" type="email" placeholder="client@company.com" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
-            <p className="text-xs text-muted-foreground">They'll get an email invite to join their portal.</p>
+            <Input
+              id="ce"
+              type="email"
+              placeholder="client@company.com"
+              value={clientEmail}
+              onChange={(e) => setClientEmail(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              They'll get an email invite to join their portal.
+            </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="cn">Their name <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Label htmlFor="cn">
+              Their name <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
             <Input id="cn" value={clientName} onChange={(e) => setClientName(e.target.value)} />
           </div>
           <div className="flex justify-between">
-            <Button type="button" variant="ghost" onClick={() => setStep(3)}>Skip</Button>
+            <Button type="button" variant="ghost" onClick={() => setStep(3)}>
+              Skip
+            </Button>
             <Button type="submit" disabled={busy}>
-              {busy ? "Inviting…" : clientEmail ? "Send invite" : "Continue"} <ArrowRight className="h-4 w-4 ml-1.5" />
+              {busy ? "Inviting…" : clientEmail ? "Send invite" : "Continue"}{" "}
+              <ArrowRight className="h-4 w-4 ml-1.5" />
             </Button>
           </div>
         </form>
@@ -141,11 +172,24 @@ export function OnboardingWizard() {
         <form onSubmit={createTicket} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="tt">First ticket title</Label>
-            <Input id="tt" placeholder="Set up staging environment" value={ticketTitle} onChange={(e) => setTicketTitle(e.target.value)} required />
+            <Input
+              id="tt"
+              placeholder="Set up staging environment"
+              value={ticketTitle}
+              onChange={(e) => setTicketTitle(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="td">Details <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea id="td" rows={3} value={ticketDesc} onChange={(e) => setTicketDesc(e.target.value)} />
+            <Label htmlFor="td">
+              Details <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
+            <Textarea
+              id="td"
+              rows={3}
+              value={ticketDesc}
+              onChange={(e) => setTicketDesc(e.target.value)}
+            />
           </div>
           <div className="flex justify-end">
             <Button type="submit" disabled={busy || !ticketTitle.trim()}>
@@ -168,15 +212,25 @@ function Stepper({ step }: { step: Step }) {
     <div className="flex items-center gap-2 my-6">
       {items.map((it, i) => (
         <div key={it.n} className="flex items-center gap-2 flex-1 min-w-0">
-          <div className={`h-7 w-7 rounded-full grid place-items-center text-xs font-medium shrink-0 ${
-            step > it.n ? "bg-primary text-primary-foreground" :
-            step === it.n ? "bg-primary text-primary-foreground" :
-            "bg-muted text-muted-foreground"
-          }`}>
+          <div
+            className={`h-7 w-7 rounded-full grid place-items-center text-xs font-medium shrink-0 ${
+              step > it.n
+                ? "bg-primary text-primary-foreground"
+                : step === it.n
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+            }`}
+          >
             {step > it.n ? <Check className="h-3.5 w-3.5" /> : it.n}
           </div>
-          <span className={`text-xs truncate ${step === it.n ? "text-foreground font-medium" : "text-muted-foreground"}`}>{it.label}</span>
-          {i < items.length - 1 && <div className={`h-px flex-1 ${step > it.n ? "bg-primary/40" : "bg-border"}`} />}
+          <span
+            className={`text-xs truncate ${step === it.n ? "text-foreground font-medium" : "text-muted-foreground"}`}
+          >
+            {it.label}
+          </span>
+          {i < items.length - 1 && (
+            <div className={`h-px flex-1 ${step > it.n ? "bg-primary/40" : "bg-border"}`} />
+          )}
         </div>
       ))}
     </div>

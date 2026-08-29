@@ -5,14 +5,33 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
+/**
+ * Two rules here are architectural, not stylistic:
+ *
+ *  - `supabase.from(...)` is confined to `src/data/**` and the server-function
+ *    modules. Scattered queries are how the app ended up with 20+ hand-typed
+ *    query keys and a dozen reads that silently dropped their `error`.
+ *  - `as any` is banned outright. The generated `Database` type already
+ *    describes every table; casting past it throws away the only schema
+ *    safety net the project has.
+ */
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vinxi",
+      "src/routeTree.gen.ts",
+      "playwright-report",
+      "test-results",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
+      ecmaVersion: 2022,
+      globals: { ...globals.browser, ...globals.node },
     },
     plugins: {
       "react-hooks": reactHooks,
@@ -29,12 +48,54 @@ export default tseslint.config(
               message:
                 "TanStack Start does not use the Next.js `server-only` package. Rename the module to `*.server.ts` or mark it with `@tanstack/react-start/server-only`.",
             },
+            {
+              name: "@/hooks/use-auth",
+              importNames: ["AuthProvider"],
+              message: "Import AuthProvider from @/components/auth-provider.",
+            },
           ],
         },
       ],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/no-explicit-any": "error",
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      eqeqeq: ["error", "smart"],
     },
+  },
+  // Data access is centralised. Everything else goes through `src/data/*`.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/data/**",
+      "src/lib/*.functions.ts",
+      "src/lib/**/*.functions.ts",
+      "src/integrations/supabase/**",
+      "src/components/auth-provider.tsx",
+      "src/**/*.{test,spec}.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='from'][callee.object.name='supabase']",
+          message:
+            "Query and mutation builders live in `src/data/*`. Import a queryOptions/mutation from there instead of calling supabase.from() inline.",
+        },
+      ],
+    },
+  },
+  // Generated Supabase types are not ours to lint.
+  {
+    files: ["src/integrations/supabase/types.ts"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
+  {
+    files: ["src/**/*.{test,spec}.{ts,tsx}", "src/test/**"],
+    rules: { "@typescript-eslint/no-explicit-any": "off", "no-console": "off" },
   },
   eslintPluginPrettier,
 );

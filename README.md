@@ -1,26 +1,93 @@
 # Consflow
 
-I run a software business where I create software for clients. I fix things. I basically do everything digital and coding related for all types of clients. What I want to build is, in my mind, I call it a ticket platform. You know, the way where if you work in a big corporation and there's an IT issue, you create an IT ticket. I want to create both the dashboard for me and the dashboard for the clients where everything like from A to C, we take the client through the project from the start, including the prices, the duration, the progress, the updates, the meetings, after meetings where we've agreed upon code changes. And then also when customers are requesting new things, new ideas, when they have tested something, when they have feedback, when they have bugs, everything. Like some way for them to report by making it easy with making screenshots and recordings and also for me to report back and like both ways for it to be simple. Also, it could utilize AI. I want to be this. I want this to be built out in full from A to C. It's required to be full implementation. Like this plan should cover everything.
+A client portal and ticket platform for a software agency. Two sides, one app:
 
-This project was built with [Lovable](https://lovable.dev).
+- **Admin workspace** — every ticket across every client in one triage queue, with search,
+  saved views, keyboard navigation, SLA tracking and time logging.
+- **Client portal** — clients report a bug by pointing at it (annotated screenshot, screen
+  recording with narration, auto-captured browser context; AI drafts the ticket), follow their
+  project from quote to milestones to invoice, and read a real activity timeline.
 
-**Live app**: https://project-whisper-board.lovable.app
+## Stack
 
-## Build with Lovable
+| Layer | Choice |
+|---|---|
+| Framework | TanStack Start (SSR) + React 19, file-based routing in `src/routes/` |
+| Server state | TanStack Query v5 — all reads/writes defined in `src/data/` |
+| Styling | Tailwind CSS v4 (CSS-first tokens in `src/styles.css`) + shadcn/ui |
+| Backend | Supabase — Postgres, Auth, Storage, Realtime. Access control is RLS |
+| Server logic | `createServerFn` handlers in `src/lib/*.functions.ts`, running on Cloudflare Workers |
+| Tests | Vitest (node + happy-dom projects), Playwright for smoke |
+| Deploy | Cloudflare Workers (`wrangler.jsonc` → `src/server.ts`) |
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/9953f29a-2af4-4874-a72b-c2e3bf7cafe7).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Getting started
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+cp .env.example .env      # fill in your Supabase project values
+bun run dev
 ```
+
+```sh
+bun run validate          # typecheck + lint + test — run this before pushing
+bun run build
+```
+
+## Environment
+
+Required — the app will not boot without these:
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `VITE_SUPABASE_URL` / `SUPABASE_URL` | client / server | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_PUBLISHABLE_KEY` | client / server | Anon key |
+| `VITE_SUPABASE_PROJECT_ID` | `bun run db:types` | Project ref |
+| `SUPABASE_SERVICE_ROLE_KEY` | server only | Privileged server functions. Never expose to the client |
+| `SITE_URL` | server | Absolute origin used in invite and email links |
+
+Optional — **every one of these is optional by design.** Each is behind a provider adapter in
+`src/lib/providers/`. With none of them set the app is fully functional: emails land in the
+in-app Outbox instead of an inbox, invoices are settled with "Mark as paid", errors are
+recorded in the `app_errors` table, and AI features hide themselves. Setting a key switches
+the adapter with no code change.
+
+| Variable | Enables | Without it |
+|---|---|---|
+| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | Ticket drafting, triage, summaries, screenshot analysis | AI affordances are hidden |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Real transactional email | Messages are written to `outbound_messages` and shown in Settings → Outbox |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Card payment on invoices | Invoices are settled manually; the flow is otherwise identical |
+| `SENTRY_DSN` | Error reporting to Sentry | Errors are written to `app_errors` and surfaced in Settings |
+
+## Architecture notes
+
+**Data access is centralised.** `src/data/` holds every query and mutation as a
+`queryOptions()` builder with a prefix-nested key factory, so invalidating `qk.ticket(id)`
+covers its comments, events and attachments. ESLint blocks `supabase.from()` outside
+`src/data/` and the server-function modules.
+
+**Errors are mapped, never leaked.** `src/lib/errors.ts` translates Postgres and network
+failures into sentences a client can read; only messages authored as an `AppError` are shown
+verbatim. `useServerAction` wraps every mutation with pending state, invalidation, optimistic
+rollback and error reporting.
+
+**The database owns its invariants.** Audit rows (`ticket_events`), project progress, ticket
+and invoice numbering, SLA due dates, first-response timestamps and "one running timer per
+user" are all enforced by triggers and constraints rather than application code.
+
+**Tenancy is a schema boundary.** Every domain table carries `workspace_id`, guarded by a
+`RESTRICTIVE` RLS policy that ANDs with the existing per-table policies. The UI is
+single-workspace today; onboarding a second agency does not require a rewrite.
+
+## Database
+
+Migrations live in `supabase/migrations/` and are ordered — later ones depend on
+`workspace_id` existing.
+
+```sh
+supabase start
+supabase db reset          # apply every migration to a fresh local database
+bun run db:types           # regenerate src/integrations/supabase/types.ts
+```
+
+`supabase/tests/schema_assertions.sql` asserts the trigger behaviour (progress rollup, audit
+writes, workspace isolation, timer uniqueness) and runs in CI whenever a migration changes.

@@ -36,7 +36,11 @@ export const notifyTicketComment = createServerFn({ method: "POST" })
     if (t.assignee_id) recipientSet.add(t.assignee_id);
     recipientSet.delete(userId); // don't notify the author
 
-    const { data: author } = await a.from("profiles").select("full_name,email").eq("id", userId).maybeSingle();
+    const { data: author } = await a
+      .from("profiles")
+      .select("full_name,email")
+      .eq("id", userId)
+      .maybeSingle();
     const authorLabel = author?.full_name || author?.email || "Someone";
 
     const rows = Array.from(recipientSet).map((uid) => ({
