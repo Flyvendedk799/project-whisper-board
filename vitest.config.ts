@@ -17,6 +17,7 @@ export default defineConfig({
   test: {
     projects: [
       {
+        plugins: [tsconfigPaths()],
         test: {
           ...SHARED,
           name: "node",
@@ -25,6 +26,7 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths()],
         test: {
           ...SHARED,
           name: "dom",

@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -9,7 +9,9 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { Toaster } from "@/components/ui/sonner";
+import { AppProviders } from "@/components/app-providers";
+import { THEME_SCRIPT } from "@/components/theme-provider";
+import { captureError } from "@/lib/providers";
 
 function NotFoundComponent() {
   return (
@@ -34,8 +36,8 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
+  captureError(error, { scope: "route" });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -107,11 +109,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the inline script below sets `class="dark"`
+    // before React sees the document, so the server markup will not match.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Blocking, before first paint. Without it every load flashes white
+            before the dark theme is applied. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>
+        <a
+          href="#main"
+          className="sr-only rounded-md focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-background focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring"
+        >
+          Skip to content
+        </a>
         {children}
         <Scripts />
       </body>
@@ -123,9 +136,8 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <AppProviders queryClient={queryClient}>
       <Outlet />
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    </AppProviders>
   );
 }
