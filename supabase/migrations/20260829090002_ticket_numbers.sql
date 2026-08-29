@@ -3,7 +3,9 @@
 -- "Have a look at #124" is how people actually talk about tickets. A UUID in
 -- the URL is fine; a UUID in a conversation is not.
 
-alter table public.tickets add column ticket_number int;
+-- The default is a placeholder the trigger below always overwrites; it exists
+-- so the generated Insert type treats the column as optional, which it is.
+alter table public.tickets add column ticket_number int not null default 0;
 
 create or replace function public.assign_ticket_number()
 returns trigger language plpgsql security definer set search_path = public
@@ -11,7 +13,8 @@ as $$
 declare
   n int;
 begin
-  if new.ticket_number is not null then
+  -- 0 is the column default, i.e. "caller did not supply one".
+  if coalesce(new.ticket_number, 0) > 0 then
     return new;
   end if;
   -- UPDATE ... RETURNING takes a row lock, so concurrent inserts queue rather
@@ -37,7 +40,6 @@ update public.workspaces w
 set ticket_seq = greatest(w.ticket_seq, coalesce(
   (select max(ticket_number) from public.tickets t where t.workspace_id = w.id), 0));
 
-alter table public.tickets alter column ticket_number set not null;
 alter table public.tickets add constraint tickets_workspace_number_key
   unique (workspace_id, ticket_number);
 

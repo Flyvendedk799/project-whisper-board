@@ -5,7 +5,7 @@ const SHARED = {
   globals: true,
   setupFiles: ["./src/test/setup.ts"],
   passWithNoTests: true,
-} as const;
+};
 
 /**
  * Two projects rather than one: pure logic (error mapping, query builders,
@@ -17,7 +17,6 @@ export default defineConfig({
   test: {
     projects: [
       {
-        plugins: [tsconfigPaths()],
         test: {
           ...SHARED,
           name: "node",
@@ -26,7 +25,6 @@ export default defineConfig({
         },
       },
       {
-        plugins: [tsconfigPaths()],
         test: {
           ...SHARED,
           name: "dom",
