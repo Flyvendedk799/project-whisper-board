@@ -1,12 +1,17 @@
 name: CI
 
 on:
+  # Every branch, not just `main`. A feature branch that only runs CI once a
+  # pull request exists is a branch you can leave broken for days — and a
+  # merged PR cannot be reused to re-run anything.
   push:
-    branches: [main]
   pull_request:
 
+# A pull request from a branch in this repo fires both events. Keying the
+# group on the head branch puts both runs in the same group, so the second one
+# supersedes the first instead of duplicating it.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
