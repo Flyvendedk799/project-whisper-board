@@ -39,14 +39,31 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Report bundle size
+      # A budget, not a report: a size regression should fail the build rather
+      # than scroll past in a summary. The client output moved from dist/client
+      # to .output/public when the Lovable scaffolding gained nitro, so resolve
+      # it rather than assume — and fail loudly if neither exists, because a
+      # silently-empty total would make this check pass forever.
+      - name: Check bundle budget
         run: |
+          BUDGET_KB=1200
+          DIR=$(ls -d .output/public dist/client 2>/dev/null | head -1)
+          if [ -z "$DIR" ]; then
+            echo "::error::No client build output in .output/public or dist/client."
+            exit 1
+          fi
+          TOTAL=$(find "$DIR" -name '*.js' -printf '%s\n' | awk '{s+=$1} END {printf "%d", s/1024}')
           echo "### Client bundle" >> "$GITHUB_STEP_SUMMARY"
+          echo "Total JS in \`$DIR\`: **${TOTAL} KB** of ${BUDGET_KB} KB budget" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          find dist/client/assets -name '*.js' -printf '%s\t%p\n' 2>/dev/null \
-            | sort -rn | head -15 | awk '{printf "%8.1f KB  %s\n", $1/1024, $2}' \
-            >> "$GITHUB_STEP_SUMMARY" || true
+          find "$DIR" -name '*.js' -printf '%s\t%p\n' \
+            | sort -rn | head -12 | awk '{printf "%8.1f KB  %s\n", $1/1024, $2}' \
+            >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$TOTAL" -gt "$BUDGET_KB" ]; then
+            echo "::error::Client JS is ${TOTAL} KB, over the ${BUDGET_KB} KB budget."
+            exit 1
+          fi
 
   e2e:
     name: Browser smoke

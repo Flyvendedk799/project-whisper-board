@@ -27,6 +27,12 @@ create table public.time_entries (
   check (ended_at is null or ended_at > started_at)
 );
 
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.time_entries to authenticated;
+grant all on public.time_entries to service_role;
 alter table public.time_entries enable row level security;
 create index idx_time_entries_project on public.time_entries(project_id, started_at desc);
 create index idx_time_entries_ticket on public.time_entries(ticket_id);

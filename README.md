@@ -96,10 +96,11 @@ supabase db reset          # apply every migration to a fresh local database
 bun run db:types           # regenerate src/integrations/supabase/types.ts
 ```
 
-`supabase/tests/schema_assertions.sql` asserts 39 behaviours — workspace isolation in both
+`supabase/tests/schema_assertions.sql` asserts 43 behaviours — workspace isolation in both
 directions, progress arithmetic including divide-by-zero, first response ignoring internal
-notes, reopen counting, part payments, timer uniqueness — and runs in CI whenever a
-migration changes.
+notes, reopen counting, part payments, timer uniqueness, storage reads scoped to project membership — and runs in CI whenever
+a migration changes. See `supabase/README.md`, which also carries a one-off tracker
+repair that must happen before the next `supabase db push`.
 
 Where the Supabase CLI cannot reach a database (it goes through Docker), the same migrations
 can be applied to a plain PostgreSQL instance:

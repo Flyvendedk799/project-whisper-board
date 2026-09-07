@@ -30,6 +30,12 @@ create table public.outbound_messages (
   created_at timestamptz not null default now()
 );
 
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select on public.outbound_messages to authenticated;
+grant all on public.outbound_messages to service_role;
 alter table public.outbound_messages enable row level security;
 create index idx_outbound_created on public.outbound_messages(workspace_id, created_at desc);
 create index idx_outbound_status on public.outbound_messages(status, scheduled_for)
@@ -58,6 +64,8 @@ create table public.app_errors (
   occurred_at timestamptz not null default now()
 );
 
+grant select on public.app_errors to authenticated;
+grant all on public.app_errors to service_role;
 alter table public.app_errors enable row level security;
 create index idx_app_errors_fingerprint on public.app_errors(fingerprint, occurred_at desc);
 create index idx_app_errors_recent on public.app_errors(occurred_at desc);

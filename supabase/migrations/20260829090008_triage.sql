@@ -17,6 +17,12 @@ create table public.saved_views (
   updated_at timestamptz not null default now(),
   unique (owner_id, scope, name)
 );
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.saved_views to authenticated;
+grant all on public.saved_views to service_role;
 alter table public.saved_views enable row level security;
 create policy "ws_boundary" on public.saved_views as restrictive to authenticated
   using (workspace_id in (select public.user_workspace_ids(auth.uid())))
@@ -43,6 +49,8 @@ create table public.ticket_relations (
   unique (from_ticket_id, to_ticket_id, kind),
   check (from_ticket_id <> to_ticket_id)
 );
+grant select, insert, update, delete on public.ticket_relations to authenticated;
+grant all on public.ticket_relations to service_role;
 alter table public.ticket_relations enable row level security;
 create index idx_relations_from on public.ticket_relations(from_ticket_id);
 create index idx_relations_to on public.ticket_relations(to_ticket_id);
@@ -78,6 +86,8 @@ create table public.sla_policies (
   resolution_minutes int not null,
   unique (workspace_id, priority)
 );
+grant select, insert, update, delete on public.sla_policies to authenticated;
+grant all on public.sla_policies to service_role;
 alter table public.sla_policies enable row level security;
 create policy "ws_boundary" on public.sla_policies as restrictive to authenticated
   using (workspace_id in (select public.user_workspace_ids(auth.uid())))

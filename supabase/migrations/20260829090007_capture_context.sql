@@ -31,6 +31,12 @@ create table public.ticket_capture_context (
   created_at timestamptz not null default now()
 );
 
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.ticket_capture_context to authenticated;
+grant all on public.ticket_capture_context to service_role;
 alter table public.ticket_capture_context enable row level security;
 create index idx_capture_context_workspace on public.ticket_capture_context(workspace_id);
 

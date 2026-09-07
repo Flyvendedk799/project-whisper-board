@@ -24,6 +24,12 @@ create table public.notification_preferences (
   updated_at timestamptz not null default now()
 );
 
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.notification_preferences to authenticated;
+grant all on public.notification_preferences to service_role;
 alter table public.notification_preferences enable row level security;
 create policy "ws_boundary" on public.notification_preferences as restrictive to authenticated
   using (workspace_id in (select public.user_workspace_ids(auth.uid())))
