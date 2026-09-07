@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
 import { AppProviders } from "@/components/app-providers";
@@ -35,7 +36,12 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+// Take the router's own props type rather than restating it. `error` is typed
+// `Error` in some versions of @tanstack/router-core and `unknown` in others, so
+// a hand-written `{ error: Error }` compiles against whichever one happens to be
+// installed and fails against the other — which is exactly how this broke in CI
+// while passing locally. `captureError` accepts `unknown` either way.
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   captureError(error, { scope: "route" });
 

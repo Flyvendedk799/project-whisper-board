@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * These run without credentials on purpose: anything requiring a signed-in
@@ -35,18 +35,34 @@ test("an unknown route renders the 404 rather than crashing", async ({ page }) =
   await expect(page.getByText(/page not found/i)).toBeVisible();
 });
 
+/**
+ * Resolves whatever the browser reports — rgb(), lab(), oklch(), color() — into
+ * sRGB by painting it. Scraping digits out of the serialised string is not
+ * stable: the same tokens serialise as rgb() in one Chromium and lab() in the
+ * next, which is exactly how this test broke once already.
+ */
+async function bodyLightness(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const colour = getComputedStyle(document.body).backgroundColor;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = colour;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return (r + g + b) / 3;
+  });
+}
+
 test("the dark palette is applied when the system asks for it", async ({ browser }) => {
   const dark = await browser.newContext({ colorScheme: "dark" });
   const page = await dark.newPage();
   await page.goto("/login");
 
   await expect(page.locator("html")).toHaveClass(/dark/);
-
-  // The token block, not just the class: a mismatched custom-variant selector
-  // would leave the class on and the colours light.
-  const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const [r, g, b] = background.match(/\d+/g)!.map(Number);
-  expect((r + g + b) / 3).toBeLessThan(80);
+  // The tokens, not just the class: a mismatched custom-variant selector would
+  // leave the class on and every colour light.
+  expect(await bodyLightness(page)).toBeLessThan(80);
 
   await dark.close();
 });
@@ -57,9 +73,7 @@ test("the light palette is applied when the system asks for it", async ({ browse
   await page.goto("/login");
 
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const [r, g, b] = background.match(/\d+/g)!.map(Number);
-  expect((r + g + b) / 3).toBeGreaterThan(200);
+  expect(await bodyLightness(page)).toBeGreaterThan(200);
 
   await light.close();
 });

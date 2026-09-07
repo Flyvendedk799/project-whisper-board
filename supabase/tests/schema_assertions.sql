@@ -361,6 +361,55 @@ select assert(
 );
 
 -- ---------------------------------------------------------------------------
+\echo 'storage reads'
+-- ---------------------------------------------------------------------------
+-- The original policy let any signed-in user read any object in these buckets.
+-- These lock the fix: your own project's files, and nobody else's.
+insert into storage.buckets (id, name, public) values ('documents', 'documents', false)
+on conflict (id) do nothing;
+
+insert into storage.objects (bucket_id, name, owner) values
+  ('attachments', '22222222-2222-2222-2222-222222222222/cccccccc-0000-0000-0000-000000000001/shot.png',
+   '22222222-2222-2222-2222-222222222222'),
+  ('recordings', '33333333-3333-3333-3333-333333333333/rival-ticket/private.webm',
+   '33333333-3333-3333-3333-333333333333');
+
+insert into public.ticket_attachments
+  (ticket_id, uploader_id, storage_bucket, storage_path, file_name, mime_type)
+values ('cccccccc-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
+        'attachments', '22222222-2222-2222-2222-222222222222/cccccccc-0000-0000-0000-000000000001/shot.png',
+        'shot.png', 'image/png');
+
+grant select on storage.objects to authenticated;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+select assert(
+  (select count(*) from storage.objects
+   where name like '22222222%shot.png') = 1,
+  'you can read a file you uploaded'
+);
+select assert(
+  (select count(*) from storage.objects where bucket_id = 'recordings') = 0,
+  'another workspace''s recording is not readable'
+);
+
+-- The admin is on the project, so the attachment row makes it visible even
+-- though they did not upload it.
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select assert(
+  (select count(*) from storage.objects where name like '22222222%shot.png') = 1,
+  'a project member can read that project''s files'
+);
+select assert(
+  (select count(*) from storage.objects where bucket_id = 'recordings') = 0,
+  'and still cannot read files from a project they are not on'
+);
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 \echo 'realtime'
 -- ---------------------------------------------------------------------------
 select assert(

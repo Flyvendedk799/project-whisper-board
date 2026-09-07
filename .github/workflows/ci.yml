@@ -1,12 +1,19 @@
 name: CI
 
 on:
+  # Every branch, not just `main`. A feature branch that only runs CI once a
+  # pull request exists is a branch you can leave broken for days — and a
+  # merged PR cannot be reused to re-run anything.
   push:
-    branches: [main]
   pull_request:
 
+# A pull request from a branch in this repo fires both events. Keying the group
+# on the head branch puts both runs in the same group, so the second supersedes
+# the first instead of duplicating it. `ref_name`, not `ref`: a push gives
+# `refs/heads/foo` where a pull request gives `foo`, which is a different group
+# and defeats the whole point.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -39,14 +46,31 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Report bundle size
+      # A budget, not a report: a size regression should fail the build rather
+      # than scroll past in a summary. The client output moved from dist/client
+      # to .output/public when the Lovable scaffolding gained nitro, so resolve
+      # it rather than assume — and fail loudly if neither exists, because a
+      # silently-empty total would make this check pass forever.
+      - name: Check bundle budget
         run: |
+          BUDGET_KB=1200
+          DIR=$(ls -d .output/public dist/client 2>/dev/null | head -1)
+          if [ -z "$DIR" ]; then
+            echo "::error::No client build output in .output/public or dist/client."
+            exit 1
+          fi
+          TOTAL=$(find "$DIR" -name '*.js' -printf '%s\n' | awk '{s+=$1} END {printf "%d", s/1024}')
           echo "### Client bundle" >> "$GITHUB_STEP_SUMMARY"
+          echo "Total JS in \`$DIR\`: **${TOTAL} KB** of ${BUDGET_KB} KB budget" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          find dist/client/assets -name '*.js' -printf '%s\t%p\n' 2>/dev/null \
-            | sort -rn | head -15 | awk '{printf "%8.1f KB  %s\n", $1/1024, $2}' \
-            >> "$GITHUB_STEP_SUMMARY" || true
+          find "$DIR" -name '*.js' -printf '%s\t%p\n' \
+            | sort -rn | head -12 | awk '{printf "%8.1f KB  %s\n", $1/1024, $2}' \
+            >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$TOTAL" -gt "$BUDGET_KB" ]; then
+            echo "::error::Client JS is ${TOTAL} KB, over the ${BUDGET_KB} KB budget."
+            exit 1
+          fi
 
   e2e:
     name: Browser smoke
@@ -77,16 +101,44 @@ jobs:
   migrations:
     name: Migration smoke
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' }}
     steps:
+      # The default shallow checkout has no `origin/<base>` to diff against, so
+      # the detection step below could only ever fail and skip. Full history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Detect migration changes
         id: changed
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^supabase/migrations/'; then
+          # On a pull request, compare against its base. On a push to a feature
+          # branch, compare against where it left the default branch, so every
+          # migration the branch adds is covered however many times you push. On
+          # a push to the default branch itself, compare against the previous tip.
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="origin/$BASE_REF"
+          elif [ "${GITHUB_REF#refs/heads/}" = "$DEFAULT_BRANCH" ]; then
+            BASE="$BEFORE"
+          else
+            BASE=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD 2>/dev/null || true)
+          fi
+
+          # A base we cannot resolve means we cannot prove the migrations are
+          # untouched. Run the smoke rather than skip it — a skipped check that
+          # looks green is worse than a slow one.
+          if [ -z "$BASE" ] || ! git rev-parse --verify -q "$BASE^{commit}" >/dev/null; then
+            echo "No usable diff base; running the migration smoke."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE...HEAD" | grep -q '^supabase/migrations/'; then
+            echo "Migrations changed since $BASE."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
+            echo "No migration changes since $BASE."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 

@@ -17,11 +17,17 @@ import tseslint from "typescript-eslint";
  */
 export default tseslint.config(
   {
+    // Generated code. The router plugin owns routeTree.gen.ts; Lovable owns
+    // everything under src/integrations/supabase (every file there says so at
+    // the top) and rewrites it unformatted whenever the schema changes. Linting
+    // either can only produce noise nobody can fix at the source. Both are still
+    // typechecked — tsc does not read this file.
     ignores: [
       "dist",
       ".output",
       ".vinxi",
       "src/routeTree.gen.ts",
+      "src/integrations/supabase/**",
       "playwright-report",
       "test-results",
     ],
@@ -87,11 +93,6 @@ export default tseslint.config(
         },
       ],
     },
-  },
-  // Generated Supabase types are not ours to lint.
-  {
-    files: ["src/integrations/supabase/types.ts"],
-    rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   {
     files: ["src/**/*.{test,spec}.{ts,tsx}", "src/test/**"],

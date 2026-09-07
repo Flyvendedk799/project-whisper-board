@@ -69,7 +69,15 @@ alter table public.user_roles drop constraint user_roles_user_id_role_key;
 alter table public.user_roles add constraint user_roles_user_workspace_role_key
   unique (user_id, workspace_id, role);
 
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.workspaces to authenticated;
+grant all on public.workspaces to service_role;
 alter table public.workspaces enable row level security;
+grant select, insert, update, delete on public.workspace_members to authenticated;
+grant all on public.workspace_members to service_role;
 alter table public.workspace_members enable row level security;
 
 create or replace function public.user_workspace_ids(_user_id uuid)

@@ -16,6 +16,12 @@ create table public.invoice_line_items (
   unit_price_cents bigint not null default 0,
   position int not null default 0
 );
+-- RLS decides which rows; a table grant decides whether the role may reach
+-- the table at all. Supabase grants these by default for new tables in
+-- `public`, but leaning on that makes the schema unreproducible anywhere
+-- else — which is why the local harness had to grant by hand.
+grant select, insert, update, delete on public.invoice_line_items to authenticated;
+grant all on public.invoice_line_items to service_role;
 alter table public.invoice_line_items enable row level security;
 create index idx_invoice_lines_invoice on public.invoice_line_items(invoice_id, position);
 create policy "ws_boundary" on public.invoice_line_items as restrictive to authenticated
@@ -57,6 +63,8 @@ create table public.payments (
   created_at timestamptz not null default now(),
   unique (provider, provider_ref)
 );
+grant select, insert, update, delete on public.payments to authenticated;
+grant all on public.payments to service_role;
 alter table public.payments enable row level security;
 create index idx_payments_invoice on public.payments(invoice_id);
 create policy "ws_boundary" on public.payments as restrictive to authenticated
