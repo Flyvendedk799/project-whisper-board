@@ -7,11 +7,13 @@ on:
   push:
   pull_request:
 
-# A pull request from a branch in this repo fires both events. Keying the
-# group on the head branch puts both runs in the same group, so the second one
-# supersedes the first instead of duplicating it.
+# A pull request from a branch in this repo fires both events. Keying the group
+# on the head branch puts both runs in the same group, so the second supersedes
+# the first instead of duplicating it. `ref_name`, not `ref`: a push gives
+# `refs/heads/foo` where a pull request gives `foo`, which is a different group
+# and defeats the whole point.
 concurrency:
-  group: ci-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
