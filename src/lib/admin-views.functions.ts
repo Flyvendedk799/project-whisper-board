@@ -2,12 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard } from "@/lib/server-errors";
-import {
-  getAiProvider,
-  getEmailProvider,
-  getErrorTracker,
-  getPaymentsProvider,
-} from "@/lib/providers";
+import { getAiProvider, getErrorTracker, getPaymentsProvider } from "@/lib/providers";
+import { getEmailProvider } from "@/lib/providers/server";
 
 /**
  * What is actually configured, and what the placeholders have been doing.

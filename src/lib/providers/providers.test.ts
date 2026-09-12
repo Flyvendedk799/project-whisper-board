@@ -1,4 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The SMTP transport is stubbed rather than pointed at a local server: what is
+ * under test is which provider gets chosen and how a refusal is reported, not
+ * nodemailer's own wire behaviour.
+ */
+const sendMail = vi.hoisted(() =>
+  vi.fn(async (_options: Record<string, unknown>) => ({ messageId: "msg_1" })),
+);
+vi.mock("nodemailer", () => ({
+  default: { createTransport: () => ({ sendMail }) },
+}));
+
 import { getEmailProvider, resetEmailProvider } from "./email";
 import { getPaymentsProvider, resetPaymentsProvider } from "./payments";
 import { getAiProvider, resetAiProvider } from "./ai";
@@ -13,12 +26,21 @@ import { AppError } from "@/lib/errors";
  */
 
 const KEYS = [
-  "RESEND_API_KEY",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASSWORD",
+  "SMTP_FROM",
+  "SMTP_FROM_NAME",
   "EMAIL_FROM",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "AI_API_KEY",
-  "LOVABLE_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "AI_MODEL",
+  "AI_BASE_URL",
+  "AI_WIRE",
   "SENTRY_DSN",
 ] as const;
 
@@ -128,48 +150,47 @@ describe("with no keys configured", () => {
 });
 
 describe("with keys configured", () => {
-  it("email switches to Resend and reports enabled", async () => {
-    process.env.RESEND_API_KEY = "re_test";
-    process.env.EMAIL_FROM = "Consflow <hi@consflow.test>";
+  it("email switches to the host's SMTP relay and reports enabled", async () => {
+    process.env.SMTP_HOST = "smtp.relay.test";
+    process.env.SMTP_FROM = "hi@consflow.test";
+    process.env.SMTP_FROM_NAME = "Consflow";
     resetEmailProvider();
-
-    const fetchMock = vi.fn(
-      async () => new Response(JSON.stringify({ id: "msg_1" }), { status: 200 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
 
     const email = getEmailProvider();
     expect(email.enabled).toBe(true);
-    expect(email.name).toBe("resend");
+    expect(email.name).toBe("smtp");
 
     const result = await email.send({ to: "a@b.test", subject: "Hi", text: "Hello" });
     expect(result).toMatchObject({ delivered: true, providerMessageId: "msg_1" });
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(sendMail).toHaveBeenCalledOnce();
+    // The display name is folded into the envelope sender, not sent separately.
+    expect(sendMail.mock.calls[0][0]).toMatchObject({
+      from: "Consflow <hi@consflow.test>",
+      to: "a@b.test",
+      subject: "Hi",
+    });
   });
 
-  it("an API key alone is not enough to send from nowhere", async () => {
-    process.env.RESEND_API_KEY = "re_test";
+  it("a relay host alone is not enough to send from nowhere", async () => {
+    process.env.SMTP_HOST = "smtp.relay.test";
     resetEmailProvider();
 
     const email = getEmailProvider();
     expect(email.enabled).toBe(false);
     expect((await email.send({ to: "a@b.test", subject: "s", text: "t" })).skippedReason).toBe(
-      "EMAIL_FROM is not set",
+      "SMTP_FROM is not set",
     );
   });
 
-  it("a provider outage is reported as an error, not as a silent success", async () => {
-    process.env.RESEND_API_KEY = "re_test";
-    process.env.EMAIL_FROM = "hi@consflow.test";
+  it("a relay outage is reported as an error, not as a silent success", async () => {
+    process.env.SMTP_HOST = "smtp.relay.test";
+    process.env.SMTP_FROM = "hi@consflow.test";
     resetEmailProvider();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("upstream is down", { status: 503 })),
-    );
+    sendMail.mockRejectedValueOnce(new Error("535 authentication failed"));
 
     const result = await getEmailProvider().send({ to: "a@b.test", subject: "s", text: "t" });
     expect(result.delivered).toBe(false);
-    expect(result.error).toContain("503");
+    expect(result.error).toContain("535");
     expect(result.skippedReason).toBeUndefined();
   });
 
@@ -202,8 +223,38 @@ describe("with keys configured", () => {
     });
   });
 
-  it("AI accepts the key the project originally shipped with", () => {
-    process.env.LOVABLE_API_KEY = "lv_test";
+  it("AI derives the wire from the model, and takes a per-wire key", () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    resetAiProvider();
+    let ai = getAiProvider();
+    expect(ai.enabled).toBe(true);
+    // The default model is a Claude id, so the Anthropic wire is chosen and the
+    // Anthropic-specific key is the one that counts.
+    expect(ai.name).toBe("anthropic");
+
+    delete process.env.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.AI_MODEL = "gpt-5";
+    resetAiProvider();
+    ai = getAiProvider();
+    expect(ai.enabled).toBe(true);
+    expect(ai.name).toBe("openai");
+
+    // An Anthropic key does not unlock an OpenAI model.
+    delete process.env.OPENAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    resetAiProvider();
+    expect(getAiProvider().enabled).toBe(false);
+  });
+
+  it("AI stays disabled for a model whose wire cannot be established", () => {
+    process.env.AI_API_KEY = "k";
+    process.env.AI_MODEL = "some-unreleased-model";
+    resetAiProvider();
+    expect(getAiProvider().enabled).toBe(false);
+
+    // Naming the wire is enough to make an unknown model usable.
+    process.env.AI_WIRE = "openai";
     resetAiProvider();
     expect(getAiProvider().enabled).toBe(true);
   });
@@ -231,16 +282,47 @@ describe("with keys configured", () => {
     resetAiProvider();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: "" } }] }))),
+      vi.fn(async () => new Response(JSON.stringify({ content: [{ type: "text", text: "" }] }))),
     );
     await expect(getAiProvider().chat([{ role: "user", content: "x" }])).rejects.toThrow(
       /returned nothing usable/,
     );
   });
 
-  it("respects AI_MODEL and AI_BASE_URL", async () => {
+  it("speaks the Anthropic wire for a Claude model, system prompt beside the turns", async () => {
     process.env.AI_API_KEY = "k";
-    process.env.AI_MODEL = "anthropic/claude-sonnet-5";
+    resetAiProvider();
+
+    const fetchMock = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ai = getAiProvider();
+    expect(ai.model).toBe("claude-sonnet-5");
+    expect(
+      await ai.chat([
+        { role: "system", content: "be terse" },
+        { role: "user", content: "x" },
+      ]),
+    ).toBe("ok");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBe("claude-sonnet-5");
+    // The system turn is lifted out; only the user turn remains in `messages`.
+    expect(body.system).toBe("be terse");
+    expect(body.messages).toEqual([{ role: "user", content: "x" }]);
+    // Anthropic refuses a request with no cap, so one is always sent.
+    expect(body.max_tokens).toBeGreaterThan(0);
+    expect((init.headers as Record<string, string>)["x-api-key"]).toBe("k");
+  });
+
+  it("respects AI_MODEL and AI_BASE_URL on the OpenAI wire", async () => {
+    process.env.AI_API_KEY = "k";
+    process.env.AI_MODEL = "gpt-5";
     process.env.AI_BASE_URL = "https://ai.example.test/v1";
     resetAiProvider();
 
@@ -251,11 +333,15 @@ describe("with keys configured", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const ai = getAiProvider();
-    expect(ai.model).toBe("anthropic/claude-sonnet-5");
-    await ai.chat([{ role: "user", content: "x" }]);
+    expect(ai.model).toBe("gpt-5");
+    await ai.chat([{ role: "user", content: "x" }], { maxTokens: 256 });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://ai.example.test/v1/chat/completions");
-    expect(JSON.parse(String(init.body)).model).toBe("anthropic/claude-sonnet-5");
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBe("gpt-5");
+    // The reasoning models reject `max_tokens` outright.
+    expect(body.max_completion_tokens).toBe(256);
+    expect(body.max_tokens).toBeUndefined();
   });
 });
