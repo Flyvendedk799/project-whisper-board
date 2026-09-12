@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getAiProvider } from "@/lib/providers";
+import { getAiProviderFor } from "@/lib/providers/server";
 import { AppError } from "@/lib/errors";
 import { guard } from "@/lib/server-errors";
 import { Constants } from "@/integrations/supabase/types";
@@ -77,7 +77,7 @@ export const composeTicketFromCapture = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.composeTicket", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       if (!ai.enabled) {
         throw new AppError(

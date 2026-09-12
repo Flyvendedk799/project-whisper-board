@@ -108,7 +108,7 @@ export async function deliver(targets: NotifyTarget[]): Promise<{ inApp: number;
     if (error) console.error("[notifications] in-app insert failed:", error.message);
   }
 
-  const email = getEmailProvider();
+  const email = await getEmailProvider();
   let emails = 0;
 
   for (const target of targets) {

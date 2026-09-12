@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard } from "@/lib/server-errors";
-import { getAiProvider, getErrorTracker, getPaymentsProvider } from "@/lib/providers";
-import { getEmailProvider } from "@/lib/providers/server";
+import { getErrorTracker, getPaymentsProvider } from "@/lib/providers";
+import { getAiProvider, getEmailProvider } from "@/lib/providers/server";
 
 /**
  * What is actually configured, and what the placeholders have been doing.
@@ -15,10 +15,10 @@ export const getIntegrationStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(() =>
     guard("admin.integrationStatus", async () => {
-      const email = getEmailProvider();
+      const email = await getEmailProvider();
       const payments = getPaymentsProvider();
       const errors = getErrorTracker();
-      const ai = getAiProvider();
+      const ai = await getAiProvider();
 
       return {
         email: { name: email.name, enabled: email.enabled },

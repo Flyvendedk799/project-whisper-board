@@ -14,7 +14,6 @@ export type {
   WebhookEvent,
 } from "./types";
 
-// Email is server-only (node:tls via nodemailer) — see ./server.ts.
+// Email and AI are server-only (node:tls, node:crypto) — see ./server.ts.
 export { getPaymentsProvider, resetPaymentsProvider } from "./payments";
 export { captureError, getErrorTracker, resetErrorTracker, setErrorSink } from "./reporting";
-export { getAiProvider, resetAiProvider } from "./ai";

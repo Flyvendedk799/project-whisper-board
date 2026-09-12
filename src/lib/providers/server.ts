@@ -1,14 +1,39 @@
+import type { AiProvider, EmailProvider } from "./types";
+
 /**
  * The providers that can only run on the server.
  *
- * `providers/index.ts` is imported by browser components (the error boundary and
- * the root route pull `captureError` out of it), so everything re-exported there
- * has to survive the client bundle. Email does not: the SMTP transport imports
- * `node:tls`, and a bundler asked to put that in a browser build can only fail.
+ * These reach for Node: the SMTP transport imports `node:tls`, and the AI
+ * provider reaches `node:crypto` through the credential store behind a person's
+ * connected subscription. `providers/index.ts` cannot carry them, because it is
+ * imported by browser components.
  *
- * Splitting the barrel is what keeps that honest. Server functions import from
- * here; components import from `index.ts`; nothing has to remember which is
- * which, because the wrong choice fails at build time rather than at runtime.
+ * Server functions import from here. TanStack strips a server function's handler
+ * from the client build, which leaves these imports unused there — and
+ * `vite.config.ts` declares `nodemailer` and `@flyvendedk799/ai-auth` free of
+ * side effects for that build so Rollup is allowed to drop them. Without that
+ * declaration Rollup keeps a side-effectful module even when nothing uses it,
+ * and the browser bundle ends up carrying an SMTP client it can never run.
  */
 
-export { getEmailProvider, resetEmailProvider } from "./email";
+export async function getEmailProvider(): Promise<EmailProvider> {
+  return (await import("./email")).getEmailProvider();
+}
+
+export async function resetEmailProvider(): Promise<void> {
+  (await import("./email")).resetEmailProvider();
+}
+
+/** What the deployment has configured, regardless of who is asking. */
+export async function getAiProvider(): Promise<AiProvider> {
+  return (await import("./ai")).getAiProvider();
+}
+
+/** The provider for one person's request — their own subscription wins. */
+export async function getAiProviderFor(accountId: string): Promise<AiProvider> {
+  return (await import("./ai")).getAiProviderFor(accountId);
+}
+
+export async function resetAiProvider(): Promise<void> {
+  (await import("./ai")).resetAiProvider();
+}

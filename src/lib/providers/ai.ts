@@ -1,28 +1,36 @@
-import { AppError } from "@/lib/errors";
+import {
+  anthropicSubscriptionOptions,
+  withClaudeCodeIdentity,
+  type SystemBlock,
+} from "@flyvendedk799/ai-auth";
 import {
   describeProviderError,
   modelSpec,
   providerErrorFacts,
 } from "@flyvendedk799/ai-auth/registry";
+import { AppError } from "@/lib/errors";
+import { claudeAccounts } from "@/lib/ai-auth/claude";
 import type { AiContent, AiMessage, AiProvider } from "./types";
 
 /**
- * AI, talking straight to the provider that owns the model.
+ * AI, talking straight to whoever owns the model.
  *
  * This used to point at a hosted gateway whose host, model and key were baked
- * into the call site. It now goes to Anthropic or OpenAI directly, with the
- * credential read from the environment, so the only party in the request is the
- * one actually running the model.
+ * into the call site. There are now two ways a call gets paid for, tried in this
+ * order:
  *
- * Which wire to speak is derived from the model id rather than configured
- * separately — `@flyvendedk799/ai-auth/registry` owns that mapping, along with
- * the catalogue and the error wording. It is imported from `/registry` and not
- * from the package root on purpose: the root reaches for `node:crypto`, and this
- * module is reachable from the browser bundle through `providers/index.ts`.
+ *  1. **The signed-in person's own Claude subscription**, connected from
+ *     Settings. Each account brings its own plan, so a call costs the person who
+ *     asked for it rather than whoever set the deployment up.
+ *  2. **An API key** from the environment, billed to the deployment as a whole.
  *
- * With no key the provider reports `enabled: false` and every AI affordance
+ * With neither, the provider reports `enabled: false` and every AI affordance
  * hides itself rather than failing when pressed. The forms all work without it;
  * AI drafts the ticket, it does not gate filing one.
+ *
+ * SERVER ONLY. The subscription path reaches `node:crypto` through the account
+ * store, which is why this is exported from `providers/server.ts` rather than
+ * from the client-safe barrel.
  */
 
 type Wire = "anthropic" | "openai";
@@ -153,9 +161,22 @@ function toAnthropicContent(content: AiContent): unknown {
   );
 }
 
-function createAnthropicProvider(apiKey: string, baseUrl: string, model: string): AiProvider {
+/**
+ * How this call is being paid for.
+ *
+ * A metered key and a subscription token go to the same endpoint but are not
+ * interchangeable: they use different headers, and the subscription additionally
+ * has to identify itself (see below). Resolving the credential per call rather
+ * than per provider is deliberate — a subscription access token expires, and the
+ * account store refreshes it on the way out.
+ */
+type AnthropicAuth =
+  | { kind: "key"; credential: () => Promise<string> }
+  | { kind: "subscription"; credential: () => Promise<string> };
+
+function createAnthropicProvider(auth: AnthropicAuth, baseUrl: string, model: string): AiProvider {
   return {
-    name: "anthropic",
+    name: auth.kind === "subscription" ? "claude-subscription" : "anthropic",
     enabled: true,
     model,
 
@@ -169,21 +190,45 @@ function createAnthropicProvider(apiKey: string, baseUrl: string, model: string)
             .join("\n\n")
         : system;
 
+      const token = await auth.credential();
+
+      let headers: Record<string, string>;
+      let systemField: string | SystemBlock[] | undefined;
+
+      if (auth.kind === "subscription") {
+        // A subscription token authenticates as `Authorization: Bearer`, and
+        // `x-api-key` must be absent entirely — Anthropic validates that header
+        // whenever it is present, so sending both fails with "invalid x-api-key"
+        // while carrying a perfectly good credential.
+        headers = {
+          Authorization: `Bearer ${token}`,
+          ...anthropicSubscriptionOptions(token).defaultHeaders,
+          "anthropic-version": ANTHROPIC_VERSION,
+          "Content-Type": "application/json",
+        };
+        // The identity block is load-bearing, not decoration: without it as the
+        // FIRST system block, in its own block, the premium models answer 429 —
+        // a rate-limit status on a plan nowhere near its limit. Haiku is exempt,
+        // which is the trap, because it is the natural model to test with.
+        systemField = withClaudeCodeIdentity(systemPrompt || []);
+      } else {
+        headers = {
+          "x-api-key": token,
+          "anthropic-version": ANTHROPIC_VERSION,
+          "Content-Type": "application/json",
+        };
+        systemField = systemPrompt || undefined;
+      }
+
       let res: Response;
       try {
         res = await fetch(`${baseUrl}/messages`, {
           method: "POST",
-          headers: {
-            // `x-api-key`, not a bearer token: the bearer form is for OAuth
-            // subscription tokens, and Anthropic validates whichever it is sent.
-            "x-api-key": apiKey,
-            "anthropic-version": ANTHROPIC_VERSION,
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify({
             model,
             max_tokens: opts?.maxTokens ?? DEFAULT_MAX_TOKENS,
-            ...(systemPrompt ? { system: systemPrompt } : {}),
+            ...(systemField ? { system: systemField } : {}),
             messages: turns.map((m) => ({
               role: m.role,
               content: toAnthropicContent(m.content),
@@ -248,6 +293,13 @@ function createOpenAiProvider(apiKey: string, baseUrl: string, model: string): A
 
 let cached: AiProvider | undefined;
 
+/**
+ * What the deployment itself has configured, ignoring who is asking.
+ *
+ * This is the environment-key path only, and it is what the Settings page
+ * reports: "is AI set up here at all". A person's own subscription is not part
+ * of that answer, because it is not the deployment's to report.
+ */
 export function getAiProvider(): AiProvider {
   if (cached) return cached;
 
@@ -265,11 +317,43 @@ export function getAiProvider(): AiProvider {
   // `AI_BASE_URL` stays supported so the traffic can be pointed at a proxy that
   // speaks the same wire without touching code.
   const baseUrl = process.env.AI_BASE_URL ?? WIRE_BASE_URL[wire];
+  const key = apiKey;
   cached =
     wire === "anthropic"
-      ? createAnthropicProvider(apiKey, baseUrl, model)
-      : createOpenAiProvider(apiKey, baseUrl, model);
+      ? createAnthropicProvider({ kind: "key", credential: async () => key }, baseUrl, model)
+      : createOpenAiProvider(key, baseUrl, model);
   return cached;
+}
+
+/**
+ * The provider for one person's request.
+ *
+ * Their own Claude subscription wins when they have connected one — that is the
+ * whole point of connecting it. Otherwise this is the deployment's key, and
+ * failing that, disabled. Not cached: the answer depends on who is asking and on
+ * a token that expires.
+ */
+export async function getAiProviderFor(accountId: string): Promise<AiProvider> {
+  const accounts = claudeAccounts();
+  if (accounts) {
+    try {
+      const status = await accounts.status(accountId);
+      if (status.connected) {
+        // An expired access token is not a disconnection — `token()` refreshes
+        // it on the way out, once per account even under a burst.
+        const model = process.env.CLAUDE_SUBSCRIPTION_MODEL ?? DEFAULT_MODEL;
+        return createAnthropicProvider(
+          { kind: "subscription", credential: () => accounts.token(accountId) },
+          process.env.AI_BASE_URL ?? WIRE_BASE_URL.anthropic,
+          model,
+        );
+      }
+    } catch {
+      // A store that cannot be read must not take AI down for someone who also
+      // has a deployment key to fall back on.
+    }
+  }
+  return getAiProvider();
 }
 
 /** Test seam. */
