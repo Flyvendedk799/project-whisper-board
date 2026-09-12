@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard } from "@/lib/server-errors";
-import { getEmailProvider } from "@/lib/providers";
+import { getEmailProvider } from "@/lib/providers/server";
 import { channelEnabled } from "@/data/notifications";
 import type { Database } from "@/integrations/supabase/types";
 import type { Enums } from "@/integrations/supabase/types";
