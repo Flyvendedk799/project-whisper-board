@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getAiProvider } from "@/lib/providers";
+import { getAiProviderFor } from "@/lib/providers/server";
 import { AppError } from "@/lib/errors";
 import { guard, requireFound } from "@/lib/server-errors";
 import { Constants } from "@/integrations/supabase/types";
@@ -56,7 +56,7 @@ export const summarizeTicket = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.summarizeTicket", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       const { data: ticket } = await supabase
         .from("tickets")
@@ -117,7 +117,7 @@ export const draftReply = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.draftReply", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       const { data: ticket } = await supabase
         .from("tickets")
@@ -174,7 +174,7 @@ export const autoTriageTicket = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.autoTriageTicket", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       const { data: ticket } = await supabase
         .from("tickets")
@@ -221,7 +221,7 @@ export const analyzeScreenshot = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.analyzeScreenshot", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       const { data: attachment } = await supabase
         .from("ticket_attachments")
@@ -311,7 +311,7 @@ export const proposeActionItems = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("ai.proposeActionItems", async () => {
       const { supabase } = context;
-      const ai = getAiProvider();
+      const ai = await getAiProviderFor(context.userId);
 
       const { data: meeting } = await supabase
         .from("meetings")
