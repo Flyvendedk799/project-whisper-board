@@ -10,6 +10,7 @@ import {
 } from "@flyvendedk799/ai-auth/registry";
 import { AppError } from "@/lib/errors";
 import { claudeAccounts } from "@/lib/ai-auth/claude";
+import { antigravityAccounts } from "@/lib/ai-auth/antigravity";
 import type { AiContent, AiMessage, AiProvider } from "./types";
 
 /**
@@ -33,7 +34,7 @@ import type { AiContent, AiMessage, AiProvider } from "./types";
  * from the client-safe barrel.
  */
 
-type Wire = "anthropic" | "openai";
+type Wire = "anthropic" | "openai" | "gemini";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
@@ -43,12 +44,14 @@ const DEFAULT_MAX_TOKENS = 4096;
 const WIRE_BASE_URL: Record<Wire, string> = {
   anthropic: "https://api.anthropic.com/v1",
   openai: "https://api.openai.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
 };
 
 /** Where each wire's key lives when `AI_API_KEY` is not set. Matches ai-auth's own names. */
 const WIRE_KEY_ENV: Record<Wire, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
 };
 
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -62,13 +65,16 @@ const ANTHROPIC_VERSION = "2023-06-01";
  */
 function wireFor(model: string): Wire | null {
   const spec = modelSpec(model);
-  if (spec?.wire === "anthropic" || spec?.wire === "openai") return spec.wire;
+  if (spec?.wire === "anthropic" || spec?.wire === "openai" || spec?.wire === "gemini")
+    return spec.wire;
 
   const configured = process.env.AI_WIRE;
-  if (configured === "anthropic" || configured === "openai") return configured;
+  if (configured === "anthropic" || configured === "openai" || configured === "gemini")
+    return configured as Wire;
 
   if (/^claude/i.test(model)) return "anthropic";
   if (/^(gpt|o\d)/i.test(model)) return "openai";
+  if (/^gemini/i.test(model)) return "gemini";
   return null;
 }
 
@@ -291,6 +297,102 @@ function createOpenAiProvider(apiKey: string, baseUrl: string, model: string): A
   };
 }
 
+type AntigravityAuth =
+  | { kind: "key"; credential: () => Promise<string> }
+  | { kind: "subscription"; credential: () => Promise<string>; projectId: string | null };
+
+function createAntigravityProvider(
+  auth: AntigravityAuth,
+  baseUrl: string,
+  model: string,
+): AiProvider {
+  return {
+    name: auth.kind === "subscription" ? "antigravity-subscription" : "antigravity",
+    enabled: true,
+    model,
+
+    async chat(messages: AiMessage[], opts): Promise<string> {
+      const { system, turns } = splitSystem(messages);
+      const systemPrompt = opts?.json
+        ? [system, "Respond with a single valid JSON object and nothing else."]
+            .filter(Boolean)
+            .join("\n\n")
+        : system;
+
+      const token = await auth.credential();
+
+      let res: Response;
+      try {
+        if (auth.kind === "subscription") {
+          const { antigravityCliOptions, toCodeAssistRequest } =
+            await import("@flyvendedk799/ai-auth");
+          const clientOptions = antigravityCliOptions(
+            {
+              accessToken: token,
+              refreshToken: null,
+              expiresAt: 0,
+              email: null,
+              projectId: auth.projectId,
+              isDogfood: false,
+            },
+            baseUrl !== WIRE_BASE_URL.gemini ? baseUrl : undefined,
+          );
+
+          const req = toCodeAssistRequest(
+            model,
+            turns.map((m) => ({
+              role: m.role as "user" | "model" | "system",
+              parts: [{ text: contentToText(m.content) }],
+            })),
+            {
+              projectId: auth.projectId || undefined,
+              systemInstruction: systemPrompt || undefined,
+            },
+          );
+
+          res = await fetch(`${clientOptions.baseURL}/generateContent`, {
+            method: "POST",
+            headers: clientOptions.defaultHeaders as Record<string, string>,
+            body: JSON.stringify(req),
+          });
+        } else {
+          // Standard Gemini API
+          const { antigravityKeyOptions } = await import("@flyvendedk799/ai-auth");
+          const clientOptions = antigravityKeyOptions(token, baseUrl);
+
+          res = await fetch(`${clientOptions.baseURL}/models/${model}:generateContent`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": token,
+            },
+            body: JSON.stringify({
+              contents: turns.map((m) => ({
+                role: m.role === "assistant" ? "model" : m.role,
+                parts: [{ text: contentToText(m.content) }],
+              })),
+              ...(systemPrompt
+                ? { systemInstruction: { role: "system", parts: [{ text: systemPrompt }] } }
+                : {}),
+            }),
+          });
+        }
+      } catch (e) {
+        failUnreachable(e);
+      }
+
+      if (!res.ok) await failFromResponse(res, "gemini", model);
+
+      const body = (await res.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text !== "string" || text.length === 0) failEmpty();
+      return text;
+    },
+  };
+}
+
 let cached: AiProvider | undefined;
 
 /**
@@ -334,6 +436,27 @@ export function getAiProvider(): AiProvider {
  * a token that expires.
  */
 export async function getAiProviderFor(accountId: string): Promise<AiProvider> {
+  const agyAccounts = antigravityAccounts();
+  if (agyAccounts) {
+    try {
+      const status = await agyAccounts.status(accountId);
+      if (status.connected) {
+        const model = process.env.ANTIGRAVITY_SUBSCRIPTION_MODEL ?? "gemini-3.1-pro";
+        return createAntigravityProvider(
+          {
+            kind: "subscription",
+            credential: () => agyAccounts.token(accountId),
+            projectId: status.projectId,
+          },
+          process.env.AI_BASE_URL ?? WIRE_BASE_URL.gemini,
+          model,
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const accounts = claudeAccounts();
   if (accounts) {
     try {
