@@ -9,10 +9,10 @@ import {
   listApiKeys,
 } from "@/lib/planner.functions";
 
-export const planListQuery = () =>
+export const planListQuery = (projectId?: string) =>
   queryOptions({
-    queryKey: qk.planList(),
-    queryFn: () => listPlans(),
+    queryKey: projectId ? [...qk.planList(), { projectId }] : qk.planList(),
+    queryFn: () => listPlans({ data: { projectId } }),
   });
 
 export const planDetailQuery = (planId: string) =>
