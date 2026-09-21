@@ -1,9 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
 import { getPaymentsProvider } from "@/lib/providers";
+
+function adminClient() {
+  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 const lineSchema = z.object({
   description: z.string().min(1).max(500),
@@ -363,3 +371,139 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
       return { mode: result.mode, url: result.url ?? null };
     }),
   );
+
+/**
+ * Builds a print-friendly HTML snapshot for a quote or invoice, stores it in
+ * the documents bucket, and returns a short-lived signed URL.
+ */
+export const generateBillingDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        kind: z.enum(["quote", "invoice"]),
+        id: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("billing.generateDocument", async () => {
+      const admin = adminClient();
+
+      let projectId: string;
+      let title: string;
+      let html: string;
+      let filename: string;
+
+      if (data.kind === "quote") {
+        const { data: quote, error } = await context.supabase
+          .from("quotes")
+          .select("*, quote_line_items(*)")
+          .eq("id", data.id)
+          .single();
+        if (error) throw error;
+        projectId = quote.project_id;
+        title = quote.title;
+        filename = `quote-${quote.id}.html`;
+        html = billingHtml({
+          kind: "Quote",
+          title: quote.title,
+          number: null,
+          currency: quote.currency,
+          notes: quote.notes,
+          totalCents: quote.total_cents,
+          lines: (quote.quote_line_items ?? []).map((l) => ({
+            description: l.description,
+            quantity: l.quantity,
+            unitPriceCents: l.unit_price_cents,
+          })),
+        });
+      } else {
+        const { data: invoice, error } = await context.supabase
+          .from("invoices")
+          .select("*, invoice_line_items(*)")
+          .eq("id", data.id)
+          .single();
+        if (error) throw error;
+        projectId = invoice.project_id;
+        title = invoice.number ?? "Invoice";
+        filename = `invoice-${invoice.id}.html`;
+        html = billingHtml({
+          kind: "Invoice",
+          title: invoice.number ?? "Invoice",
+          number: invoice.number,
+          currency: invoice.currency,
+          notes: invoice.notes,
+          totalCents: invoice.amount_cents,
+          dueDate: invoice.due_date,
+          lines: (invoice.invoice_line_items ?? []).map((l) => ({
+            description: l.description,
+            quantity: l.quantity,
+            unitPriceCents: l.unit_price_cents,
+          })),
+        });
+      }
+
+      const path = `${context.userId}/${projectId}/${data.kind}/${filename}`;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const { error: uploadError } = await admin.storage
+        .from("documents")
+        .upload(path, blob, { contentType: "text/html;charset=utf-8", upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: signed, error: signError } = await admin.storage
+        .from("documents")
+        .createSignedUrl(path, 60 * 30);
+      if (signError) throw signError;
+
+      return { url: signed.signedUrl, path, title };
+    }),
+  );
+
+function billingHtml(doc: {
+  kind: string;
+  title: string;
+  number: string | null;
+  currency: string;
+  notes: string | null;
+  totalCents: number;
+  dueDate?: string | null;
+  lines: Array<{ description: string; quantity: number; unitPriceCents: number }>;
+}) {
+  const money = (cents: number) =>
+    new Intl.NumberFormat("en", { style: "currency", currency: doc.currency }).format(cents / 100);
+  const rows = doc.lines
+    .map(
+      (line) =>
+        `<tr><td>${escapeHtml(line.description)}</td><td style="text-align:right">${line.quantity}</td><td style="text-align:right">${money(line.unitPriceCents)}</td><td style="text-align:right">${money(Math.round(line.unitPriceCents * line.quantity))}</td></tr>`,
+    )
+    .join("");
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8"/><title>${escapeHtml(doc.kind)} — ${escapeHtml(doc.title)}</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;color:#111;padding:0 16px}
+  h1{font-size:24px;margin:0 0 4px} .meta{color:#666;font-size:14px;margin-bottom:24px}
+  table{width:100%;border-collapse:collapse;margin:16px 0}
+  th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left;font-size:14px}
+  th{color:#666;font-weight:600} .total{font-size:18px;font-weight:600;text-align:right;margin-top:16px}
+  .notes{margin-top:24px;color:#444;white-space:pre-wrap;font-size:14px}
+  @media print{body{margin:0}}
+</style></head><body>
+  <h1>${escapeHtml(doc.kind)}</h1>
+  <div class="meta">${escapeHtml(doc.title)}${doc.number ? ` · ${escapeHtml(doc.number)}` : ""}${doc.dueDate ? ` · Due ${escapeHtml(doc.dueDate)}` : ""}</div>
+  <table><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="total">Total ${money(doc.totalCents)}</div>
+  ${doc.notes ? `<div class="notes">${escapeHtml(doc.notes)}</div>` : ""}
+  <script>window.onload=function(){/* ready for print */}</script>
+</body></html>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

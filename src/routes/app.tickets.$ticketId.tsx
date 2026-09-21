@@ -1,16 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, CalendarClock, Send, Sparkles, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { RichTextView } from "@/components/rich-text-view";
 import { useAuth } from "@/components/auth-provider";
 import { AttachmentGrid } from "@/features/tickets/attachment-tile";
 import { CaptureContextPanel } from "@/features/tickets/capture-context-panel";
@@ -31,6 +32,7 @@ import {
   ticketEventsQuery,
   ticketQuery,
 } from "@/data/tickets";
+import { workspacePeopleQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
 import {
   TICKET_PRIORITY_LABEL,
@@ -41,10 +43,25 @@ import {
 } from "@/data/enums";
 import { formatDate } from "@/lib/utils-format";
 import { toast } from "sonner";
+import type { PersonRef } from "@/data/types";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   component: TicketPage,
 });
+
+function plainText(html: string) {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+\n/g, "\n")
+    .trim();
+}
+
+function replyDraftKey(ticketId: string) {
+  return `cf.reply.draft.${ticketId}`;
+}
 
 function TicketPage() {
   const { ticketId } = Route.useParams();
@@ -145,7 +162,7 @@ function TicketPage() {
                 </div>
 
                 {t.description ? (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.description}</p>
+                  <RichTextView html={t.description} />
                 ) : (
                   <p className="text-sm text-muted-foreground">No description.</p>
                 )}
@@ -220,10 +237,49 @@ function CommentBox({
   userId: string;
   isAdmin: boolean;
 }) {
-  const [body, setBody] = useState("");
+  const { workspaceId } = useAuth();
+  const [body, setBody] = useState(() => {
+    try {
+      return sessionStorage.getItem(replyDraftKey(ticketId)) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [internal, setInternal] = useState(false);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [mentions, setMentions] = useState<string[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const mentionBoxRef = useRef<HTMLDivElement>(null);
+
+  const people = useQuery(workspacePeopleQuery(workspaceId));
+
+  useEffect(() => {
+    try {
+      if (body.trim()) sessionStorage.setItem(replyDraftKey(ticketId), body);
+      else sessionStorage.removeItem(replyDraftKey(ticketId));
+    } catch {
+      /* ignore */
+    }
+  }, [body, ticketId]);
+
+  useEffect(() => {
+    const text = plainText(body);
+    const match = /(?:^|\s)@([^\s@]*)$/.exec(text.replace(/\u00a0/g, " "));
+    setMentionQuery(match ? match[1] : null);
+  }, [body]);
+
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return (people.data ?? [])
+      .filter((person) => person.id !== userId)
+      .filter((person) => {
+        const name = (person.full_name ?? person.email ?? "").toLowerCase();
+        return !q || name.includes(q) || (person.email ?? "").toLowerCase().includes(q);
+      })
+      .slice(0, 6);
+  }, [mentionQuery, people.data, userId]);
 
   const notify = useServerFn(notifyTicketComment);
 
@@ -235,15 +291,34 @@ function CommentBox({
   const draft = useServerAction(useServerFn(draftReply), {
     label: "ai.draftReply",
     errorMessage: "Couldn't draft a reply.",
-    onSuccess: (result) => setBody((current) => (current ? `${current}\n\n` : "") + result.reply),
+    onSuccess: (result) =>
+      setBody((current) => (current ? `${current}<p></p>` : "") + `<p>${result.reply}</p>`),
   });
+
+  const insertMention = (person: PersonRef) => {
+    const label = person.full_name ?? person.email ?? "someone";
+    const text = plainText(body);
+    const nextText = text.replace(
+      /(?:^|\s)@[^\s@]*$/,
+      (m) => `${m[0] === "@" ? "" : m[0]}@${label} `,
+    );
+    setBody(`<p>${nextText.replace(/\n/g, "<br>")}</p>`);
+    setMentions((prev) => (prev.includes(person.id) ? prev : [...prev, person.id]));
+    setMentionQuery(null);
+  };
 
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!body.trim() && drafts.length === 0) return;
+    const text = plainText(body);
+    if (!text && drafts.length === 0) return;
 
-    if (body.trim()) {
-      await post.run({ ticketId, body: body.trim(), isInternal: internal });
+    if (text) {
+      await post.run({
+        ticketId,
+        body: body.trim(),
+        isInternal: internal,
+        mentions,
+      });
     }
 
     if (drafts.length > 0) {
@@ -254,39 +329,59 @@ function CommentBox({
       if (problem) toast.error(problem);
     }
 
-    if (!internal && body.trim()) {
-      // Best effort: the comment is already saved, and failing to notify is not
-      // a reason to tell someone their reply did not send.
+    if (!internal && text) {
       void notify({
-        data: { ticketId, excerpt: body.trim().slice(0, 200) },
+        data: { ticketId, excerpt: text.slice(0, 200), mentions },
       }).catch(() => {});
     }
 
     setBody("");
     setDrafts([]);
     setInternal(false);
+    setMentions([]);
+    try {
+      sessionStorage.removeItem(replyDraftKey(ticketId));
+    } catch {
+      /* ignore */
+    }
   };
 
   const busy = post.busy || uploading;
   const placeholder = useMemo(
-    () => (isAdmin ? "Reply to the client…" : "Add anything else that might help…"),
+    () =>
+      isAdmin ? "Reply to the client… Type @ to mention" : "Add anything else that might help…",
     [isAdmin],
   );
 
   return (
     <Card className="space-y-3 p-4">
       <form onSubmit={send} className="space-y-3">
-        <div className="space-y-1.5">
+        <div className="relative space-y-1.5" ref={mentionBoxRef}>
           <Label htmlFor="reply" className="sr-only">
             Your reply
           </Label>
-          <Textarea
-            id="reply"
-            rows={3}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={placeholder}
-          />
+          <RichTextEditor id="reply" value={body} onChange={setBody} placeholder={placeholder} />
+          {mentionCandidates.length > 0 && (
+            <ul
+              className="absolute bottom-full z-20 mb-1 max-h-48 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md"
+              role="listbox"
+            >
+              {mentionCandidates.map((person) => (
+                <li key={person.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                    onClick={() => insertMention(person)}
+                  >
+                    <span className="truncate font-medium">{person.full_name ?? person.email}</span>
+                    {person.full_name && person.email && (
+                      <span className="truncate text-xs text-muted-foreground">{person.email}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <CaptureDropzone
@@ -332,7 +427,7 @@ function CommentBox({
             )}
           </div>
 
-          <Button type="submit" disabled={busy || (!body.trim() && drafts.length === 0)}>
+          <Button type="submit" disabled={busy || (!plainText(body) && drafts.length === 0)}>
             <Send className="mr-1.5 h-4 w-4" aria-hidden="true" />
             {busy ? "Sending…" : "Send"}
           </Button>

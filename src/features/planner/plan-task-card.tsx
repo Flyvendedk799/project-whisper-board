@@ -20,7 +20,7 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
           <Badge variant="outline" className="text-xs">
             <span
               className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                task.priority === "urgent"
+                task.priority === "critical"
                   ? "bg-red-500"
                   : task.priority === "high"
                     ? "bg-orange-500"
@@ -80,7 +80,7 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
               </a>
             )}
           </div>
-          
+
           {task.ticket_id && (
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
               <span>Resolves #{task.ticket?.ticket_number || "TICKET"}</span>

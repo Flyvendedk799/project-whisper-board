@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/app-shell";
+import { RichTextView } from "@/components/rich-text-view";
 import { formatRelative, initials } from "@/lib/utils-format";
 import {
   TICKET_PRIORITY_LABEL,
@@ -85,11 +86,9 @@ function CommentEntry({ comment }: { comment: CommentWithAuthor }) {
           )}
         </div>
         <Card
-          className={`whitespace-pre-wrap p-3 text-sm ${
-            comment.is_internal ? "border-warning/40 bg-warning/5" : ""
-          }`}
+          className={`p-3 text-sm ${comment.is_internal ? "border-warning/40 bg-warning/5" : ""}`}
         >
-          {comment.body}
+          <RichTextView html={comment.body} />
         </Card>
       </div>
     </li>

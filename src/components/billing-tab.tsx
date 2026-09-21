@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CreditCard, FileText, Plus, Receipt, Trash2 } from "lucide-react";
+import { CreditCard, Download, FileText, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { useServerAction } from "@/lib/use-server-action";
 import {
   createInvoice,
   createQuote,
+  generateBillingDocument,
   recordPayment,
   respondQuote,
   sendQuote,
@@ -308,6 +309,13 @@ function QuoteCard({
     invalidate,
   });
 
+  const doc = useServerAction(useServerFn(generateBillingDocument), {
+    label: "billing.generateDocument",
+    onSuccess: (result) => {
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    },
+  });
+
   return (
     <Card className="space-y-3 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -369,13 +377,90 @@ function QuoteCard({
           </>
         )}
         {quote.status === "accepted" && (
-          <p className="text-xs text-muted-foreground">
-            Accepted {quote.responded_at ? formatDate(quote.responded_at) : ""} — the line items are
-            now milestones on this project.
-          </p>
+          <>
+            <p className="w-full text-xs text-muted-foreground">
+              Accepted {quote.responded_at ? formatDate(quote.responded_at) : ""} — the line items
+              are now milestones on this project.
+            </p>
+            {canEdit && <InvoiceFromQuoteButton projectId={projectId} quote={quote} />}
+          </>
         )}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={doc.busy}
+          onClick={() => doc.fire({ kind: "quote", id: quote.id })}
+        >
+          <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          {doc.busy ? "Preparing…" : "Download"}
+        </Button>
       </div>
     </Card>
+  );
+}
+
+function InvoiceFromQuoteButton({
+  projectId,
+  quote,
+}: {
+  projectId: string;
+  quote: QuoteWithLines;
+}) {
+  const [open, setOpen] = useState(false);
+  const [lines, setLines] = useState<Line[]>(() =>
+    quote.quote_line_items.map((line) => ({
+      description: line.description,
+      unit_price_cents: line.unit_price_cents,
+      quantity: line.quantity,
+    })),
+  );
+
+  const create = useServerAction(useServerFn(createInvoice), {
+    label: "billing.createInvoiceFromQuote",
+    success: (result) => `${result.number ?? "Invoice"} created`,
+    invalidate: [qk.projectInvoices(projectId), qk.projectQuotes(projectId)],
+    onSuccess: () => setOpen(false),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Create invoice
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Invoice from quote</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            void create.run({
+              projectId,
+              quoteId: quote.id,
+              currency: quote.currency,
+              dueDate: String(form.get("due")) || undefined,
+              lines: lines.filter((l) => l.description.trim()),
+            });
+          }}
+          className="space-y-4"
+        >
+          <LineEditor lines={lines} onChange={setLines} currency={quote.currency} />
+          <div className="space-y-1.5">
+            <Label htmlFor={`q-inv-due-${quote.id}`}>Due date</Label>
+            <Input id={`q-inv-due-${quote.id}`} name="due" type="date" />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={create.busy}>
+              {create.busy ? "Creating…" : "Create and send"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -479,6 +564,13 @@ function InvoiceCard({
     },
   });
 
+  const doc = useServerAction(useServerFn(generateBillingDocument), {
+    label: "billing.generateDocument",
+    onSuccess: (result) => {
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    },
+  });
+
   return (
     <Card className="space-y-3 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -555,11 +647,15 @@ function InvoiceCard({
             Pay this invoice
           </Button>
         )}
-        {/*
-          With no card processor configured the flow is identical up to here —
-          the same invoice, the same payments row, the same trigger — so say what
-          actually happens rather than showing a button that goes nowhere.
-        */}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={doc.busy}
+          onClick={() => doc.fire({ kind: "invoice", id: invoice.id })}
+        >
+          <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          {doc.busy ? "Preparing…" : "Download"}
+        </Button>
         {!canEdit && checkout.error === null && !checkout.busy && outstanding > 0 && (
           <p className="w-full text-xs text-muted-foreground">
             Paying by transfer? Go ahead — we&rsquo;ll mark it received here.

@@ -70,23 +70,46 @@ export const Route = createFileRoute("/app/report")({
 
 type Step = "capture" | "describe";
 
+const REPORT_DRAFT_KEY = "cf.report.wizard";
+
+type ReportDraft = {
+  step: Step;
+  projectId?: string;
+  note: string;
+  title: string;
+  description: string;
+  type: TicketType;
+  priority: TicketPriority;
+};
+
+function readReportDraft(): Partial<ReportDraft> {
+  try {
+    const raw = sessionStorage.getItem(REPORT_DRAFT_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<ReportDraft>;
+  } catch {
+    return {};
+  }
+}
+
 function ReportPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, workspaceId } = useAuth();
+  const saved = useMemo(() => readReportDraft(), []);
 
-  const [step, setStep] = useState<Step>("capture");
-  const [projectId, setProjectId] = useState<string | undefined>(search.project);
+  const [step, setStep] = useState<Step>(saved.step ?? "capture");
+  const [projectId, setProjectId] = useState<string | undefined>(search.project ?? saved.projectId);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [annotating, setAnnotating] = useState<{
     draft: DraftAttachment;
     image: HTMLImageElement;
   } | null>(null);
-  const [note, setNote] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [type, setType] = useState<TicketType>("bug");
-  const [priority, setPriority] = useState<TicketPriority>("medium");
+  const [note, setNote] = useState(saved.note ?? "");
+  const [title, setTitle] = useState(saved.title ?? "");
+  const [description, setDescription] = useState(saved.description ?? "");
+  const [type, setType] = useState<TicketType>(saved.type ?? "bug");
+  const [priority, setPriority] = useState<TicketPriority>(saved.priority ?? "medium");
   const [aiDraft, setAiDraft] = useState<TicketDraft | null>(null);
 
   // Captured when the page opens, not on submit: navigating here already
@@ -95,12 +118,29 @@ function ReportPage() {
     collectCaptureContext(search.url ? { url: search.url } : {}),
   );
 
-  const projects = useQuery(projectListQuery());
+  const projects = useQuery(projectListQuery(workspaceId));
   const chosenProject = projects.data?.find((p) => p.id === projectId) ?? projects.data?.[0];
 
   useEffect(() => {
     if (!projectId && projects.data?.length === 1) setProjectId(projects.data[0].id);
   }, [projectId, projects.data]);
+
+  useEffect(() => {
+    try {
+      const payload: ReportDraft = {
+        step,
+        projectId,
+        note,
+        title,
+        description,
+        type,
+        priority,
+      };
+      sessionStorage.setItem(REPORT_DRAFT_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+  }, [step, projectId, note, title, description, type, priority]);
 
   // Object URLs outlive the component unless they are revoked.
   useEffect(
@@ -235,6 +275,11 @@ function ReportPage() {
     }
 
     toast.success("Sent. We'll pick it up from here.");
+    try {
+      sessionStorage.removeItem(REPORT_DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
     void navigate({ to: "/app/tickets/$ticketId", params: { ticketId: id } });
   };
 

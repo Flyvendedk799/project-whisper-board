@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { BrainCircuit, LayoutList, CheckSquare } from "lucide-react";
+import { BrainCircuit, CheckSquare, LayoutList } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,12 +15,21 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState, PageHeader, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
+import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import type { Row } from "@/data";
 import { planListQuery } from "@/data/planner";
+import { projectListQuery } from "@/data/projects";
 import { createPlan } from "@/lib/planner.functions";
 
 export const Route = createFileRoute("/app/planner")({
@@ -30,12 +39,14 @@ export const Route = createFileRoute("/app/planner")({
 
 function PlannerPage() {
   const navigate = useNavigate({ from: Route.fullPath });
-  const plans = useQuery(planListQuery());
+  const { workspaceId } = useAuth();
+  const plans = useQuery(planListQuery(workspaceId));
+  const projects = useQuery(projectListQuery(workspaceId));
   const [isCreating, setIsCreating] = useState(false);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState<string>("");
 
   const create = useServerAction(useServerFn(createPlan), {
     label: "plans.create",
@@ -45,14 +56,19 @@ function PlannerPage() {
       setTitle("");
       setDescription("");
       setProjectId("");
-      void navigate({ to: `/app/planner/${result.id}` });
+      void navigate({ to: "/app/planner/$planId", params: { planId: result.id } });
     },
   });
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    create.fire({ title, description, projectId: projectId || undefined });
+    if (!title.trim() || !workspaceId) return;
+    create.fire({
+      title,
+      description,
+      projectId: projectId || undefined,
+      workspaceId,
+    });
   };
 
   const rows = plans.data?.plans ?? [];
@@ -80,6 +96,12 @@ function PlannerPage() {
                 icon={BrainCircuit}
                 title="No AI plans yet"
                 description="Create a plan to organize tasks and assign them to AI agents."
+                action={
+                  <Button onClick={() => setIsCreating(true)}>
+                    <BrainCircuit className="mr-2 h-4 w-4" />
+                    Create a plan
+                  </Button>
+                }
               />
             </div>
           }
@@ -89,7 +111,8 @@ function PlannerPage() {
               {rows.map((plan: Row<"plans">) => (
                 <Link
                   key={plan.id}
-                  to={`/app/planner/${plan.id}`}
+                  to="/app/planner/$planId"
+                  params={{ planId: plan.id }}
                   className="group flex flex-col justify-between rounded-lg border bg-card p-5 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div>
@@ -119,17 +142,18 @@ function PlannerPage() {
                   <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <LayoutList className="h-3.5 w-3.5" />
-                      <span className="text-muted-foreground">
-                        {(plan as any).section_count || 0} sections
+                      <span>
+                        {(plan as Row<"plans"> & { section_count?: number }).section_count || 0}{" "}
+                        sections
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <CheckSquare className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        {(plan as any).task_count || 0} tasks
+                      <CheckSquare className="h-4 w-4" />
+                      <span>
+                        {(plan as Row<"plans"> & { task_count?: number }).task_count || 0} tasks
                       </span>
                     </div>
-                    {plan.project_id && <div className="ml-auto">Linked Project</div>}
+                    {plan.project_id && <div className="ml-auto">Linked project</div>}
                   </div>
                 </Link>
               ))}
@@ -170,13 +194,23 @@ function PlannerPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="project">Project ID (Optional)</Label>
-              <Input
-                id="project"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                placeholder="UUID of linked project"
-              />
+              <Label htmlFor="project">Project (optional)</Label>
+              <Select
+                value={projectId || "none"}
+                onValueChange={(value) => setProjectId(value === "none" ? "" : value)}
+              >
+                <SelectTrigger id="project">
+                  <SelectValue placeholder="Link a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {(projects.data ?? []).map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <DialogFooter>

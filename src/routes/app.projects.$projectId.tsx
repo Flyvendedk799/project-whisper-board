@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { Bug, GripVertical, Plus, Ticket, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { ProjectAiPlansTab } from "@/features/projects/project-ai-plans";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
-import { inviteClient } from "@/lib/admin.functions";
+import { inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
 import { setMilestoneStatus, setProjectStatus } from "@/lib/tickets.functions";
 import { projectMembersQuery, projectMilestonesQuery, projectQuery } from "@/data/projects";
 import { projectInvoicesQuery } from "@/data/billing";
@@ -71,10 +72,23 @@ function ProjectPage() {
   const { projectId } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isClientAdmin, workspaceId } = useAuth();
 
   const project = useQuery(projectQuery(projectId));
   const tab = search.tab ?? (isAdmin ? "tickets" : "overview");
+
+  useEffect(() => {
+    if (search.paid !== "1") return;
+    toast.success("Payment received — thank you.");
+    void navigate({
+      search: (prev: { tab?: string; paid?: string }) => ({
+        ...prev,
+        paid: undefined,
+        tab: prev.tab ?? "billing",
+      }),
+      replace: true,
+    });
+  }, [search.paid, navigate]);
 
   return (
     <QueryState query={project} errorTitle="Couldn't load this project">
@@ -85,7 +99,9 @@ function ProjectPage() {
             description={p.description ?? p.organization?.name ?? undefined}
             action={
               <div className="flex flex-wrap gap-2">
-                {isAdmin && <InviteClientButton projectId={projectId} />}
+                {(isAdmin || isClientAdmin) && (
+                  <InviteClientButton projectId={projectId} canChooseRole={isAdmin} />
+                )}
                 <Button asChild>
                   <Link to="/app/report" search={{ project: projectId, url: undefined }}>
                     <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -116,7 +132,9 @@ function ProjectPage() {
             <Tabs
               value={tab}
               onValueChange={(next) =>
-                void navigate({ search: (prev) => ({ ...prev, tab: next }) })
+                void navigate({
+                  search: (prev: { tab?: string; paid?: string }) => ({ ...prev, tab: next }),
+                })
               }
             >
               <TabsList className="flex-wrap">
@@ -142,7 +160,11 @@ function ProjectPage() {
               {tab === "tickets" && (
                 <TabsContent value="tickets" className="mt-6" forceMount>
                   <SectionBoundary label="project-tickets">
-                    <TicketsPanel projectId={projectId} viewerId={user?.id ?? ""} />
+                    <TicketsPanel
+                      projectId={projectId}
+                      viewerId={user?.id ?? ""}
+                      workspaceId={workspaceId}
+                    />
                   </SectionBoundary>
                 </TabsContent>
               )}
@@ -190,7 +212,11 @@ function ProjectPage() {
               {tab === "people" && (
                 <TabsContent value="people" className="mt-6" forceMount>
                   <SectionBoundary label="project-people">
-                    <PeoplePanel projectId={projectId} canInvite={isAdmin} />
+                    <PeoplePanel
+                      projectId={projectId}
+                      canInvite={isAdmin || isClientAdmin}
+                      canManageRoles={isAdmin}
+                    />
                   </SectionBoundary>
                 </TabsContent>
               )}
@@ -223,10 +249,18 @@ function OverviewPanel({
   );
 }
 
-function TicketsPanel({ projectId, viewerId }: { projectId: string; viewerId: string }) {
+function TicketsPanel({
+  projectId,
+  viewerId,
+  workspaceId,
+}: {
+  projectId: string;
+  viewerId: string;
+  workspaceId: string | null;
+}) {
   const tickets = useInfiniteQuery({
-    ...ticketListQuery({ projectId, sort: "updated" }, viewerId),
-    enabled: Boolean(viewerId),
+    ...ticketListQuery({ projectId, sort: "updated" }, viewerId, workspaceId),
+    enabled: Boolean(viewerId && workspaceId),
   });
   const rows = tickets.data?.pages.flatMap((page) => page.rows) ?? [];
 
@@ -374,8 +408,23 @@ function MilestonesPanel({ projectId, canEdit }: { projectId: string; canEdit: b
   );
 }
 
-function PeoplePanel({ projectId, canInvite }: { projectId: string; canInvite: boolean }) {
+function PeoplePanel({
+  projectId,
+  canInvite,
+  canManageRoles,
+}: {
+  projectId: string;
+  canInvite: boolean;
+  canManageRoles: boolean;
+}) {
+  const { workspaceId } = useAuth();
   const members = useQuery(projectMembersQuery(projectId));
+
+  const setRole = useServerAction(useServerFn(setProjectMemberRole), {
+    label: "admin.setProjectMemberRole",
+    success: "Role updated",
+    invalidate: [qk.projectMembers(projectId), qk.workspacePeople(workspaceId ?? undefined)],
+  });
 
   return (
     <QueryState
@@ -386,34 +435,66 @@ function PeoplePanel({ projectId, canInvite }: { projectId: string; canInvite: b
           <EmptyState
             icon={UserPlus}
             title="Nobody here yet"
-            description={canInvite ? "Invite your client above." : "You're the first."}
+            description={
+              canInvite
+                ? "Invite your client so they can report issues and follow progress."
+                : "You're the first."
+            }
+            action={
+              canInvite ? (
+                <InviteClientButton projectId={projectId} canChooseRole={canManageRoles} />
+              ) : undefined
+            }
           />
         </Card>
       }
     >
       {(data) => (
         <Card className="divide-y">
-          {data.map((member) => (
-            <div key={member.id} className="flex items-center gap-3 p-4">
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
-                aria-hidden="true"
-              >
-                {initials(member.profile?.full_name ?? member.profile?.email)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {member.profile?.full_name ?? member.profile?.email}
+          {data.map((member) => {
+            const role = member.role;
+            const canToggle =
+              canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
+
+            return (
+              <div key={member.id} className="flex items-center gap-3 p-4">
+                <span
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
+                  aria-hidden="true"
+                >
+                  {initials(member.profile?.full_name ?? member.profile?.email)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">
+                    {member.profile?.full_name ?? member.profile?.email}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {member.profile?.email}
+                  </div>
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {member.profile?.email}
-                </div>
+                <StatusPill>
+                  {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
+                </StatusPill>
+                {canToggle && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={setRole.busy}
+                    onClick={() =>
+                      setRole.fire({
+                        workspaceId: workspaceId!,
+                        userId: member.user_id,
+                        projectId,
+                        role: role === "client_admin" ? "client" : "client_admin",
+                      })
+                    }
+                  >
+                    {role === "client_admin" ? "Make client" : "Make lead"}
+                  </Button>
+                )}
               </div>
-              <StatusPill>
-                {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
-              </StatusPill>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       )}
     </QueryState>
@@ -421,9 +502,10 @@ function PeoplePanel({ projectId, canInvite }: { projectId: string; canInvite: b
 }
 
 function ProjectStatusSelect({ projectId, status }: { projectId: string; status: ProjectStatus }) {
+  const { workspaceId } = useAuth();
   const update = useServerAction(useServerFn(setProjectStatus), {
     label: "projects.setStatus",
-    invalidate: [qk.project(projectId), qk.projectList()],
+    invalidate: [qk.project(projectId), qk.projectList(workspaceId ?? undefined)],
   });
 
   return (
@@ -445,13 +527,21 @@ function ProjectStatusSelect({ projectId, status }: { projectId: string; status:
   );
 }
 
-function InviteClientButton({ projectId }: { projectId: string }) {
+function InviteClientButton({
+  projectId,
+  canChooseRole = false,
+}: {
+  projectId: string;
+  canChooseRole?: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<"client" | "client_admin">("client");
+  const { workspaceId } = useAuth();
 
   const invite = useServerAction(useServerFn(inviteClient), {
     label: "admin.inviteClient",
     success: "Invitation sent",
-    invalidate: [qk.projectMembers(projectId), qk.workspacePeople()],
+    invalidate: [qk.projectMembers(projectId), qk.workspacePeople(workspaceId ?? undefined)],
     onSuccess: () => setOpen(false),
   });
 
@@ -470,11 +560,14 @@ function InviteClientButton({ projectId }: { projectId: string }) {
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (!workspaceId) return;
             const form = new FormData(event.currentTarget);
             void invite.run({
               projectId,
+              workspaceId,
               email: String(form.get("email")),
               fullName: String(form.get("name")) || undefined,
+              role: canChooseRole ? role : "client",
             });
           }}
           className="space-y-4"
@@ -487,11 +580,28 @@ function InviteClientButton({ projectId }: { projectId: string }) {
             <Label htmlFor="invite-name">Name (optional)</Label>
             <Input id="invite-name" name="name" />
           </div>
+          {canChooseRole && (
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-role">Role</Label>
+              <Select
+                value={role}
+                onValueChange={(value) => setRole(value as "client" | "client_admin")}
+              >
+                <SelectTrigger id="invite-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="client_admin">Client lead</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             They&rsquo;ll get an email with a sign-in link and immediate access to this project.
           </p>
           <DialogFooter>
-            <Button type="submit" disabled={invite.busy}>
+            <Button type="submit" disabled={invite.busy || !workspaceId}>
               {invite.busy ? "Inviting…" : "Send invite"}
             </Button>
           </DialogFooter>

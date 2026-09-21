@@ -3,21 +3,12 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { assertWorkspaceAdmin, assertWorkspaceInviter } from "@/lib/workspace.functions";
 
 function admin() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-}
-
-async function assertAdmin(supabase: ReturnType<typeof admin>, userId: string) {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!data) throw new Error("Forbidden: admin only");
 }
 
 export const inviteClient = createServerFn({ method: "POST" })
@@ -26,51 +17,141 @@ export const inviteClient = createServerFn({ method: "POST" })
     z
       .object({
         email: z.string().email(),
+        workspaceId: z.string().uuid(),
         projectId: z.string().uuid().optional(),
         fullName: z.string().min(1).max(120).optional(),
+        role: z.enum(["client", "client_admin"]).default("client"),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const a = admin();
-    await assertAdmin(a, context.userId);
+    const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    // Only workspace admins may invite another client_admin.
+    if (data.role === "client_admin" && inviterRole !== "admin") {
+      throw new Error("Forbidden: only admins can invite client leads");
+    }
 
     const origin = process.env.SITE_URL || "";
-    const redirectTo = origin ? `${origin}/app` : undefined;
+    const redirectTo = origin ? `${origin}/invite/accept` : undefined;
 
-    // Try invite (sends email). If user exists, fall back to magic link.
+    const meta: Record<string, string> = {
+      workspace_id: data.workspaceId,
+      invite_role: data.role,
+    };
+    if (data.fullName) meta.full_name = data.fullName;
+    if (data.projectId) meta.project_id = data.projectId;
+
     const { data: invited, error: inviteErr } = await a.auth.admin.inviteUserByEmail(data.email, {
       redirectTo,
-      data: data.fullName ? { full_name: data.fullName } : undefined,
+      data: meta,
     });
 
     let userId = invited?.user?.id;
     if (inviteErr && !userId) {
-      // Likely existing user — look them up via magic link generation
       const { data: link, error: linkErr } = await a.auth.admin.generateLink({
         type: "magiclink",
         email: data.email,
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          data: meta,
+        },
       });
       if (linkErr) throw new Error(linkErr.message);
       userId = link.user?.id;
+
+      // Existing users: ensure membership now (invite email may not re-run trigger).
+      if (userId) {
+        await a
+          .from("user_roles")
+          .upsert(
+            { user_id: userId, workspace_id: data.workspaceId, role: data.role },
+            { onConflict: "user_id,workspace_id,role" },
+          );
+        await a
+          .from("workspace_members")
+          .upsert(
+            { workspace_id: data.workspaceId, user_id: userId, role: data.role },
+            { onConflict: "workspace_id,user_id" },
+          );
+      }
     }
     if (!userId) throw new Error("Could not invite user");
 
-    // Ensure role
+    // New invites get roles via handle_new_user; ensure membership for both paths.
     await a
       .from("user_roles")
-      .upsert({ user_id: userId, role: "client" }, { onConflict: "user_id,role" });
+      .upsert(
+        { user_id: userId, workspace_id: data.workspaceId, role: data.role },
+        { onConflict: "user_id,workspace_id,role" },
+      );
+    await a
+      .from("workspace_members")
+      .upsert(
+        { workspace_id: data.workspaceId, user_id: userId, role: data.role },
+        { onConflict: "workspace_id,user_id" },
+      );
+
+    if (data.projectId) {
+      await a.from("project_members").upsert(
+        {
+          project_id: data.projectId,
+          user_id: userId,
+          role: data.role,
+          workspace_id: data.workspaceId,
+        },
+        { onConflict: "project_id,user_id" },
+      );
+    }
+    return { ok: true, userId };
+  });
+
+export const setProjectMemberRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+        role: z.enum(["client", "client_admin"]),
+        projectId: z.string().uuid().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    await assertWorkspaceAdmin(context.userId, data.workspaceId);
+
+    await a
+      .from("workspace_members")
+      .upsert(
+        { workspace_id: data.workspaceId, user_id: data.userId, role: data.role },
+        { onConflict: "workspace_id,user_id" },
+      );
+
+    // Replace prior client roles for this workspace with the new one.
+    await a
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .eq("workspace_id", data.workspaceId)
+      .in("role", ["client", "client_admin"]);
+    await a.from("user_roles").insert({
+      user_id: data.userId,
+      workspace_id: data.workspaceId,
+      role: data.role,
+    });
 
     if (data.projectId) {
       await a
         .from("project_members")
-        .upsert(
-          { project_id: data.projectId, user_id: userId, role: "client" },
-          { onConflict: "project_id,user_id" },
-        );
+        .update({ role: data.role })
+        .eq("project_id", data.projectId)
+        .eq("user_id", data.userId);
     }
-    return { ok: true, userId };
+
+    return { ok: true };
   });
 
 export const signedAttachmentUrl = createServerFn({ method: "POST" })
@@ -81,7 +162,6 @@ export const signedAttachmentUrl = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    // Use the user-scoped client to verify access via RLS on ticket_attachments
     const { supabase } = context;
     const { data: row } = await supabase
       .from("ticket_attachments")

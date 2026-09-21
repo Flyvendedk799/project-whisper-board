@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/app-shell";
+import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { linkTickets, unlinkTickets, updateTicket } from "@/lib/tickets.functions";
 import { notifyTicketChanged } from "@/lib/notifications.functions";
@@ -41,6 +42,7 @@ import type { RelationWithTicket, TicketDetail } from "@/data/types";
 
 /** Everything an admin does to a ticket, in the order they usually do it. */
 export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
+  const { workspaceId } = useAuth();
   const invalidate = [qk.ticket(ticket.id), qk.tickets()];
 
   const notify = useServerFn(notifyTicketChanged);
@@ -57,7 +59,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
     },
   });
 
-  const people = useQuery(workspacePeopleQuery());
+  const people = useQuery(workspacePeopleQuery(workspaceId));
   const relations = useQuery(ticketRelationsQuery(ticket.id));
   const timeEntries = useQuery(ticketTimeQuery(ticket.id));
   const running = useQuery(runningTimerQuery(userId));
@@ -321,7 +323,7 @@ function TicketAiTasks({ ticketId }: { ticketId: string }) {
     <Card className="space-y-3 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">AI Tasks</h2>
-        <Link 
+        <Link
           to="/app/planner"
           className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
         >
@@ -329,16 +331,19 @@ function TicketAiTasks({ ticketId }: { ticketId: string }) {
         </Link>
       </div>
       <ul className="space-y-2">
-        {tasksQuery.data.map((task: any) => (
+        {tasksQuery.data.map((task) => (
           <li key={task.id} className="text-sm">
-            <Link 
-              to={`/app/planner/${task.plan_id}`}
+            <Link
+              to="/app/planner/$planId"
+              params={{ planId: task.plan_id }}
               className="group block rounded-md border p-2 transition-colors hover:bg-muted/50"
             >
               <div className="font-medium">{task.title}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                 <StatusPill tone="default">{task.status}</StatusPill>
-                <span className="truncate">Plan: {task.plan?.title}</span>
+                <span className="truncate">
+                  Plan: {task.plan && "title" in task.plan ? String(task.plan.title) : "—"}
+                </span>
               </div>
             </Link>
           </li>

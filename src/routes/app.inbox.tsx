@@ -18,6 +18,39 @@ export const Route = createFileRoute("/app/inbox")({
   component: InboxPage,
 });
 
+function InboxOpenLink({ link, onOpen }: { link: string; onOpen: () => void }) {
+  const ticket = /^\/app\/tickets\/([^/?#]+)/.exec(link);
+  if (ticket) {
+    return (
+      <Button variant="ghost" size="sm" asChild>
+        <Link to="/app/tickets/$ticketId" params={{ ticketId: ticket[1] }} onClick={onOpen}>
+          Open
+        </Link>
+      </Button>
+    );
+  }
+  const project = /^\/app\/projects\/([^/?#]+)/.exec(link);
+  if (project) {
+    return (
+      <Button variant="ghost" size="sm" asChild>
+        <Link to="/app/projects/$projectId" params={{ projectId: project[1] }} onClick={onOpen}>
+          Open
+        </Link>
+      </Button>
+    );
+  }
+  if (link.startsWith("/app")) {
+    return (
+      <Button variant="ghost" size="sm" asChild>
+        <Link to={link as "/app"} onClick={onOpen}>
+          Open
+        </Link>
+      </Button>
+    );
+  }
+  return null;
+}
+
 function InboxPage() {
   const { user } = useAuth();
   const notifications = useQuery({ ...notificationListQuery(), enabled: Boolean(user) });
@@ -65,56 +98,56 @@ function InboxPage() {
         >
           {(data) => (
             <Card className="divide-y">
-              {data.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`flex items-start gap-3 p-4 ${notification.read_at ? "opacity-60" : ""}`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{notification.title}</span>
-                      <StatusPill>{NOTIFICATION_KIND_LABEL[notification.kind]}</StatusPill>
+              {data.map((notification) => {
+                const open = () => {
+                  if (!notification.read_at) markRead.fire({ ids: [notification.id] });
+                };
+
+                return (
+                  <div
+                    key={notification.id}
+                    className={`flex items-start gap-3 p-4 ${notification.read_at ? "opacity-60" : ""}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{notification.title}</span>
+                        <StatusPill>{NOTIFICATION_KIND_LABEL[notification.kind]}</StatusPill>
+                        {!notification.read_at && (
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-primary"
+                            aria-label="Unread"
+                            role="img"
+                          />
+                        )}
+                      </div>
+                      {notification.body && (
+                        <p className="mt-0.5 text-sm text-muted-foreground">{notification.body}</p>
+                      )}
+                      <time
+                        dateTime={notification.created_at}
+                        className="mt-1 block text-xs text-muted-foreground"
+                      >
+                        {formatRelative(notification.created_at)}
+                      </time>
+                    </div>
+
+                    <div className="flex shrink-0 gap-1">
+                      {notification.link && (
+                        <InboxOpenLink link={notification.link} onOpen={open} />
+                      )}
                       {!notification.read_at && (
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-primary"
-                          aria-label="Unread"
-                          role="img"
-                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => markRead.fire({ ids: [notification.id] })}
+                        >
+                          Mark read
+                        </Button>
                       )}
                     </div>
-                    {notification.body && (
-                      <p className="mt-0.5 text-sm text-muted-foreground">{notification.body}</p>
-                    )}
-                    <time
-                      dateTime={notification.created_at}
-                      className="mt-1 block text-xs text-muted-foreground"
-                    >
-                      {formatRelative(notification.created_at)}
-                    </time>
                   </div>
-
-                  <div className="flex shrink-0 gap-1">
-                    {notification.link && (
-                      <Button variant="ghost" size="sm" asChild>
-                        {/*
-                          Links are stored as plain paths by the notification
-                          fan-out, so this is an anchor rather than a typed Link.
-                        */}
-                        <a href={notification.link}>Open</a>
-                      </Button>
-                    )}
-                    {!notification.read_at && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => markRead.fire({ ids: [notification.id] })}
-                      >
-                        Mark read
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </Card>
           )}
         </QueryState>
@@ -122,5 +155,3 @@ function InboxPage() {
     </>
   );
 }
-
-export { Link };

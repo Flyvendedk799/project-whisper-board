@@ -7,7 +7,7 @@ import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { ticketListQuery } from "@/data/tickets";
-import { ticketFiltersSchema } from "@/data/filters";
+import { ticketFiltersSchema, type TicketFilters } from "@/data/filters";
 import { OPEN_TICKET_STATUSES } from "@/data/enums";
 
 /**
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/app/tickets/")({
 function MyTicketsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, workspaceId } = useAuth();
 
   const showClosed = search.status?.includes("done") ?? false;
 
@@ -39,8 +39,9 @@ function MyTicketsPage() {
         status: showClosed ? undefined : [...OPEN_TICKET_STATUSES],
       },
       user?.id ?? "",
+      workspaceId,
     ),
-    enabled: Boolean(user),
+    enabled: Boolean(user && workspaceId),
   });
 
   const rows = tickets.data?.pages.flatMap((page) => page.rows) ?? [];
@@ -58,7 +59,10 @@ function MyTicketsPage() {
               aria-pressed={showClosed}
               onClick={() =>
                 void navigate({
-                  search: (prev) => ({ ...prev, status: showClosed ? undefined : ["done"] }),
+                  search: (prev: TicketFilters) => ({
+                    ...prev,
+                    status: showClosed ? undefined : ["done"],
+                  }),
                 })
               }
             >

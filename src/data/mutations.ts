@@ -15,10 +15,35 @@ import type { Insert, Update } from "./types";
  * turns an error into a DataError and refuses a success that returned no row.
  */
 
-export const createProject = (input: { title: string; description?: string | null }) =>
+export const createProject = (input: {
+  title: string;
+  description?: string | null;
+  workspaceId: string;
+  organizationId?: string | null;
+}) =>
   supabase
     .from("projects")
-    .insert({ title: input.title, description: input.description ?? null })
+    .insert({
+      title: input.title,
+      description: input.description ?? null,
+      workspace_id: input.workspaceId,
+      organization_id: input.organizationId ?? null,
+    })
+    .select("*")
+    .single();
+
+export const createOrganization = (input: {
+  name: string;
+  workspaceId: string;
+  website?: string | null;
+}) =>
+  supabase
+    .from("organizations")
+    .insert({
+      name: input.name,
+      workspace_id: input.workspaceId,
+      website: input.website ?? null,
+    })
     .select("*")
     .single();
 

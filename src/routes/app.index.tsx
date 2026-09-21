@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   Timer,
   UserRound,
 } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,8 +30,9 @@ import { projectMeetingsQuery, upcomingMeetingsQuery } from "@/data/meetings";
 import { projectTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
 import { formatCents, formatRelative } from "@/lib/utils-format";
-import { useInfiniteQuery } from "@tanstack/react-query";
 import type { TicketFilters } from "@/data/filters";
+import type { InvoiceWithLines } from "@/data/types";
+import type { TimeEntry } from "@/data/types";
 
 export const Route = createFileRoute("/app/")({
   component: HomePage,
@@ -65,16 +67,16 @@ function HomePage() {
  * always one click from the tickets behind it.
  */
 function AdminHome() {
-  const { user } = useAuth();
+  const { user, workspaceId } = useAuth();
   const viewerId = user?.id ?? "";
 
-  const counts = useQuery({ ...ticketCountsQuery(viewerId), enabled: Boolean(viewerId) });
-  const projects = useQuery(projectListQuery());
+  const counts = useQuery(ticketCountsQuery(viewerId, workspaceId));
+  const projects = useQuery(projectListQuery(workspaceId));
   const meetings = useQuery(upcomingMeetingsQuery());
 
   const recent = useInfiniteQuery({
-    ...ticketListQuery({ sort: "updated" }, viewerId),
-    enabled: Boolean(viewerId),
+    ...ticketListQuery({ sort: "updated" }, viewerId, workspaceId),
+    enabled: Boolean(viewerId && workspaceId),
   });
   const recentRows = (recent.data?.pages[0]?.rows ?? []).slice(0, 6);
 
@@ -176,12 +178,19 @@ function AdminHome() {
                 <p className="p-4 text-sm text-muted-foreground">Nothing scheduled.</p>
               ) : (
                 (meetings.data ?? []).map((meeting) => (
-                  <div key={meeting.id} className="p-3">
+                  <Link
+                    key={meeting.id}
+                    to="/app/projects/$projectId"
+                    params={{ projectId: meeting.project_id }}
+                    search={{ tab: "meetings", paid: undefined }}
+                    className="block p-3 hover:bg-accent/40"
+                  >
                     <p className="truncate text-sm font-medium">{meeting.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatRelative(meeting.scheduled_at)}
+                      {meeting.project?.title ? ` · ${meeting.project.title}` : ""}
                     </p>
-                  </div>
+                  </Link>
                 ))
               )}
             </Card>
@@ -221,21 +230,40 @@ function AdminHome() {
 }
 
 function MoneyCard({ projects }: { projects: Array<{ id: string; currency: string }> }) {
-  // One project's invoices is the common case; more than a handful and this
-  // belongs on its own page rather than the dashboard.
-  const first = projects[0];
-  const invoices = useQuery({ ...projectInvoicesQuery(first?.id ?? ""), enabled: Boolean(first) });
-  const time = useQuery({ ...projectTimeQuery(first?.id ?? ""), enabled: Boolean(first) });
+  const invoiceQueries = useQueries({
+    queries: projects.map((project) => ({
+      ...projectInvoicesQuery(project.id),
+      enabled: Boolean(project.id),
+    })),
+  });
+  const timeQueries = useQueries({
+    queries: projects.map((project) => ({
+      ...projectTimeQuery(project.id),
+      enabled: Boolean(project.id),
+    })),
+  });
 
-  const owed = (invoices.data ?? [])
-    .filter((invoice) => invoice.status === "sent" || invoice.status === "overdue")
-    .reduce((total, invoice) => total + outstandingCents(invoice), 0);
+  const currency = projects[0]?.currency ?? "USD";
+  const weekAgo = useMemo(() => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), []);
 
-  const thisWeek = (time.data ?? []).filter(
-    (entry) => new Date(entry.started_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-  );
+  const owed = invoiceQueries.reduce((total, query) => {
+    const invoices = (query.data ?? []) as InvoiceWithLines[];
+    return (
+      total +
+      invoices
+        .filter((invoice) => invoice.status === "sent" || invoice.status === "overdue")
+        .reduce((sum, invoice) => sum + outstandingCents(invoice), 0)
+    );
+  }, 0);
 
-  if (!first) return null;
+  const thisWeekMinutes = timeQueries.reduce((total, query) => {
+    const entries = (query.data ?? []) as TimeEntry[];
+    return total + totalMinutes(entries.filter((entry) => new Date(entry.started_at) >= weekAgo));
+  }, 0);
+
+  const loading = invoiceQueries.some((q) => q.isPending) || timeQueries.some((q) => q.isPending);
+
+  if (projects.length === 0) return null;
 
   return (
     <section aria-labelledby="money">
@@ -246,15 +274,27 @@ function MoneyCard({ projects }: { projects: Array<{ id: string; currency: strin
         <div className="flex items-center gap-2.5">
           <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm">
-            <strong className="tabular-nums">{formatCents(owed, first.currency)}</strong>{" "}
-            <span className="text-muted-foreground">outstanding</span>
+            {loading ? (
+              <Skeleton className="inline-block h-4 w-24" />
+            ) : (
+              <>
+                <strong className="tabular-nums">{formatCents(owed, currency)}</strong>{" "}
+                <span className="text-muted-foreground">outstanding</span>
+              </>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-2.5">
           <Timer className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm">
-            <strong className="tabular-nums">{formatMinutes(totalMinutes(thisWeek))}</strong>{" "}
-            <span className="text-muted-foreground">logged this week</span>
+            {loading ? (
+              <Skeleton className="inline-block h-4 w-24" />
+            ) : (
+              <>
+                <strong className="tabular-nums">{formatMinutes(thisWeekMinutes)}</strong>{" "}
+                <span className="text-muted-foreground">logged this week</span>
+              </>
+            )}
           </span>
         </div>
       </Card>
@@ -263,7 +303,8 @@ function MoneyCard({ projects }: { projects: Array<{ id: string; currency: strin
 }
 
 function ClientHome() {
-  const projects = useQuery(projectListQuery());
+  const { workspaceId } = useAuth();
+  const projects = useQuery(projectListQuery(workspaceId));
   const first = projects.data?.[0];
 
   const milestones = useQuery({
@@ -282,7 +323,15 @@ function ClientHome() {
           <EmptyState
             icon={FolderKanban}
             title="Nothing shared with you yet"
-            description="Once you're added to a project it'll appear here."
+            description="Ask your agency to invite you to a project — it'll show up here with tickets, meetings and progress. Check your inbox if you're waiting on an invite."
+            action={
+              <Button variant="outline" asChild>
+                <Link to="/app/inbox">
+                  <Inbox className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Open inbox
+                </Link>
+              </Button>
+            }
           />
         </Card>
       }

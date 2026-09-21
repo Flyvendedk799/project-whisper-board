@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/components/auth-provider";
 import { useServerAction, useDataMutation } from "@/lib/use-server-action";
 import { inviteClient } from "@/lib/admin.functions";
 import { qk } from "@/data/keys";
@@ -18,10 +19,65 @@ import { createProject, createTicketRow } from "@/data/mutations";
  */
 type Step = 1 | 2 | 3;
 
+function stepStorageKey(workspaceId: string) {
+  return `cf.onboarding.step.${workspaceId}`;
+}
+
+function projectStorageKey(workspaceId: string) {
+  return `cf.onboarding.project.${workspaceId}`;
+}
+
+function readStoredStep(workspaceId: string | null): Step {
+  if (!workspaceId || typeof sessionStorage === "undefined") return 1;
+  try {
+    const raw = sessionStorage.getItem(stepStorageKey(workspaceId));
+    const n = Number(raw);
+    return n === 1 || n === 2 || n === 3 ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function readStoredProjectId(workspaceId: string | null): string | null {
+  if (!workspaceId || typeof sessionStorage === "undefined") return null;
+  try {
+    return sessionStorage.getItem(projectStorageKey(workspaceId));
+  } catch {
+    return null;
+  }
+}
+
+function clearOnboardingStorage(workspaceId: string | null) {
+  if (!workspaceId) return;
+  try {
+    sessionStorage.removeItem(stepStorageKey(workspaceId));
+    sessionStorage.removeItem(projectStorageKey(workspaceId));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function OnboardingWizard() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>(1);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const { workspaceId } = useAuth();
+  const [step, setStep] = useState<Step>(() => readStoredStep(workspaceId));
+  const [projectId, setProjectId] = useState<string | null>(() => readStoredProjectId(workspaceId));
+  const [showTicketForm, setShowTicketForm] = useState(false);
+
+  useEffect(() => {
+    setStep(readStoredStep(workspaceId));
+    setProjectId(readStoredProjectId(workspaceId));
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    try {
+      sessionStorage.setItem(stepStorageKey(workspaceId), String(step));
+      if (projectId) sessionStorage.setItem(projectStorageKey(workspaceId), projectId);
+    } catch {
+      /* ignore */
+    }
+  }, [workspaceId, step, projectId]);
 
   const project = useDataMutation("projects.insert", createProject, {
     success: "Project created",
@@ -35,7 +91,7 @@ export function OnboardingWizard() {
   const invite = useServerAction(useServerFn(inviteClient), {
     label: "admin.inviteClient",
     success: "Invitation sent",
-    invalidate: [qk.projects(), qk.workspacePeople()],
+    invalidate: [qk.projects(), qk.workspacePeople(workspaceId ?? undefined)],
     onSuccess: () => setStep(3),
   });
 
@@ -52,10 +108,25 @@ export function OnboardingWizard() {
     {
       success: "You're set up",
       invalidate: [qk.tickets(), qk.projects()],
-      onSuccess: (ticket) =>
-        void navigate({ to: "/app/tickets/$ticketId", params: { ticketId: ticket.id } }),
+      onSuccess: (ticket) => {
+        clearOnboardingStorage(workspaceId);
+        void navigate({ to: "/app/tickets/$ticketId", params: { ticketId: ticket.id } });
+      },
     },
   );
+
+  const finishToPeople = () => {
+    clearOnboardingStorage(workspaceId);
+    if (projectId) {
+      void navigate({
+        to: "/app/projects/$projectId",
+        params: { projectId },
+        search: { tab: "people", paid: undefined },
+      });
+      return;
+    }
+    void navigate({ to: "/app" });
+  };
 
   return (
     <Card className="mx-auto max-w-xl p-6 sm:p-8">
@@ -69,17 +140,19 @@ export function OnboardingWizard() {
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
         <StepDot n={2} label="Client" current={step} />
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
-        <StepDot n={3} label="First ticket" current={step} />
+        <StepDot n={3} label="Share" current={step} />
       </ol>
 
       {step === 1 && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (!workspaceId) return;
             const form = new FormData(event.currentTarget);
             void project.run({
               title: String(form.get("title")),
               description: String(form.get("description")) || null,
+              workspaceId,
             });
           }}
           className="space-y-4"
@@ -96,7 +169,7 @@ export function OnboardingWizard() {
             <Label htmlFor="ob-description">A line about it (optional)</Label>
             <Textarea id="ob-description" name="description" rows={2} />
           </div>
-          <Button type="submit" className="w-full" disabled={project.busy}>
+          <Button type="submit" className="w-full" disabled={project.busy || !workspaceId}>
             {project.busy ? "Creating…" : "Create it"}
             <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
           </Button>
@@ -107,9 +180,12 @@ export function OnboardingWizard() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (!workspaceId) return;
             const form = new FormData(event.currentTarget);
             void invite.run({
               projectId: projectId ?? undefined,
+              workspaceId,
+              role: "client_admin",
               email: String(form.get("email")),
               fullName: String(form.get("name")) || undefined,
             });
@@ -117,8 +193,8 @@ export function OnboardingWizard() {
           className="space-y-4"
         >
           <p className="text-sm text-muted-foreground">
-            They&rsquo;ll get a sign-in link and can report things straight away — with a screenshot
-            and a recording, not a paragraph of guesswork.
+            Invite your client lead — they&rsquo;ll get a sign-in link and can report things
+            straight away, and can invite their own team later.
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="ob-email">Their email</Label>
@@ -132,14 +208,47 @@ export function OnboardingWizard() {
             <Button type="button" variant="outline" onClick={() => setStep(3)}>
               Skip
             </Button>
-            <Button type="submit" className="flex-1" disabled={invite.busy}>
+            <Button type="submit" className="flex-1" disabled={invite.busy || !workspaceId}>
               {invite.busy ? "Inviting…" : "Send the invite"}
             </Button>
           </div>
         </form>
       )}
 
-      {step === 3 && (
+      {step === 3 && !showTicketForm && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            You&rsquo;re ready. Share the project with your client from People, or optionally seed
+            the queue with a first ticket.
+          </p>
+          <Button className="w-full" onClick={finishToPeople} disabled={!projectId}>
+            <Users className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Share with client
+          </Button>
+          {projectId && (
+            <Button variant="outline" className="w-full" asChild>
+              <Link
+                to="/app/projects/$projectId"
+                params={{ projectId }}
+                search={{ tab: "people", paid: undefined }}
+                onClick={() => clearOnboardingStorage(workspaceId)}
+              >
+                Open project People
+              </Link>
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => setShowTicketForm(true)}
+          >
+            Or create a first ticket
+          </Button>
+        </div>
+      )}
+
+      {step === 3 && showTicketForm && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -162,10 +271,15 @@ export function OnboardingWizard() {
             <Label htmlFor="ob-ticket-detail">Details (optional)</Label>
             <Textarea id="ob-ticket-detail" name="description" rows={2} />
           </div>
-          <Button type="submit" className="w-full" disabled={createTicket.busy || !projectId}>
-            {createTicket.busy ? "Creating…" : "Finish"}
-            <Check className="ml-1.5 h-4 w-4" aria-hidden="true" />
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowTicketForm(false)}>
+              Back
+            </Button>
+            <Button type="submit" className="flex-1" disabled={createTicket.busy || !projectId}>
+              {createTicket.busy ? "Creating…" : "Finish"}
+              <Check className="ml-1.5 h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </form>
       )}
     </Card>

@@ -1,13 +1,12 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, ChevronDown, ChevronUp, Terminal } from "lucide-react";
+import { Bot, ChevronUp, Terminal } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { planEventsQuery } from "@/data/planner";
-import { PLAN_EVENT_KIND_LABEL, type PlanEventKind, type EventWithRefs } from "@/data";
+import { PLAN_EVENT_KIND_LABEL, type EventWithRefs } from "@/data";
 import { qk } from "@/data/keys";
-import { useAuth } from "@/components/auth-provider";
 import { supabase } from "@/integrations/supabase/client";
 
 export function AgentActivityFeed({ planId }: { planId: string }) {
@@ -36,9 +35,9 @@ export function AgentActivityFeed({ planId }: { planId: string }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [planId, queryClient, supabase]);
+  }, [planId, queryClient]);
 
-  const rows = events.data || [];
+  const rows = events.data?.events ?? [];
 
   return (
     <Collapsible
@@ -61,24 +60,37 @@ export function AgentActivityFeed({ planId }: { planId: string }) {
       <CollapsibleContent className="flex-1 min-h-0">
         <ScrollArea className="h-full">
           <ul className="flex flex-col gap-3 p-4">
-            {rows.map((event: EventWithRefs) => (
-              <li key={event.id} className="flex gap-3 text-sm">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Bot className="h-3 w-3" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-medium text-foreground">
-                    {event.actor_name || "Agent"}{" "}
-                    <span className="font-normal text-muted-foreground">performed</span>{" "}
-                    {event.kind}
-                  </span>
-                  {event.details && <span className="text-muted-foreground">{event.details}</span>}
-                  <span className="mt-0.5 text-xs text-muted-foreground">
-                    {new Date(event.created_at).toLocaleString()}
-                  </span>
-                </div>
-              </li>
-            ))}
+            {rows.map((event) => {
+              const row = event as EventWithRefs;
+              const actorName = row.agent?.name || row.actor?.full_name || "Someone";
+              const detail =
+                typeof row.metadata === "object" &&
+                row.metadata &&
+                !Array.isArray(row.metadata) &&
+                "message" in row.metadata
+                  ? String((row.metadata as { message?: unknown }).message ?? "")
+                  : row.new_value;
+
+              return (
+                <li key={row.id} className="flex gap-3 text-sm">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Bot className="h-3 w-3" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-medium text-foreground">
+                      {actorName}{" "}
+                      <span className="font-normal text-muted-foreground">
+                        {PLAN_EVENT_KIND_LABEL[row.kind] ?? row.kind}
+                      </span>
+                    </span>
+                    {detail ? <span className="text-muted-foreground">{detail}</span> : null}
+                    <span className="mt-0.5 text-xs text-muted-foreground">
+                      {new Date(row.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
             {rows.length === 0 && (
               <li className="text-center text-sm text-muted-foreground">No activity yet.</li>
             )}

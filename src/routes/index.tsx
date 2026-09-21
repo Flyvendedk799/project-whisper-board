@@ -68,13 +68,13 @@ function Landing() {
           Tickets with screen recordings. Meeting notes that turn into action items. Progress your
           clients can actually see. Invoices when milestones land. AI to keep the noise down.
         </p>
-        <div className="mt-8 md:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Button size="lg" asChild className="w-full sm:w-auto">
+        <div className="mt-8 md:mt-10 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:mx-auto sm:max-w-none sm:flex-row sm:items-center">
+          <Button size="lg" asChild className="w-full sm:w-auto sm:min-w-[12rem]">
             <Link to="/signup">
-              Create your workspace <ArrowRight className="h-4 w-4 ml-1.5" />
+              Create your workspace <ArrowRight className="ml-1.5 h-4 w-4" />
             </Link>
           </Button>
-          <Button size="lg" variant="ghost" asChild className="w-full sm:w-auto">
+          <Button size="lg" variant="outline" asChild className="w-full sm:w-auto sm:min-w-[12rem]">
             <Link to="/login">I have an account</Link>
           </Button>
         </div>

@@ -144,7 +144,10 @@ export const commitActionItems = createServerFn({ method: "POST" })
       );
       if (itemError) throw itemError;
 
-      return { created: tickets?.length ?? 0 };
+      return {
+        created: tickets?.length ?? 0,
+        ticketIds: (tickets ?? []).map((t) => t.id),
+      };
     }),
   );
 

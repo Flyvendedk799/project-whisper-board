@@ -13,6 +13,15 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   boundsOf,
   canRedo,
@@ -78,6 +87,7 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
   const [draft, setDraft] = useState<AnnotationShape | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [textDraft, setTextDraft] = useState<{ point: Point; value: string } | null>(null);
 
   const doc = history.present;
 
@@ -145,26 +155,7 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
     }
 
     if (tool === "text") {
-      const text = window.prompt("Label");
-      if (text?.trim()) {
-        setDoc({
-          ...doc,
-          shapes: [
-            ...doc.shapes,
-            {
-              kind: "text",
-              id: newId(),
-              x: point.x,
-              y: point.y,
-              text: text.trim(),
-              size: 20,
-              color,
-              width: 1,
-            },
-          ],
-        });
-        setAnnouncement("Label added");
-      }
+      setTextDraft({ point, value: "" });
       return;
     }
 
@@ -389,6 +380,68 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
         Drag to draw. Use <strong>Blur out</strong> to hide anything private before sending — the
         original is never uploaded once you do.
       </p>
+
+      <Dialog
+        open={Boolean(textDraft)}
+        onOpenChange={(open) => {
+          if (!open) setTextDraft(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a label</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!textDraft?.value.trim()) {
+                setTextDraft(null);
+                return;
+              }
+              setDoc({
+                ...doc,
+                shapes: [
+                  ...doc.shapes,
+                  {
+                    kind: "text",
+                    id: newId(),
+                    x: textDraft.point.x,
+                    y: textDraft.point.y,
+                    text: textDraft.value.trim(),
+                    size: 20,
+                    color,
+                    width: 1,
+                  },
+                ],
+              });
+              setAnnouncement("Label added");
+              setTextDraft(null);
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="annotator-label">Text</Label>
+              <Input
+                id="annotator-label"
+                value={textDraft?.value ?? ""}
+                onChange={(e) =>
+                  setTextDraft((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+                }
+                autoFocus
+                placeholder="What should they look at?"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setTextDraft(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!textDraft?.value.trim()}>
+                Add label
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

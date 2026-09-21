@@ -90,12 +90,12 @@ export const createPullRequest = createServerFn({ method: "POST" })
         body: data.body,
       });
 
-      const { data: task } = await supabase
+      const { data: taskRow } = await supabase
         .from("plan_tasks")
         .select("plan_id")
         .eq("id", data.taskId)
         .single();
-      requireFound(task, "task");
+      const task = requireFound(taskRow, "task");
 
       const { error } = await supabase
         .from("plan_tasks")

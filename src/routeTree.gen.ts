@@ -15,11 +15,13 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppCreateWorkspaceRouteImport } from './routes/app.create-workspace'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppPlannerRouteImport } from './routes/app.planner'
 import { Route as AppReportRouteImport } from './routes/app.report'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTriageRouteImport } from './routes/app.triage'
+import { Route as InviteAcceptRouteImport } from './routes/invite.accept'
 import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as AppPlannerPlanIdRouteImport } from './routes/app.planner.$planId'
@@ -58,6 +60,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCreateWorkspaceRoute = AppCreateWorkspaceRouteImport.update({
+  id: '/create-workspace',
+  path: '/create-workspace',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -82,6 +89,11 @@ const AppTriageRoute = AppTriageRouteImport.update({
   id: '/triage',
   path: '/triage',
   getParentRoute: () => AppRoute,
+} as any)
+const InviteAcceptRoute = InviteAcceptRouteImport.update({
+  id: '/invite/accept',
+  path: '/invite/accept',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPlannerSplatRoute = ApiPlannerSplatRouteImport.update({
   id: '/api/planner/$',
@@ -125,11 +137,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
+  '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -144,11 +158,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
+  '/invite/accept': typeof InviteAcceptRoute
   '/app': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -165,11 +181,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
+  '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -187,11 +205,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/create-workspace'
     | '/app/inbox'
     | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
+    | '/invite/accept'
     | '/app/'
     | '/api/planner/$'
     | '/api/webhooks/stripe'
@@ -206,11 +226,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/create-workspace'
     | '/app/inbox'
     | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
+    | '/invite/accept'
     | '/app'
     | '/api/planner/$'
     | '/api/webhooks/stripe'
@@ -226,11 +248,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/app/create-workspace'
     | '/app/inbox'
     | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
+    | '/invite/accept'
     | '/app/'
     | '/api/planner/$'
     | '/api/webhooks/stripe'
@@ -247,6 +271,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  InviteAcceptRoute: typeof InviteAcceptRoute
   ApiPlannerSplatRoute: typeof ApiPlannerSplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
@@ -295,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/create-workspace': {
+      id: '/app/create-workspace'
+      path: '/create-workspace'
+      fullPath: '/app/create-workspace'
+      preLoaderRoute: typeof AppCreateWorkspaceRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/inbox': {
       id: '/app/inbox'
       path: '/inbox'
@@ -329,6 +361,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/triage'
       preLoaderRoute: typeof AppTriageRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/invite/accept': {
+      id: '/invite/accept'
+      path: '/invite/accept'
+      fullPath: '/invite/accept'
+      preLoaderRoute: typeof InviteAcceptRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/planner/$': {
       id: '/api/planner/$'
@@ -395,6 +434,7 @@ const AppPlannerRouteWithChildren = AppPlannerRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppCreateWorkspaceRoute: typeof AppCreateWorkspaceRoute
   AppInboxRoute: typeof AppInboxRoute
   AppPlannerRoute: typeof AppPlannerRouteWithChildren
   AppReportRoute: typeof AppReportRoute
@@ -408,6 +448,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCreateWorkspaceRoute: AppCreateWorkspaceRoute,
   AppInboxRoute: AppInboxRoute,
   AppPlannerRoute: AppPlannerRouteWithChildren,
   AppReportRoute: AppReportRoute,
@@ -428,19 +469,10 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  InviteAcceptRoute: InviteAcceptRoute,
   ApiPlannerSplatRoute: ApiPlannerSplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

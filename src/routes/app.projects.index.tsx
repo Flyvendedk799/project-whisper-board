@@ -15,12 +15,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useDataMutation } from "@/lib/use-server-action";
-import { projectListQuery } from "@/data/projects";
-import { createProject } from "@/data/mutations";
+import { organizationsQuery, projectListQuery } from "@/data/projects";
+import { createOrganization, createProject } from "@/data/mutations";
 import { qk } from "@/data/keys";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
 import { formatDate } from "@/lib/utils-format";
@@ -30,8 +37,8 @@ export const Route = createFileRoute("/app/projects/")({
 });
 
 function ProjectsPage() {
-  const { isAdmin } = useAuth();
-  const projects = useQuery(projectListQuery());
+  const { isAdmin, workspaceId } = useAuth();
+  const projects = useQuery(projectListQuery(workspaceId));
 
   return (
     <>
@@ -53,9 +60,17 @@ function ProjectsPage() {
                 description={
                   isAdmin
                     ? "Create one and invite your client — everything else hangs off it."
-                    : "Nothing has been shared with you yet."
+                    : "Nothing has been shared with you yet. Once your agency adds you to a project, it will appear here."
                 }
-                action={isAdmin ? <NewProjectButton /> : undefined}
+                action={
+                  isAdmin ? (
+                    <NewProjectButton />
+                  ) : (
+                    <Button variant="outline" asChild>
+                      <Link to="/app/inbox">Check your inbox</Link>
+                    </Button>
+                  )
+                }
               />
             </Card>
           }
@@ -113,19 +128,38 @@ function ProjectsPage() {
 
 function NewProjectButton() {
   const [open, setOpen] = useState(false);
+  const [orgMode, setOrgMode] = useState<"existing" | "new" | "none">("none");
+  const [organizationId, setOrganizationId] = useState<string | undefined>();
   const navigate = useNavigate();
+  const { workspaceId } = useAuth();
+  const orgs = useQuery(organizationsQuery(workspaceId));
+
+  const createOrg = useDataMutation("organizations.insert", createOrganization, {
+    invalidate: [[...qk.all, "organizations", workspaceId ?? "none"]],
+  });
 
   const create = useDataMutation("projects.insert", createProject, {
     success: "Project created",
-    invalidate: [qk.projects()],
+    invalidate: [qk.projects(), qk.projectList(workspaceId ?? undefined)],
     onSuccess: (project) => {
       setOpen(false);
+      setOrgMode("none");
+      setOrganizationId(undefined);
       void navigate({ to: "/app/projects/$projectId", params: { projectId: project.id } });
     },
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          setOrgMode("none");
+          setOrganizationId(undefined);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -139,11 +173,27 @@ function NewProjectButton() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (!workspaceId) return;
             const form = new FormData(event.currentTarget);
-            void create.run({
-              title: String(form.get("title")),
-              description: String(form.get("description")) || null,
-            });
+            const title = String(form.get("title"));
+            const description = String(form.get("description")) || null;
+
+            const finish = (organizationId?: string | null) =>
+              void create.run({
+                title,
+                description,
+                workspaceId,
+                organizationId: organizationId ?? null,
+              });
+
+            if (orgMode === "new") {
+              const orgName = String(form.get("orgName")).trim();
+              if (!orgName) return;
+              void createOrg.run({ name: orgName, workspaceId }).then((org) => finish(org.id));
+              return;
+            }
+
+            finish(orgMode === "existing" ? organizationId : null);
           }}
           className="space-y-4"
         >
@@ -155,9 +205,65 @@ function NewProjectButton() {
             <Label htmlFor="project-description">What is it?</Label>
             <Textarea id="project-description" name="description" rows={3} />
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="org-mode">Organisation (optional)</Label>
+            <Select
+              value={orgMode}
+              onValueChange={(value) => {
+                setOrgMode(value as "existing" | "new" | "none");
+                if (value !== "existing") setOrganizationId(undefined);
+              }}
+            >
+              <SelectTrigger id="org-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {(orgs.data?.length ?? 0) > 0 && (
+                  <SelectItem value="existing">Existing organisation</SelectItem>
+                )}
+                <SelectItem value="new">Create new organisation</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {orgMode === "existing" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="organization">Organisation</Label>
+              <Select value={organizationId} onValueChange={setOrganizationId}>
+                <SelectTrigger id="organization">
+                  <SelectValue placeholder="Pick an organisation" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(orgs.data ?? []).map((org) => (
+                    <SelectItem key={org.id} value={org.id}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {orgMode === "new" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="org-name">Organisation name</Label>
+              <Input id="org-name" name="orgName" required placeholder="Acme Inc." />
+            </div>
+          )}
+
           <DialogFooter>
-            <Button type="submit" disabled={create.busy}>
-              {create.busy ? "Creating…" : "Create"}
+            <Button
+              type="submit"
+              disabled={
+                create.busy ||
+                createOrg.busy ||
+                !workspaceId ||
+                (orgMode === "existing" && !organizationId)
+              }
+            >
+              {create.busy || createOrg.busy ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </form>

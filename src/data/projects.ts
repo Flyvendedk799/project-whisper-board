@@ -12,13 +12,15 @@ import {
   type UpdateWithAuthor,
 } from "./types";
 
-export function projectListQuery() {
+export function projectListQuery(workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: qk.projectList(),
+    queryKey: qk.projectList(workspaceId ?? undefined),
+    enabled: Boolean(workspaceId),
     queryFn: async (): Promise<ProjectWithOrg[]> => {
       const { data, error } = await supabase
         .from("projects")
         .select("*, organization:organizations(id, name)")
+        .eq("workspace_id", workspaceId!)
         .order("updated_at", { ascending: false })
         .returns<ProjectWithOrg[]>();
 
@@ -97,15 +99,26 @@ export function projectUpdatesQuery(projectId: string) {
   });
 }
 
-/** Everyone in the workspace, for assignee pickers and @mentions. */
-export function workspacePeopleQuery() {
+/** Everyone in the active workspace, for assignee pickers and @mentions. */
+export function workspacePeopleQuery(workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: qk.workspacePeople(),
+    queryKey: qk.workspacePeople(workspaceId ?? undefined),
+    enabled: Boolean(workspaceId),
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<PersonRef[]> => {
+      const { data: members, error: membersError } = await supabase
+        .from("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", workspaceId!);
+      if (membersError) throw new DataError("workspace_members.list", membersError);
+
+      const ids = (members ?? []).map((m) => m.user_id);
+      if (ids.length === 0) return [];
+
       const { data, error } = await supabase
         .from("profiles")
         .select(PERSON_REF_COLUMNS)
+        .in("id", ids)
         .order("full_name")
         .returns<PersonRef[]>();
 
@@ -115,14 +128,15 @@ export function workspacePeopleQuery() {
   });
 }
 
-export function projectSearchQuery(term: string) {
+export function projectSearchQuery(term: string, workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: [...qk.projects(), "search", term] as const,
-    enabled: term.trim().length >= 2,
+    queryKey: [...qk.projects(), "search", workspaceId ?? "none", term] as const,
+    enabled: Boolean(workspaceId) && term.trim().length >= 2,
     queryFn: async (): Promise<Project[]> => {
       const { data, error } = await supabase
         .from("projects")
         .select("*")
+        .eq("workspace_id", workspaceId!)
         .ilike("title", `%${term}%`)
         .order("updated_at", { ascending: false })
         .limit(8);
@@ -133,12 +147,17 @@ export function projectSearchQuery(term: string) {
   });
 }
 
-export function organizationsQuery() {
+export function organizationsQuery(workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: [...qk.all, "organizations"] as const,
+    queryKey: [...qk.all, "organizations", workspaceId ?? "none"] as const,
+    enabled: Boolean(workspaceId),
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from("organizations").select("*").order("name");
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("workspace_id", workspaceId!)
+        .order("name");
       if (error) throw new DataError("organizations.list", error);
       return data ?? [];
     },
