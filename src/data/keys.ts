@@ -42,6 +42,7 @@ export const qk = {
   ticketEvents: (id: string) => [...qk.ticket(id), "events"] as const,
   ticketAttachments: (id: string) => [...qk.ticket(id), "attachments"] as const,
   ticketRelations: (id: string) => [...qk.ticket(id), "relations"] as const,
+  ticketTasks: (id: string) => [...qk.ticket(id), "tasks"] as const,
   ticketContext: (id: string) => [...qk.ticket(id), "context"] as const,
   ticketTime: (id: string) => [...qk.ticket(id), "time"] as const,
 
