@@ -29,7 +29,7 @@ import type { Plugin } from "vite";
  * splits it out precisely so the model catalogue and error wording are safe in a
  * browser, and the AI provider imports it from there.
  */
-const SERVER_ONLY_MODULES = ["nodemailer", "@flyvendedk799/ai-auth"];
+const SERVER_ONLY_MODULES = ["nodemailer", "@flyvendedk799/ai-auth", "octokit"];
 
 /** Every binding the app imports from those packages. A new import lands here too. */
 const STUBBED_EXPORTS = [
@@ -41,6 +41,14 @@ const STUBBED_EXPORTS = [
   "startClaudeLogin",
   "anthropicSubscriptionOptions",
   "withClaudeCodeIdentity",
+  // Antigravity auth (PR #5)
+  "AntigravityAccountStore",
+  "exchangeAntigravityCode",
+  "startAntigravityLogin",
+  // Octokit (GitHub integration)
+  "Octokit",
+  // node:crypto used by api-auth
+  "createHash",
 ];
 
 function serverOnlyStubs(): Plugin {

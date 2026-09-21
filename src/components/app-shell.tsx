@@ -14,6 +14,7 @@ import {
   Settings,
   Sun,
   Ticket,
+  BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useTheme } from "@/components/theme-provider";
@@ -108,7 +109,10 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
   const nav = [
     { to: "/app", label: "Home", icon: Home, exact: true },
     ...(isAdmin
-      ? [{ to: "/app/triage", label: "Triage", icon: ListFilter, exact: false }]
+      ? [
+          { to: "/app/triage", label: "Triage", icon: ListFilter, exact: false },
+          { to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false },
+        ]
       : [{ to: "/app/tickets", label: "My tickets", icon: Ticket, exact: true }]),
     { to: "/app/projects", label: "Projects", icon: FolderKanban, exact: false },
     { to: "/app/inbox", label: "Inbox", icon: Inbox, exact: false },

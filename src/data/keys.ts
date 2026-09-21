@@ -61,4 +61,15 @@ export const qk = {
 
   outbox: () => [...qk.all, "outbox"] as const,
   appErrors: () => [...qk.all, "app-errors"] as const,
+
+  // AI Planner
+  plans: () => [...qk.all, "plans"] as const,
+  planList: () => [...qk.plans(), "list"] as const,
+  plan: (id: string) => [...qk.plans(), "detail", id] as const,
+  planSections: (id: string) => [...qk.plan(id), "sections"] as const,
+  planTasks: (id: string) => [...qk.plan(id), "tasks"] as const,
+  planEvents: (id: string) => [...qk.plan(id), "events"] as const,
+  planAgents: () => [...qk.all, "plan-agents"] as const,
+  taskComments: (id: string) => [...qk.all, "task-comments", id] as const,
+  apiKeys: () => [...qk.all, "api-keys"] as const,
 } as const;

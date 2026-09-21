@@ -9,35 +9,28 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/app'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
-import { Route as AppTriageRouteImport } from './routes/app.triage'
-import { Route as AppSettingsRouteImport } from './routes/app.settings'
-import { Route as AppReportRouteImport } from './routes/app.report'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
-import { Route as AppTicketsIndexRouteImport } from './routes/app.tickets.index'
-import { Route as AppProjectsIndexRouteImport } from './routes/app.projects.index'
-import { Route as AppTicketsTicketIdRouteImport } from './routes/app.tickets.$ticketId'
-import { Route as AppProjectsProjectIdRouteImport } from './routes/app.projects.$projectId'
+import { Route as AppPlannerRouteImport } from './routes/app.planner'
+import { Route as AppReportRouteImport } from './routes/app.report'
+import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppTriageRouteImport } from './routes/app.triage'
+import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
+import { Route as AppPlannerPlanIdRouteImport } from './routes/app.planner.$planId'
+import { Route as AppProjectsIndexRouteImport } from './routes/app.projects.index'
+import { Route as AppProjectsProjectIdRouteImport } from './routes/app.projects.$projectId'
+import { Route as AppTicketsIndexRouteImport } from './routes/app.tickets.index'
+import { Route as AppTicketsTicketIdRouteImport } from './routes/app.tickets.$ticketId'
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -45,9 +38,19 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -55,14 +58,14 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTriageRoute = AppTriageRouteImport.update({
-  id: '/triage',
-  path: '/triage',
+const AppInboxRoute = AppInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSettingsRoute = AppSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const AppPlannerRoute = AppPlannerRouteImport.update({
+  id: '/planner',
+  path: '/planner',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportRoute = AppReportRouteImport.update({
@@ -70,24 +73,34 @@ const AppReportRoute = AppReportRouteImport.update({
   path: '/report',
   getParentRoute: () => AppRoute,
 } as any)
-const AppInboxRoute = AppInboxRouteImport.update({
-  id: '/inbox',
-  path: '/inbox',
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
-  id: '/tickets/',
-  path: '/tickets/',
+const AppTriageRoute = AppTriageRouteImport.update({
+  id: '/triage',
+  path: '/triage',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiPlannerSplatRoute = ApiPlannerSplatRouteImport.update({
+  id: '/api/planner/$',
+  path: '/api/planner/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
+  id: '/api/webhooks/stripe',
+  path: '/api/webhooks/stripe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppPlannerPlanIdRoute = AppPlannerPlanIdRouteImport.update({
+  id: '/$planId',
+  path: '/$planId',
+  getParentRoute: () => AppPlannerRoute,
 } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppTicketsTicketIdRoute = AppTicketsTicketIdRouteImport.update({
-  id: '/tickets/$ticketId',
-  path: '/tickets/$ticketId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
@@ -95,10 +108,15 @@ const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => AppRoute,
 } as any)
-const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
-  id: '/api/webhooks/stripe',
-  path: '/api/webhooks/stripe',
-  getParentRoute: () => rootRouteImport,
+const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
+  id: '/tickets/',
+  path: '/tickets/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTicketsTicketIdRoute = AppTicketsTicketIdRouteImport.update({
+  id: '/tickets/$ticketId',
+  path: '/tickets/$ticketId',
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -108,11 +126,14 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
   '/app/': typeof AppIndexRoute
+  '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects/': typeof AppProjectsIndexRoute
@@ -124,11 +145,14 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
   '/app': typeof AppIndexRoute
+  '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects': typeof AppProjectsIndexRoute
@@ -142,11 +166,14 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
   '/app/': typeof AppIndexRoute
+  '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
   '/app/projects/': typeof AppProjectsIndexRoute
@@ -161,11 +188,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
     | '/app/'
+    | '/api/planner/$'
     | '/api/webhooks/stripe'
+    | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects/'
@@ -177,11 +207,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
     | '/app'
+    | '/api/planner/$'
     | '/api/webhooks/stripe'
+    | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects'
@@ -194,11 +227,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/app/inbox'
+    | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
     | '/app/'
+    | '/api/planner/$'
     | '/api/webhooks/stripe'
+    | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
     | '/app/projects/'
@@ -211,30 +247,17 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiPlannerSplatRoute: typeof ApiPlannerSplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -244,11 +267,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -258,18 +295,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/triage': {
-      id: '/app/triage'
-      path: '/triage'
-      fullPath: '/app/triage'
-      preLoaderRoute: typeof AppTriageRouteImport
+    '/app/inbox': {
+      id: '/app/inbox'
+      path: '/inbox'
+      fullPath: '/app/inbox'
+      preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/settings': {
-      id: '/app/settings'
-      path: '/settings'
-      fullPath: '/app/settings'
-      preLoaderRoute: typeof AppSettingsRouteImport
+    '/app/planner': {
+      id: '/app/planner'
+      path: '/planner'
+      fullPath: '/app/planner'
+      preLoaderRoute: typeof AppPlannerRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/report': {
@@ -279,32 +316,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/inbox': {
-      id: '/app/inbox'
-      path: '/inbox'
-      fullPath: '/app/inbox'
-      preLoaderRoute: typeof AppInboxRouteImport
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/tickets/': {
-      id: '/app/tickets/'
-      path: '/tickets'
-      fullPath: '/app/tickets/'
-      preLoaderRoute: typeof AppTicketsIndexRouteImport
+    '/app/triage': {
+      id: '/app/triage'
+      path: '/triage'
+      fullPath: '/app/triage'
+      preLoaderRoute: typeof AppTriageRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/planner/$': {
+      id: '/api/planner/$'
+      path: '/api/planner/$'
+      fullPath: '/api/planner/$'
+      preLoaderRoute: typeof ApiPlannerSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/stripe': {
+      id: '/api/webhooks/stripe'
+      path: '/api/webhooks/stripe'
+      fullPath: '/api/webhooks/stripe'
+      preLoaderRoute: typeof ApiWebhooksStripeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/planner/$planId': {
+      id: '/app/planner/$planId'
+      path: '/$planId'
+      fullPath: '/app/planner/$planId'
+      preLoaderRoute: typeof AppPlannerPlanIdRouteImport
+      parentRoute: typeof AppPlannerRoute
     }
     '/app/projects/': {
       id: '/app/projects/'
       path: '/projects'
       fullPath: '/app/projects/'
       preLoaderRoute: typeof AppProjectsIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/tickets/$ticketId': {
-      id: '/app/tickets/$ticketId'
-      path: '/tickets/$ticketId'
-      fullPath: '/app/tickets/$ticketId'
-      preLoaderRoute: typeof AppTicketsTicketIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/projects/$projectId': {
@@ -314,18 +365,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdRouteImport
       parentRoute: typeof AppRoute
     }
-    '/api/webhooks/stripe': {
-      id: '/api/webhooks/stripe'
-      path: '/api/webhooks/stripe'
-      fullPath: '/api/webhooks/stripe'
-      preLoaderRoute: typeof ApiWebhooksStripeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/app/tickets/': {
+      id: '/app/tickets/'
+      path: '/tickets'
+      fullPath: '/app/tickets/'
+      preLoaderRoute: typeof AppTicketsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/tickets/$ticketId': {
+      id: '/app/tickets/$ticketId'
+      path: '/tickets/$ticketId'
+      fullPath: '/app/tickets/$ticketId'
+      preLoaderRoute: typeof AppTicketsTicketIdRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
 
+interface AppPlannerRouteChildren {
+  AppPlannerPlanIdRoute: typeof AppPlannerPlanIdRoute
+}
+
+const AppPlannerRouteChildren: AppPlannerRouteChildren = {
+  AppPlannerPlanIdRoute: AppPlannerPlanIdRoute,
+}
+
+const AppPlannerRouteWithChildren = AppPlannerRoute._addFileChildren(
+  AppPlannerRouteChildren,
+)
+
 interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
+  AppPlannerRoute: typeof AppPlannerRouteWithChildren
   AppReportRoute: typeof AppReportRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTriageRoute: typeof AppTriageRoute
@@ -338,6 +409,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
+  AppPlannerRoute: AppPlannerRouteWithChildren,
   AppReportRoute: AppReportRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTriageRoute: AppTriageRoute,
@@ -356,6 +428,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiPlannerSplatRoute: ApiPlannerSplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport
