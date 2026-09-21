@@ -35,7 +35,7 @@ function PlanDetailPage() {
       <QueryState
         query={planQuery}
         errorTitle="Couldn't load plan"
-        loading={
+        pending={
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
@@ -43,10 +43,10 @@ function PlanDetailPage() {
       >
         {({ plan }) => (
           <>
-            <PlanHeader plan={plan as PlanWithSections} />
-            <div className="min-h-0 flex-1">
+            <PlanHeader plan={plan as unknown as PlanWithSections} />
+            <div className="flex-1 overflow-hidden relative">
               <PlanBoard
-                plan={plan as PlanWithSections}
+                plan={plan as unknown as PlanWithSections}
                 onCreateTask={handleCreateTask}
                 onTaskClick={setDrawerTaskId}
               />

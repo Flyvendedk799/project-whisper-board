@@ -113,10 +113,12 @@ export type RelationWithTicket = TicketRelation & {
 // AI Planner composite types
 export type PlanAgentRef = Pick<PlanAgent, "id" | "name" | "provider" | "model">;
 export type PlanWithSections = Plan & {
-  plan_sections: (PlanSection & { plan_tasks: PlanTask[] })[];
+  sections: (PlanSection & { tasks: TaskWithAgent[] })[];
 };
 export type TaskWithAgent = PlanTask & {
   assigned_agent: PlanAgentRef | null;
+  assigned_user?: PersonRef | null;
+  ticket?: Pick<Ticket, "id" | "ticket_number" | "title"> | null;
 };
 export type TaskWithComments = PlanTask & {
   plan_task_comments: (PlanTaskComment & {

@@ -281,6 +281,7 @@ const tablesInsert = `
           acceptance_criteria: string | null
           actual_minutes: number | null
           assigned_agent_id: string | null
+          assigned_user_id: string | null
           branch_name: string | null
           claimed_at: string | null
           completed_at: string | null
@@ -302,6 +303,7 @@ const tablesInsert = `
           priority: Database["public"]["Enums"]["plan_task_priority"]
           section_id: string
           status: Database["public"]["Enums"]["plan_task_status"]
+          ticket_id: string | null
           title: string
           updated_at: string
         }
@@ -309,6 +311,7 @@ const tablesInsert = `
           acceptance_criteria?: string | null
           actual_minutes?: number | null
           assigned_agent_id?: string | null
+          assigned_user_id?: string | null
           branch_name?: string | null
           claimed_at?: string | null
           completed_at?: string | null
@@ -330,6 +333,7 @@ const tablesInsert = `
           priority?: Database["public"]["Enums"]["plan_task_priority"]
           section_id: string
           status?: Database["public"]["Enums"]["plan_task_status"]
+          ticket_id?: string | null
           title: string
           updated_at?: string
         }
@@ -337,6 +341,7 @@ const tablesInsert = `
           acceptance_criteria?: string | null
           actual_minutes?: number | null
           assigned_agent_id?: string | null
+          assigned_user_id?: string | null
           branch_name?: string | null
           claimed_at?: string | null
           completed_at?: string | null
@@ -358,6 +363,7 @@ const tablesInsert = `
           priority?: Database["public"]["Enums"]["plan_task_priority"]
           section_id?: string
           status?: Database["public"]["Enums"]["plan_task_status"]
+          ticket_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -367,6 +373,13 @@ const tablesInsert = `
             columns: ["assigned_agent_id"]
             isOneToOne: false
             referencedRelation: "plan_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_tasks_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -381,6 +394,46 @@ const tablesInsert = `
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "plan_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_tasks_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      plan_followers: {
+        Row: {
+          plan_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          plan_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          plan_id?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_followers_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_followers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
         ]
