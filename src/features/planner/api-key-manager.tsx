@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -34,6 +35,7 @@ export function ApiKeyManager() {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [revokeId, setRevokeId] = useState<string | null>(null);
 
   const create = useServerAction(useServerFn(createApiKey), {
     label: "apikeys.create",
@@ -48,6 +50,7 @@ export function ApiKeyManager() {
   const revoke = useServerAction(useServerFn(revokeApiKey), {
     label: "apikeys.revoke",
     invalidate: [qk.apiKeys()],
+    onSuccess: () => setRevokeId(null),
   });
 
   const onSubmit = (e: React.FormEvent) => {
@@ -99,11 +102,7 @@ export function ApiKeyManager() {
                       variant="ghost"
                       size="icon"
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => {
-                        if (confirm("Are you sure you want to revoke this key?")) {
-                          revoke.fire({ keyId: k.id });
-                        }
-                      }}
+                      onClick={() => setRevokeId(k.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -154,6 +153,28 @@ export function ApiKeyManager() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke this API key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Agents using it will lose access immediately. This can&rsquo;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={revoke.busy || !revokeId}
+              onClick={() => {
+                if (revokeId) revoke.fire({ keyId: revokeId });
+              }}
+            >
+              {revoke.busy ? "Revoking…" : "Revoke"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!newKey} onOpenChange={() => setNewKey(null)}>
         <AlertDialogContent>

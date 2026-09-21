@@ -1,9 +1,18 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { ArrowLeft, Camera, Check, Loader2, Send, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  FolderKanban,
+  Loader2,
+  Plus,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,7 +57,6 @@ import {
 } from "@/data/enums";
 import { AppError } from "@/lib/errors";
 import { toast } from "sonner";
-import { FolderKanban } from "lucide-react";
 
 /**
  * Reporting something, for a person who is not a developer.
@@ -95,7 +103,7 @@ function readReportDraft(): Partial<ReportDraft> {
 function ReportPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { user, workspaceId } = useAuth();
+  const { user, isAdmin, workspaceId } = useAuth();
   const saved = useMemo(() => readReportDraft(), []);
 
   const [step, setStep] = useState<Step>(saved.step ?? "capture");
@@ -121,9 +129,19 @@ function ReportPage() {
   const projects = useQuery(projectListQuery(workspaceId));
   const chosenProject = projects.data?.find((p) => p.id === projectId) ?? projects.data?.[0];
 
+  // Prefer `?project=` over a stale draft when the URL carries one.
   useEffect(() => {
-    if (!projectId && projects.data?.length === 1) setProjectId(projects.data[0].id);
-  }, [projectId, projects.data]);
+    if (search.project) setProjectId(search.project);
+  }, [search.project]);
+
+  useEffect(() => {
+    if (projectId) return;
+    if (search.project) {
+      setProjectId(search.project);
+      return;
+    }
+    if (projects.data?.length === 1) setProjectId(projects.data[0].id);
+  }, [projectId, projects.data, search.project]);
 
   useEffect(() => {
     try {
@@ -293,7 +311,25 @@ function ReportPage() {
           <EmptyState
             icon={FolderKanban}
             title="No projects yet"
-            description="Once you've been added to a project you can report things against it."
+            description={
+              isAdmin
+                ? "Create a project first — tickets hang off projects, so there's nowhere to file this yet."
+                : "Once you've been added to a project you can report things against it."
+            }
+            action={
+              isAdmin ? (
+                <Button asChild>
+                  <Link to="/app/projects">
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Create a project
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" asChild>
+                  <Link to="/app/inbox">Check your inbox</Link>
+                </Button>
+              )
+            }
           />
         </div>
       </>
@@ -446,6 +482,7 @@ function ReportPage() {
               className="w-full"
               disabled={!chosenProject || (!note.trim() && drafts.length === 0)}
               onClick={() => {
+                if (!title.trim() && note.trim()) setTitle(note.trim());
                 setStep("describe");
                 void askAi();
               }}

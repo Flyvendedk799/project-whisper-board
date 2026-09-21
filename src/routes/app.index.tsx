@@ -20,7 +20,7 @@ import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/ap
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
-import { OnboardingWizard } from "@/components/onboarding-wizard";
+import { OnboardingWizard, isOnboardingIncomplete } from "@/components/onboarding-wizard";
 import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
@@ -81,7 +81,8 @@ function AdminHome() {
   const recentRows = (recent.data?.pages[0]?.rows ?? []).slice(0, 6);
 
   const noProjects = projects.isSuccess && projects.data.length === 0;
-  if (noProjects) return <OnboardingWizard />;
+  const resumeOnboarding = isOnboardingIncomplete(workspaceId);
+  if (noProjects || resumeOnboarding) return <OnboardingWizard />;
 
   return (
     <div className="space-y-8">
@@ -145,7 +146,20 @@ function AdminHome() {
                 <EmptyState
                   icon={Inbox}
                   title="Nothing yet"
-                  description="Tickets your clients open will land here."
+                  description="Tickets your clients open will land here. Seed the queue yourself, or invite a client so they can report."
+                  action={
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button asChild>
+                        <Link to="/app/report">
+                          <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          Report something
+                        </Link>
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link to="/app/triage">Open the queue</Link>
+                      </Button>
+                    </div>
+                  }
                 />
               </Card>
             }

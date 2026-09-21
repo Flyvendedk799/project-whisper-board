@@ -29,12 +29,22 @@ function SignupPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
+    // Persist name so create-workspace can prefill after email confirmation.
+    try {
+      sessionStorage.setItem("cf.pendingWorkspaceName", workspaceName.trim());
+    } catch {
+      /* ignore */
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/app/create-workspace`,
-        data: { full_name: name },
+        data: {
+          full_name: name,
+          pending_workspace_name: workspaceName.trim(),
+        },
       },
     });
     if (error) {
@@ -73,10 +83,19 @@ function SignupPage() {
           <h1 className="text-3xl font-display">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to <strong>{email}</strong>. After you confirm, you&rsquo;ll
-            finish creating your workspace.
+            finish creating <strong>{workspaceName || "your workspace"}</strong>.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Already confirmed?{" "}
+            <Link to="/login" search={{ continue: "workspace" }} className="text-primary underline">
+              Sign in to create your workspace
+            </Link>
+            .
           </p>
           <Button asChild variant="outline">
-            <Link to="/login">Back to sign in</Link>
+            <Link to="/login" search={{ continue: "workspace" }}>
+              Continue to create workspace
+            </Link>
           </Button>
         </Card>
       </div>

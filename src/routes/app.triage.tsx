@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Inbox, LayoutGrid, List, Loader2, Ticket } from "lucide-react";
+import { Bug, Inbox, LayoutGrid, List, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { EmptyState, PageHeader } from "@/components/app-shell";
@@ -17,7 +17,7 @@ import { ViewsRail } from "@/features/triage/views-rail";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { bulkUpdateTickets, deleteView, saveView } from "@/lib/tickets.functions";
-import { ticketFiltersSchema, type TicketFilters } from "@/data/filters";
+import { EMPTY_FILTERS, isFiltered, ticketFiltersSchema, type TicketFilters } from "@/data/filters";
 import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
 import { projectListQuery, workspacePeopleQuery } from "@/data/projects";
 import { savedViewsQuery } from "@/data/views";
@@ -268,8 +268,29 @@ function TriagePage() {
               empty={
                 <EmptyState
                   icon={Inbox}
-                  title="Nothing here"
-                  description="No tickets match these filters. Try clearing one."
+                  title={isFiltered(search) ? "Nothing here" : "No tickets yet"}
+                  description={
+                    isFiltered(search)
+                      ? "No tickets match these filters. Clear them to see the full queue."
+                      : "When clients report issues — or you file one yourself — they'll land here."
+                  }
+                  action={
+                    isFiltered(search) ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => setFilters(EMPTY_FILTERS, undefined)}
+                      >
+                        Clear filters
+                      </Button>
+                    ) : (
+                      <Button asChild>
+                        <Link to="/app/report">
+                          <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          Report something
+                        </Link>
+                      </Button>
+                    )
+                  }
                 />
               }
             >

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,18 +11,42 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   validateSearch: z.object({
     redirect: z.string().optional(),
+    continue: z.enum(["workspace"]).optional(),
   }),
   head: () => ({ meta: [{ title: "Sign in · Consflow" }] }),
   component: LoginPage,
 });
 
+function readPendingWorkspaceName(): string | null {
+  try {
+    return sessionStorage.getItem("cf.pendingWorkspaceName");
+  } catch {
+    return null;
+  }
+}
+
 function LoginPage() {
   const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
+  const { redirect, continue: continueTo } = Route.useSearch();
+  const pendingWorkspace = useMemo(() => readPendingWorkspaceName(), []);
+  const finishingSignup = continueTo === "workspace" || Boolean(pendingWorkspace);
+
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  function afterSignIn() {
+    if (redirect) {
+      void navigate({ href: redirect });
+      return;
+    }
+    if (finishingSignup) {
+      void navigate({ to: "/app/create-workspace" });
+      return;
+    }
+    void navigate({ to: "/app" });
+  }
 
   async function handlePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -30,12 +54,8 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success("Welcome back");
-    if (redirect) {
-      void navigate({ href: redirect });
-    } else {
-      void navigate({ to: "/app" });
-    }
+    toast.success(finishingSignup ? "Welcome — let's finish your workspace" : "Welcome back");
+    afterSignIn();
   }
 
   async function handleMagic(e: React.FormEvent) {
@@ -43,11 +63,19 @@ function LoginPage() {
     setBusy(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/app` },
+      options: {
+        emailRedirectTo: `${window.location.origin}${
+          finishingSignup ? "/app/create-workspace" : "/app"
+        }`,
+      },
     });
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success("Check your email for a sign-in link");
+    toast.success(
+      finishingSignup
+        ? "Check your email — the link continues to create your workspace"
+        : "Check your email for a sign-in link",
+    );
   }
 
   return (
@@ -55,7 +83,19 @@ function LoginPage() {
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-display">Consflow</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
+          {finishingSignup ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Email confirmed? Sign in to finish creating{" "}
+                {pendingWorkspace ? <strong>{pendingWorkspace}</strong> : "your workspace"}.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Next step: name your agency and you&rsquo;re in.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
+          )}
         </div>
         <div className="flex gap-1 p-1 bg-muted rounded-md text-sm">
           <button
@@ -97,7 +137,13 @@ function LoginPage() {
             </div>
           )}
           <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "..." : mode === "password" ? "Sign in" : "Send magic link"}
+            {busy
+              ? "..."
+              : mode === "password"
+                ? finishingSignup
+                  ? "Continue to create workspace"
+                  : "Sign in"
+                : "Send magic link"}
           </Button>
         </form>
         <div className="text-center text-sm text-muted-foreground space-y-1">

@@ -73,6 +73,7 @@ function ProjectPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { user, isAdmin, isClientAdmin, workspaceId } = useAuth();
+  const [pendingInvite, setPendingInvite] = useState<string | null>(null);
 
   const project = useQuery(projectQuery(projectId));
   const tab = search.tab ?? (isAdmin ? "tickets" : "overview");
@@ -100,7 +101,21 @@ function ProjectPage() {
             action={
               <div className="flex flex-wrap gap-2">
                 {(isAdmin || isClientAdmin) && (
-                  <InviteClientButton projectId={projectId} canChooseRole={isAdmin} />
+                  <InviteClientButton
+                    projectId={projectId}
+                    canChooseRole={isAdmin}
+                    onInvited={(email) => {
+                      setPendingInvite(email);
+                      if (tab !== "people") {
+                        void navigate({
+                          search: (prev: { tab?: string; paid?: string }) => ({
+                            ...prev,
+                            tab: "people",
+                          }),
+                        });
+                      }
+                    }}
+                  />
                 )}
                 <Button asChild>
                   <Link to="/app/report" search={{ project: projectId, url: undefined }}>
@@ -216,6 +231,8 @@ function ProjectPage() {
                       projectId={projectId}
                       canInvite={isAdmin || isClientAdmin}
                       canManageRoles={isAdmin}
+                      pendingInvite={pendingInvite}
+                      onPendingInviteChange={setPendingInvite}
                     />
                   </SectionBoundary>
                 </TabsContent>
@@ -412,10 +429,14 @@ function PeoplePanel({
   projectId,
   canInvite,
   canManageRoles,
+  pendingInvite,
+  onPendingInviteChange,
 }: {
   projectId: string;
   canInvite: boolean;
   canManageRoles: boolean;
+  pendingInvite: string | null;
+  onPendingInviteChange: (email: string | null) => void;
 }) {
   const { workspaceId } = useAuth();
   const members = useQuery(projectMembersQuery(projectId));
@@ -427,77 +448,135 @@ function PeoplePanel({
   });
 
   return (
-    <QueryState
-      query={members}
-      errorTitle="Couldn't load people"
-      empty={
-        <Card>
-          <EmptyState
-            icon={UserPlus}
-            title="Nobody here yet"
-            description={
-              canInvite
-                ? "Invite your client so they can report issues and follow progress."
-                : "You're the first."
-            }
-            action={
-              canInvite ? (
-                <InviteClientButton projectId={projectId} canChooseRole={canManageRoles} />
-              ) : undefined
-            }
-          />
-        </Card>
-      }
-    >
-      {(data) => (
-        <Card className="divide-y">
-          {data.map((member) => {
-            const role = member.role;
-            const canToggle =
-              canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
-
-            return (
-              <div key={member.id} className="flex items-center gap-3 p-4">
-                <span
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
-                  aria-hidden="true"
-                >
-                  {initials(member.profile?.full_name ?? member.profile?.email)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {member.profile?.full_name ?? member.profile?.email}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {member.profile?.email}
-                  </div>
-                </div>
-                <StatusPill>
-                  {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
-                </StatusPill>
-                {canToggle && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={setRole.busy}
-                    onClick={() =>
-                      setRole.fire({
-                        workspaceId: workspaceId!,
-                        userId: member.user_id,
-                        projectId,
-                        role: role === "client_admin" ? "client" : "client_admin",
-                      })
-                    }
-                  >
-                    {role === "client_admin" ? "Make client" : "Make lead"}
-                  </Button>
-                )}
-              </div>
-            );
-          })}
+    <div className="space-y-3">
+      {pendingInvite && (
+        <Card className="border-dashed p-4">
+          <p className="text-sm font-medium">Invite sent to {pendingInvite}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Waiting for them to accept — they&rsquo;ll appear here once they sign in.
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 px-0"
+            onClick={() => onPendingInviteChange(null)}
+          >
+            Dismiss
+          </Button>
         </Card>
       )}
-    </QueryState>
+
+      <QueryState
+        query={members}
+        errorTitle="Couldn't load people"
+        empty={
+          <Card>
+            <EmptyState
+              icon={UserPlus}
+              title="Nobody here yet"
+              description={
+                canInvite
+                  ? "Invite your client so they can report issues and follow progress."
+                  : "You're the first."
+              }
+              action={
+                canInvite ? (
+                  <InviteClientButton
+                    projectId={projectId}
+                    canChooseRole={canManageRoles}
+                    onInvited={(email) => onPendingInviteChange(email)}
+                  />
+                ) : undefined
+              }
+            />
+          </Card>
+        }
+      >
+        {(data) => {
+          const hasClient = data.some(
+            (member) => member.role === "client" || member.role === "client_admin",
+          );
+
+          return (
+            <div className="space-y-3">
+              {canInvite && !hasClient && !pendingInvite && (
+                <Card className="flex flex-wrap items-center justify-between gap-3 border-dashed p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">No client on this project yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      Invite them so they can report issues and follow progress.
+                    </p>
+                  </div>
+                  <InviteClientButton
+                    projectId={projectId}
+                    canChooseRole={canManageRoles}
+                    onInvited={(email) => onPendingInviteChange(email)}
+                  />
+                </Card>
+              )}
+
+              {canInvite && hasClient && (
+                <div className="flex justify-end">
+                  <InviteClientButton
+                    projectId={projectId}
+                    canChooseRole={canManageRoles}
+                    onInvited={(email) => onPendingInviteChange(email)}
+                  />
+                </div>
+              )}
+
+              <Card className="divide-y">
+                {data.map((member) => {
+                  const role = member.role;
+                  const canToggle =
+                    canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
+
+                  return (
+                    <div key={member.id} className="flex items-center gap-3 p-4">
+                      <span
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
+                        aria-hidden="true"
+                      >
+                        {initials(member.profile?.full_name ?? member.profile?.email)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">
+                          {member.profile?.full_name ?? member.profile?.email}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {member.profile?.email}
+                        </div>
+                      </div>
+                      <StatusPill>
+                        {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
+                      </StatusPill>
+                      {canToggle && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={setRole.busy}
+                          onClick={() =>
+                            setRole.fire({
+                              workspaceId: workspaceId!,
+                              userId: member.user_id,
+                              projectId,
+                              role: role === "client_admin" ? "client" : "client_admin",
+                            })
+                          }
+                        >
+                          {role === "client_admin" ? "Make client" : "Make lead"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          );
+        }}
+      </QueryState>
+    </div>
   );
 }
 
@@ -530,9 +609,11 @@ function ProjectStatusSelect({ projectId, status }: { projectId: string; status:
 function InviteClientButton({
   projectId,
   canChooseRole = false,
+  onInvited,
 }: {
   projectId: string;
   canChooseRole?: boolean;
+  onInvited?: (email: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<"client" | "client_admin">("client");
@@ -542,7 +623,14 @@ function InviteClientButton({
     label: "admin.inviteClient",
     success: "Invitation sent",
     invalidate: [qk.projectMembers(projectId), qk.workspacePeople(workspaceId ?? undefined)],
-    onSuccess: () => setOpen(false),
+    onSuccess: (_result, vars) => {
+      setOpen(false);
+      const email =
+        vars && typeof vars === "object" && "email" in vars
+          ? String((vars as { email: string }).email)
+          : "";
+      if (email) onInvited?.(email);
+    },
   });
 
   return (

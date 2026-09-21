@@ -44,6 +44,27 @@ describe("QueryState", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("treats an infinite-query with empty pages as empty", () => {
+    renderWithQuery(
+      <QueryState
+        query={{ ...base, data: { pages: [{ rows: [] }], pageParams: [null] } }}
+        empty={<p>No tickets yet</p>}
+      >
+        {() => <p>rows</p>}
+      </QueryState>,
+    );
+    expect(screen.getByText("No tickets yet")).toBeInTheDocument();
+  });
+
+  it("treats a wrapped empty list as empty", () => {
+    renderWithQuery(
+      <QueryState query={{ ...base, data: { plans: [] } }} empty={<p>No plans</p>}>
+        {() => <p>plans</p>}
+      </QueryState>,
+    );
+    expect(screen.getByText("No plans")).toBeInTheDocument();
+  });
+
   it("announces a failure, and says what happened in words a client can read", () => {
     const denied = new DataError("tickets.list", {
       message: 'new row violates row-level security policy for table "tickets"',
@@ -76,5 +97,26 @@ describe("QueryState", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it("treats an empty plans wrapper as empty", () => {
+    renderWithQuery(
+      <QueryState query={{ ...base, data: { plans: [] } }} empty={<p>No plans yet</p>}>
+        {() => <p>rows</p>}
+      </QueryState>,
+    );
+    expect(screen.getByText("No plans yet")).toBeInTheDocument();
+  });
+
+  it("treats infinite-query pages.rows as empty when there are none", () => {
+    renderWithQuery(
+      <QueryState
+        query={{ ...base, data: { pages: [{ rows: [] }], pageParams: [0] } }}
+        empty={<p>No tickets yet</p>}
+      >
+        {() => <p>rows</p>}
+      </QueryState>,
+    );
+    expect(screen.getByText("No tickets yet")).toBeInTheDocument();
   });
 });

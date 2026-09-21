@@ -9,6 +9,8 @@ import { useAuth } from "@/components/auth-provider";
 import { createWorkspace } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 
+const PENDING_WS_NAME_KEY = "cf.pendingWorkspaceName";
+
 export const Route = createFileRoute("/app/create-workspace")({
   head: () => ({ meta: [{ title: "Create workspace · Consflow" }] }),
   component: CreateWorkspacePage,
@@ -18,25 +20,46 @@ function CreateWorkspacePage() {
   const navigate = useNavigate();
   const { user, loading, needsWorkspace, setActiveWorkspace, refetchWorkspaces } = useAuth();
   const createWs = useServerFn(createWorkspace);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => {
+    try {
+      return sessionStorage.getItem(PENDING_WS_NAME_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
 
+  // Prefill from signup metadata if sessionStorage was cleared.
+  useEffect(() => {
+    if (name) return;
+    const fromMeta = user?.user_metadata?.pending_workspace_name;
+    if (typeof fromMeta === "string" && fromMeta.trim()) {
+      setName(fromMeta.trim());
+    }
+  }, [user, name]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
       const result = await createWs({ data: { name: name.trim() } });
+      try {
+        sessionStorage.removeItem(PENDING_WS_NAME_KEY);
+      } catch {
+        /* ignore */
+      }
       setActiveWorkspace(result.workspace.id);
-      refetchWorkspaces();
+      await refetchWorkspaces();
       toast.success("Workspace created");
-      navigate({ to: "/app" });
+      // Hard navigate avoids staying on this route when AppShell still treats
+      // /create-workspace as a special shell (no sidebar) after success.
+      window.location.assign("/app");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't create workspace");
-    } finally {
       setBusy(false);
     }
   }
