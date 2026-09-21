@@ -156,9 +156,16 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
       const completeMatch = path.match(/^tasks\/([^/]+)\/complete$/);
       if (completeMatch) {
+        const body = await request.json().catch(() => ({}));
+        const updateData: { status: "done"; completed_at: string; pr_url?: string } = {
+          status: "done",
+          completed_at: new Date().toISOString(),
+        };
+        if (body.pr_url) updateData.pr_url = body.pr_url;
+
         const { data: task, error } = await admin
           .from("plan_tasks")
-          .update({ status: "done", completed_at: new Date().toISOString() })
+          .update(updateData)
           .eq("id", completeMatch[1])
           .select()
           .single();

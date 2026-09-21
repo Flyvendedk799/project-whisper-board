@@ -1,24 +1,36 @@
 /* eslint-disable no-restricted-syntax */
+import "dotenv/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
 
-// Setup Supabase
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const workspaceId = process.env.PLANNER_WORKSPACE_ID!;
+// Setup API connection
+const apiUrl = process.env.PLANNER_API_URL || (process.env.NODE_ENV === "production" ? "https://boared.online/api/planner" : "http://localhost:3000/api/planner");
+const apiKey = process.env.PLANNER_API_KEY;
 
-if (!supabaseUrl || !supabaseKey || !workspaceId) {
-  console.error(
-    "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PLANNER_WORKSPACE_ID",
-  );
+if (!apiKey) {
+  console.error("Missing required environment variable: PLANNER_API_KEY");
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const fetchApi = async (path: string, options: RequestInit = {}): Promise<unknown> => {
+  const url = `${apiUrl}/${path.replace(/^\//, "")}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API Error (${response.status}): ${text}`);
+  }
+
+  return response.json();
+};
 
 const server = new McpServer({
   name: "consflow-planner",
@@ -27,14 +39,12 @@ const server = new McpServer({
 
 // Tools
 server.tool("list_plans", "List all active plans", {}, async () => {
-  const { data: plans, error } = await supabase
-    .from("plans")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active");
-
-  if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-  return { content: [{ type: "text", text: JSON.stringify(plans, null, 2) }] };
+  try {
+    const plans = await fetchApi("plans");
+    return { content: [{ type: "text", text: JSON.stringify(plans, null, 2) }] };
+  } catch (error: unknown) {
+    return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+  }
 });
 
 server.tool(
@@ -44,16 +54,12 @@ server.tool(
     plan_id: z.string().describe("The ID of the plan"),
   },
   async ({ plan_id }) => {
-    const { data: plan, error } = await supabase
-      .from("plans")
-      .select("*, plan_sections(*, plan_tasks(*))")
-      .eq("id", plan_id)
-      .eq("workspace_id", workspaceId)
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(plan, null, 2) }] };
+    try {
+      const plan = await fetchApi(`plans/${plan_id}`);
+      return { content: [{ type: "text", text: JSON.stringify(plan, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -64,37 +70,12 @@ server.tool(
     plan_id: z.string().describe("The ID of the plan"),
   },
   async ({ plan_id }) => {
-    // First verify plan belongs to workspace
-    const { data: plan, error: planError } = await supabase
-      .from("plans")
-      .select("id")
-      .eq("id", plan_id)
-      .eq("workspace_id", workspaceId)
-      .single();
-
-    if (planError || !plan)
-      return {
-        content: [{ type: "text", text: `Plan not found or access denied` }],
-        isError: true,
-      };
-
-    const { data: allTasks, error: tasksError } = await supabase
-      .from("plan_tasks")
-      .select("*")
-      .eq("plan_id", plan_id);
-
-    if (tasksError)
-      return { content: [{ type: "text", text: `Error: ${tasksError.message}` }], isError: true };
-
-    const taskStatusMap = new Map(allTasks.map((t) => [t.id, t.status]));
-
-    const availableTasks = allTasks.filter((t) => {
-      if (t.status !== "available") return false;
-      if (!t.depends_on || t.depends_on.length === 0) return true;
-      return (t.depends_on as string[]).every((depId) => taskStatusMap.get(depId) === "done");
-    });
-
-    return { content: [{ type: "text", text: JSON.stringify(availableTasks, null, 2) }] };
+    try {
+      const availableTasks = await fetchApi(`plans/${plan_id}/available-tasks`);
+      return { content: [{ type: "text", text: JSON.stringify(availableTasks, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -105,16 +86,12 @@ server.tool(
     task_id: z.string().describe("The ID of the task"),
   },
   async ({ task_id }) => {
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .select("*, plan:plans!inner(workspace_id)")
-      .eq("id", task_id)
-      .eq("plans.workspace_id", workspaceId)
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    try {
+      const task = await fetchApi(`tasks/${task_id}`);
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -128,48 +105,28 @@ server.tool(
     model: z.string().optional(),
   },
   async ({ task_id, agent_name, provider, model }) => {
-    // Auto-register agent
-    const { data: agent, error: agentError } = await supabase
-      .from("agents")
-      .upsert(
-        {
-          workspace_id: workspaceId,
+    try {
+      // Auto-register agent
+      const agent = (await fetchApi("agents/register", {
+        method: "POST",
+        body: JSON.stringify({
           name: agent_name,
           provider: provider,
           model: model,
-          last_seen: new Date().toISOString(),
-        },
-        { onConflict: "workspace_id, name" },
-      )
-      .select()
-      .single();
+        }),
+      })) as { id: string };
 
-    if (agentError)
+      const task = await fetchApi(`tasks/${task_id}/claim`, {
+        method: "POST",
+        body: JSON.stringify({ agent_id: agent.id }),
+      });
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
       return {
-        content: [{ type: "text", text: `Agent register error: ${agentError.message}` }],
+        content: [{ type: "text", text: `Error claiming task: ${(error as Error).message}` }],
         isError: true,
       };
-
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .update({
-        status: "claimed",
-        assigned_agent_id: agent.id,
-        claimed_at: new Date().toISOString(),
-      })
-      .eq("id", task_id)
-      .eq("status", "available")
-      .select()
-      .single();
-
-    if (error)
-      return {
-        content: [
-          { type: "text", text: `Error claiming task (may not be available): ${error.message}` },
-        ],
-        isError: true,
-      };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    }
   },
 );
 
@@ -180,16 +137,12 @@ server.tool(
     task_id: z.string(),
   },
   async ({ task_id }) => {
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .update({ status: "in_progress" })
-      .eq("id", task_id)
-      .select()
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    try {
+      const task = await fetchApi(`tasks/${task_id}/start`, { method: "POST" });
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -202,28 +155,22 @@ server.tool(
     pr_url: z.string().optional(),
   },
   async ({ task_id, summary, pr_url }) => {
-    // Option to store summary and pr_url if there's a place for it,
-    // otherwise just mark done
-    const updateData: Record<string, unknown> = {
-      status: "done",
-      completed_at: new Date().toISOString(),
-    };
-    if (pr_url) updateData.pr_url = pr_url;
+    try {
+      if (summary) {
+        await fetchApi(`tasks/${task_id}/comment`, {
+          method: "POST",
+          body: JSON.stringify({ body: `COMPLETED: ${summary}` }),
+        }).catch(console.error);
+      }
 
-    if (summary) {
-      await supabase.from("plan_task_comments").insert({ task_id, body: `COMPLETED: ${summary}` });
+      const task = await fetchApi(`tasks/${task_id}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ pr_url }),
+      });
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
     }
-
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .update(updateData)
-      .eq("id", task_id)
-      .select()
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
   },
 );
 
@@ -235,19 +182,17 @@ server.tool(
     reason: z.string(),
   },
   async ({ task_id, reason }) => {
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .update({ status: "blocked" })
-      .eq("id", task_id)
-      .select()
-      .single();
+    try {
+      await fetchApi(`tasks/${task_id}/comment`, {
+        method: "POST",
+        body: JSON.stringify({ body: `BLOCKED: ${reason}` }),
+      }).catch(console.error);
 
-    // Optionally log the reason to comments
-    await supabase.from("plan_task_comments").insert({ task_id, body: `BLOCKED: ${reason}` });
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+      const task = await fetchApi(`tasks/${task_id}/block`, { method: "POST" });
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -258,16 +203,12 @@ server.tool(
     task_id: z.string(),
   },
   async ({ task_id }) => {
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .update({ status: "available", assigned_agent_id: null, claimed_at: null })
-      .eq("id", task_id)
-      .select()
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    try {
+      const task = await fetchApi(`tasks/${task_id}/unclaim`, { method: "POST" });
+      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -279,15 +220,15 @@ server.tool(
     body: z.string(),
   },
   async ({ task_id, body }) => {
-    const { data: comment, error } = await supabase
-      .from("plan_task_comments")
-      .insert({ task_id, body })
-      .select()
-      .single();
-
-    if (error)
-      return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
+    try {
+      const comment = await fetchApi(`tasks/${task_id}/comment`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      });
+      return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
@@ -321,7 +262,7 @@ server.tool(
           body: JSON.stringify({
             title,
             head: head_branch,
-            base: "main", // assume main for simplicity, or could be parametrized
+            base: "main",
             body: body || `PR for task ${task_id}`,
           }),
         },
@@ -335,18 +276,20 @@ server.tool(
         };
       }
 
-      const pr = await response.json();
+      const pr = (await response.json()) as { html_url: string; number: number };
 
-      // Optionally update task with PR url
-      await supabase.from("plan_tasks").update({ pr_url: pr.html_url }).eq("id", task_id);
+      await fetchApi(`tasks/${task_id}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ pr_url: pr.html_url }),
+      }).catch(console.error);
 
       return {
         content: [
           { type: "text", text: JSON.stringify({ url: pr.html_url, number: pr.number }, null, 2) },
         ],
       };
-    } catch (err: any) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }], isError: true };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
     }
   },
 );
@@ -358,26 +301,26 @@ server.tool(
     task_id: z.string(),
   },
   async ({ task_id }) => {
-    const { data: task, error } = await supabase
-      .from("plan_tasks")
-      .select("pr_url")
-      .eq("id", task_id)
-      .single();
+    try {
+      const task = (await fetchApi(`tasks/${task_id}`)) as { pr_url?: string };
 
-    if (error || !task?.pr_url)
+      if (!task?.pr_url)
+        return {
+          content: [{ type: "text", text: `Task has no PR URL or error fetching task.` }],
+          isError: true,
+        };
+
       return {
-        content: [{ type: "text", text: `Task has no PR URL or error fetching task.` }],
-        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `PR URL is: ${task.pr_url}. Use GitHub tools to check further details.`,
+          },
+        ],
       };
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `PR URL is: ${task.pr_url}. Use GitHub tools to check further details.`,
-        },
-      ],
-    };
+    } catch (error: unknown) {
+      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    }
   },
 );
 
