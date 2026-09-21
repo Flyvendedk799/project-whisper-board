@@ -141,6 +141,28 @@ export const listPlans = createServerFn({ method: "GET" })
     }),
   );
 
+export const listTasksByTicket = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ ticketId: z.string().uuid() }).parse(input))
+  .handler(({ data, context }) =>
+    guard("tasks.listByTicket", async () => {
+      const { supabase } = context;
+      const { data: tasks, error } = await supabase
+        .from("plan_tasks")
+        .select(`
+          *,
+          plan:plans(id, title),
+          assigned_agent:plan_agents(id, name, provider, model),
+          assigned_user:profiles(id, full_name, email, avatar_url)
+        `)
+        .eq("ticket_id", data.ticketId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return tasks ?? [];
+    }),
+  );
+
 export const getPlan = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input) => z.object({ planId: z.string().uuid() }).parse(input))

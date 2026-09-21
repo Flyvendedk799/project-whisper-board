@@ -7,6 +7,7 @@ import {
   getPlanEvents,
   listTaskComments,
   listApiKeys,
+  listTasksByTicket,
 } from "@/lib/planner.functions";
 
 export const planListQuery = (projectId?: string) =>
@@ -38,8 +39,15 @@ export const planEventsQuery = (planId: string, limit = 50) =>
 export const taskCommentsQuery = (taskId: string) =>
   queryOptions({
     queryKey: qk.taskComments(taskId),
-    queryFn: () => listTaskComments({ taskId }),
+    queryFn: () => listTaskComments({ data: { taskId } }),
     enabled: Boolean(taskId),
+  });
+
+export const ticketTasksQuery = (ticketId: string) =>
+  queryOptions({
+    queryKey: qk.ticketTasks(ticketId),
+    queryFn: () => listTasksByTicket({ data: { ticketId } }),
+    enabled: Boolean(ticketId),
   });
 
 export const apiKeysQuery = () =>
