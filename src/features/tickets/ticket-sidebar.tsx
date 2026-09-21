@@ -21,6 +21,7 @@ import { notifyTicketChanged } from "@/lib/notifications.functions";
 import { autoTriageTicket, summarizeTicket } from "@/lib/ai.functions";
 import { startTimer, stopTimer } from "@/lib/time.functions";
 import { ticketRelationsQuery } from "@/data/tickets";
+import { ticketTasksQuery } from "@/data/planner";
 import { runningTimerQuery, ticketTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { workspacePeopleQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
@@ -304,7 +305,46 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
       </Card>
 
       <RelationsCard ticketId={ticket.id} relations={relations.data ?? []} />
+      <TicketAiTasks ticketId={ticket.id} />
     </div>
+  );
+}
+
+function TicketAiTasks({ ticketId }: { ticketId: string }) {
+  const tasksQuery = useQuery(ticketTasksQuery(ticketId));
+
+  if (!tasksQuery.data?.length) {
+    return null;
+  }
+
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium">AI Tasks</h2>
+        <Link 
+          to="/app/planner"
+          className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+        >
+          View Planner
+        </Link>
+      </div>
+      <ul className="space-y-2">
+        {tasksQuery.data.map((task: any) => (
+          <li key={task.id} className="text-sm">
+            <Link 
+              to={`/app/planner/${task.plan_id}`}
+              className="group block rounded-md border p-2 transition-colors hover:bg-muted/50"
+            >
+              <div className="font-medium">{task.title}</div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <StatusPill tone="default">{task.status}</StatusPill>
+                <span className="truncate">Plan: {task.plan?.title}</span>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
