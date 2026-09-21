@@ -10,29 +10,39 @@ import {
   listTasksByTicket,
 } from "@/lib/planner.functions";
 
-export const planListQuery = (projectId?: string) =>
+export const planListQuery = (workspaceId?: string | null, projectId?: string) =>
   queryOptions({
-    queryKey: projectId ? [...qk.planList(), { projectId }] : qk.planList(),
-    queryFn: () => listPlans({ data: { projectId } }),
+    queryKey: projectId
+      ? [...qk.planList(), workspaceId ?? "none", { projectId }]
+      : [...qk.planList(), workspaceId ?? "none"],
+    enabled: Boolean(workspaceId),
+    queryFn: () =>
+      listPlans({
+        data: {
+          projectId,
+          workspaceId: workspaceId ?? undefined,
+        },
+      }),
   });
 
 export const planDetailQuery = (planId: string) =>
   queryOptions({
     queryKey: qk.plan(planId),
-    queryFn: () => getPlan({ planId }),
+    queryFn: () => getPlan({ data: { planId } }),
     enabled: Boolean(planId),
   });
 
-export const planAgentsQuery = () =>
+export const planAgentsQuery = (workspaceId?: string | null) =>
   queryOptions({
-    queryKey: qk.planAgents(),
-    queryFn: () => listAgents(),
+    queryKey: [...qk.planAgents(), workspaceId ?? "none"],
+    enabled: Boolean(workspaceId),
+    queryFn: () => listAgents({ data: { workspaceId: workspaceId ?? undefined } }),
   });
 
 export const planEventsQuery = (planId: string, limit = 50) =>
   queryOptions({
     queryKey: qk.planEvents(planId),
-    queryFn: () => getPlanEvents({ planId, limit }),
+    queryFn: () => getPlanEvents({ data: { planId, limit } }),
     enabled: Boolean(planId),
   });
 
@@ -50,8 +60,9 @@ export const ticketTasksQuery = (ticketId: string) =>
     enabled: Boolean(ticketId),
   });
 
-export const apiKeysQuery = () =>
+export const apiKeysQuery = (workspaceId?: string | null) =>
   queryOptions({
-    queryKey: qk.apiKeys(),
-    queryFn: () => listApiKeys(),
+    queryKey: [...qk.apiKeys(), workspaceId ?? "none"],
+    enabled: Boolean(workspaceId),
+    queryFn: () => listApiKeys({ data: { workspaceId: workspaceId ?? undefined } }),
   });

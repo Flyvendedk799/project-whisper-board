@@ -137,15 +137,24 @@ function closedList() {
  * Keyset pagination on the sort column. `.range()` offsets get slower the
  * further you scroll and skip rows when something is inserted mid-scroll.
  */
-export function ticketListQuery(filters: TicketFilters, viewerId: string) {
+export function ticketListQuery(
+  filters: TicketFilters,
+  viewerId: string,
+  workspaceId: string | null | undefined,
+) {
   const sort = SORT[filters.sort ?? "updated"];
 
   return infiniteQueryOptions({
-    queryKey: qk.ticketList(filterCacheKey(filters)),
+    queryKey: [...qk.ticketList(filterCacheKey(filters)), workspaceId ?? "none"] as const,
+    enabled: Boolean(workspaceId),
     initialPageParam: null as string | null,
     getNextPageParam: (last: Page<TicketListRow>) => last.nextCursor,
     queryFn: async ({ pageParam }): Promise<Page<TicketListRow>> => {
-      let query = applyFilters(supabase.from("tickets").select(LIST_SELECT), filters, viewerId);
+      let query = applyFilters(
+        supabase.from("tickets").select(LIST_SELECT).eq("workspace_id", workspaceId!),
+        filters,
+        viewerId,
+      );
 
       if (pageParam) {
         query = sort.ascending
@@ -178,16 +187,17 @@ export function ticketListQuery(filters: TicketFilters, viewerId: string) {
  * Postgres returns the count without any rows, so six of these is cheaper than
  * fetching one page of tickets.
  */
-export function ticketCountsQuery(viewerId: string) {
+export function ticketCountsQuery(viewerId: string, workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: qk.ticketCounts(),
+    queryKey: [...qk.ticketCounts(), workspaceId ?? "none"] as const,
+    enabled: Boolean(workspaceId),
     queryFn: async () => {
       const now = new Date().toISOString();
       const soon = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       const open = closedList();
 
       const bucket = async (label: string, build: (q: CountBuilder) => CountBuilder) => {
-        const { count, error } = await build(countBuilder());
+        const { count, error } = await build(countBuilder().eq("workspace_id", workspaceId!));
         if (error) throw new DataError(`tickets.count.${label}`, error);
         return count ?? 0;
       };
@@ -311,14 +321,15 @@ export function ticketContextQuery(ticketId: string) {
 }
 
 /** Type-ahead for the command palette and relation picker. */
-export function ticketSearchQuery(term: string) {
+export function ticketSearchQuery(term: string, workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: [...qk.tickets(), "search", term] as const,
-    enabled: term.trim().length >= 2,
+    queryKey: [...qk.tickets(), "search", workspaceId ?? "none", term] as const,
+    enabled: Boolean(workspaceId) && term.trim().length >= 2,
     queryFn: async (): Promise<TicketListRow[]> => {
       const { data, error } = await supabase
         .from("tickets")
         .select(LIST_SELECT)
+        .eq("workspace_id", workspaceId!)
         .textSearch("search_tsv", term, { type: "websearch" })
         .order("updated_at", { ascending: false })
         .limit(8)

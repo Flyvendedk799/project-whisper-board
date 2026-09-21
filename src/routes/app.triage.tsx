@@ -1,13 +1,15 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Inbox, LayoutGrid, List, Loader2 } from "lucide-react";
+import { Inbox, LayoutGrid, List, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { EmptyState, PageHeader } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { FilterBar } from "@/features/triage/filter-bar";
 import { TicketBoard } from "@/features/triage/ticket-board";
 import { BulkBar } from "@/features/triage/bulk-bar";
@@ -43,9 +45,11 @@ export const Route = createFileRoute("/app/triage")({
 function TriagePage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, workspaceId } = useAuth();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const viewerId = user?.id ?? "";
 
@@ -53,19 +57,23 @@ function TriagePage() {
     (next: Partial<TicketFilters>, viewId?: string) => {
       setSelected(new Set());
       void navigate({
-        search: (prev) => ({ ...prev, ...next, ...(viewId !== undefined ? { view: viewId } : {}) }),
+        search: (prev: TicketFilters) => ({
+          ...prev,
+          ...next,
+          ...(viewId !== undefined ? { view: viewId } : {}),
+        }),
       });
     },
     [navigate],
   );
 
   const tickets = useInfiniteQuery({
-    ...ticketListQuery(search, viewerId),
-    enabled: Boolean(viewerId),
+    ...ticketListQuery(search, viewerId, workspaceId),
+    enabled: Boolean(viewerId && workspaceId),
   });
-  const counts = useQuery({ ...ticketCountsQuery(viewerId), enabled: Boolean(viewerId) });
-  const projects = useQuery(projectListQuery());
-  const people = useQuery(workspacePeopleQuery());
+  const counts = useQuery(ticketCountsQuery(viewerId, workspaceId));
+  const projects = useQuery(projectListQuery(workspaceId));
+  const people = useQuery(workspacePeopleQuery(workspaceId));
   const views = useQuery(savedViewsQuery());
 
   const rows = useMemo(
@@ -126,6 +134,14 @@ function TriagePage() {
             icon={Inbox}
             title="This is the admin queue"
             description="Your own tickets are on the My tickets page."
+            action={
+              <Button asChild>
+                <Link to="/app/tickets">
+                  <Ticket className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  My tickets
+                </Link>
+              </Button>
+            }
           />
         </div>
       </>
@@ -147,24 +163,63 @@ function TriagePage() {
         title="Triage"
         description={`${rows.length}${tickets.hasNextPage ? "+" : ""} tickets`}
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilters({ board: !search.board })}
-            aria-pressed={Boolean(search.board)}
-          >
-            {search.board ? (
-              <>
-                <List className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                List
-              </>
-            ) : (
-              <>
-                <LayoutGrid className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Board
-              </>
+          <div className="flex flex-wrap gap-2">
+            {isMobile && (
+              <Sheet open={viewsOpen} onOpenChange={setViewsOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Views
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-72 p-0">
+                  <SheetHeader className="border-b px-4 py-3">
+                    <SheetTitle>Saved views</SheetTitle>
+                  </SheetHeader>
+                  <SectionBoundary label="views-rail-mobile">
+                    <ViewsRail
+                      counts={counts.data}
+                      views={views.data ?? []}
+                      activeViewId={search.view}
+                      currentFilters={search}
+                      canSave={Boolean(
+                        search.q || search.status?.length || search.projectId || search.sla,
+                      )}
+                      onApply={(next, viewId) => {
+                        setFilters(next, viewId);
+                        setViewsOpen(false);
+                      }}
+                      onSave={(name) =>
+                        persistView.fire({
+                          name,
+                          filters: { ...search, view: undefined },
+                          isShared: false,
+                        })
+                      }
+                      onDelete={(viewId) => removeView.fire({ viewId })}
+                    />
+                  </SectionBoundary>
+                </SheetContent>
+              </Sheet>
             )}
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFilters({ board: !search.board })}
+              aria-pressed={Boolean(search.board)}
+            >
+              {search.board ? (
+                <>
+                  <List className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  List
+                </>
+              ) : (
+                <>
+                  <LayoutGrid className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Board
+                </>
+              )}
+            </Button>
+          </div>
         }
       />
 

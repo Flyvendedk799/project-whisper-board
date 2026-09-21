@@ -40,6 +40,7 @@ describe("query keys", () => {
       qk.session(),
       qk.ticketList(EMPTY_FILTERS),
       qk.projectList(),
+      qk.workspacePeople(),
       qk.notificationCount(),
       qk.savedViews(),
       qk.timer(),

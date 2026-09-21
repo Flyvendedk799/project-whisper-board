@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Trash2 } from "lucide-react";
-import { type Row } from "@/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,9 +26,11 @@ import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import { apiKeysQuery } from "@/data/planner";
 import { createApiKey, revokeApiKey } from "@/lib/planner.functions";
+import { useAuth } from "@/components/auth-provider";
 
 export function ApiKeyManager() {
-  const keys = useQuery(apiKeysQuery());
+  const { workspaceId } = useAuth();
+  const keys = useQuery(apiKeysQuery(workspaceId));
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function ApiKeyManager() {
     label: "apikeys.create",
     invalidate: [qk.apiKeys()],
     onSuccess: (result) => {
-      setNewKey(result.key);
+      setNewKey(result.rawKey);
       setIsCreating(false);
       setName("");
     },
@@ -51,11 +52,11 @@ export function ApiKeyManager() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    create.fire({ name });
+    if (!name.trim() || !workspaceId) return;
+    create.fire({ name, workspaceId });
   };
 
-  const rows = keys.data ?? [];
+  const rows = keys.data?.keys ?? [];
 
   return (
     <div className="space-y-6">
@@ -82,7 +83,7 @@ export function ApiKeyManager() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {rows.map((k: Row<"api_keys">) => (
+            {rows.map((k) => (
               <tr key={k.id} className={k.revoked_at ? "opacity-50" : ""}>
                 <td className="px-4 py-3 font-medium">{k.name}</td>
                 <td className="px-4 py-3 font-mono text-muted-foreground">{k.key_prefix}...</td>
@@ -100,7 +101,7 @@ export function ApiKeyManager() {
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => {
                         if (confirm("Are you sure you want to revoke this key?")) {
-                          revoke.fire({ id: k.id });
+                          revoke.fire({ keyId: k.id });
                         }
                       }}
                     >

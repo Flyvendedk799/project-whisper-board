@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarPlus, Check, ExternalLink, Sparkles, Ticket, Video, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -173,9 +175,20 @@ function MeetingCard({
     label: "meetings.commitActionItems",
     success: (result) => `${result.created} ticket${result.created === 1 ? "" : "s"} created`,
     invalidate,
-    onSuccess: () => {
+    onSuccess: (result) => {
       setProposal(null);
       setChosen(new Set());
+      const firstId = result.ticketIds?.[0];
+      if (firstId) {
+        toast.message("Action items are tickets now", {
+          action: {
+            label: "Open first",
+            onClick: () => {
+              window.location.href = `/app/tickets/${firstId}`;
+            },
+          },
+        });
+      }
     },
   });
 
@@ -224,7 +237,19 @@ function MeetingCard({
                   className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <span className="min-w-0 flex-1">{item.title}</span>
+                <span className="min-w-0 flex-1">
+                  {item.ticket_id ? (
+                    <Link
+                      to="/app/tickets/$ticketId"
+                      params={{ ticketId: item.ticket_id }}
+                      className="underline underline-offset-2"
+                    >
+                      {item.title}
+                    </Link>
+                  ) : (
+                    item.title
+                  )}
+                </span>
                 <StatusPill>{ACTION_ITEM_STATUS_LABEL[item.status]}</StatusPill>
               </li>
             ))}

@@ -4,23 +4,37 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import { updatePlan } from "@/lib/planner.functions";
 import { projectListQuery } from "@/data/projects";
-import type { PlanWithSections } from "@/data";
+import { useAuth } from "@/components/auth-provider";
+import { type PlanStatus, type PlanWithSections } from "@/data";
 
-export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; onClose: () => void }) {
+export function PlanSettingsForm({
+  plan,
+  onClose,
+}: {
+  plan: PlanWithSections;
+  onClose: () => void;
+}) {
+  const { workspaceId } = useAuth();
   const [title, setTitle] = useState(plan.title);
   const [description, setDescription] = useState(plan.description ?? "");
-  const [status, setStatus] = useState<string>(plan.status);
+  const [status, setStatus] = useState<PlanStatus>(plan.status);
   const [projectId, setProjectId] = useState<string | null>(plan.project_id);
   const [githubRepo, setGithubRepo] = useState(plan.github_repo ?? "");
   const [githubBase, setGithubBase] = useState(plan.github_base ?? "");
 
-  const projectsQuery = useQuery(projectListQuery());
+  const projectsQuery = useQuery(projectListQuery(workspaceId));
 
   const save = useServerAction(useServerFn(updatePlan), {
     label: "plans.update",
@@ -36,7 +50,7 @@ export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; on
       planId: plan.id,
       title,
       description: description || undefined,
-      status: status as any,
+      status,
       projectId: projectId || undefined,
       githubRepo: githubRepo || undefined,
       githubBase: githubBase || undefined,
@@ -52,17 +66,17 @@ export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; on
 
       <div className="space-y-2">
         <Label htmlFor="description">Description</Label>
-        <Textarea 
-          id="description" 
-          value={description} 
-          onChange={(e) => setDescription(e.target.value)} 
+        <Textarea
+          id="description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
           rows={3}
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="status">Status</Label>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(value) => setStatus(value as PlanStatus)}>
           <SelectTrigger id="status">
             <SelectValue />
           </SelectTrigger>
@@ -78,8 +92,8 @@ export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; on
 
       <div className="space-y-2">
         <Label htmlFor="project">Linked Project</Label>
-        <Select 
-          value={projectId ?? "none"} 
+        <Select
+          value={projectId ?? "none"}
           onValueChange={(val) => setProjectId(val === "none" ? null : val)}
         >
           <SelectTrigger id="project">
@@ -98,21 +112,21 @@ export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; on
 
       <div className="space-y-2">
         <Label htmlFor="githubRepo">GitHub Repository</Label>
-        <Input 
-          id="githubRepo" 
-          placeholder="owner/repo" 
-          value={githubRepo} 
-          onChange={(e) => setGithubRepo(e.target.value)} 
+        <Input
+          id="githubRepo"
+          placeholder="owner/repo"
+          value={githubRepo}
+          onChange={(e) => setGithubRepo(e.target.value)}
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="githubBase">GitHub Base Branch</Label>
-        <Input 
-          id="githubBase" 
-          placeholder="main" 
-          value={githubBase} 
-          onChange={(e) => setGithubBase(e.target.value)} 
+        <Input
+          id="githubBase"
+          placeholder="main"
+          value={githubBase}
+          onChange={(e) => setGithubBase(e.target.value)}
         />
       </div>
 
@@ -120,8 +134,8 @@ export function PlanSettingsForm({ plan, onClose }: { plan: PlanWithSections; on
         <Button variant="outline" type="button" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? "Saving..." : "Save Changes"}
+        <Button type="submit" disabled={save.busy}>
+          {save.busy ? "Saving..." : "Save Changes"}
         </Button>
       </div>
     </form>

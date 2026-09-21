@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bug,
+  BrainCircuit,
   FolderKanban,
   Home,
   Inbox,
@@ -45,7 +46,7 @@ export function CommandPalette() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [term, setTerm] = useState("");
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, workspaceId } = useAuth();
   const { resolved, toggle } = useTheme();
 
   // Debounced: the palette fires on every keystroke otherwise.
@@ -56,12 +57,12 @@ export function CommandPalette() {
   }, [term]);
 
   const tickets = useQuery({
-    ...ticketSearchQuery(debounced),
-    enabled: open && debounced.length >= 2,
+    ...ticketSearchQuery(debounced, workspaceId),
+    enabled: open && Boolean(workspaceId) && debounced.length >= 2,
   });
   const projects = useQuery({
-    ...projectSearchQuery(debounced),
-    enabled: open && debounced.length >= 2,
+    ...projectSearchQuery(debounced, workspaceId),
+    enabled: open && Boolean(workspaceId) && debounced.length >= 2,
   });
 
   useHotkeys({
@@ -196,6 +197,15 @@ export function CommandPalette() {
               Inbox
               <CommandShortcut>g i</CommandShortcut>
             </CommandItem>
+            {isAdmin && (
+              <CommandItem
+                value="planner"
+                onSelect={() => run(() => void navigate({ to: "/app/planner" }))}
+              >
+                <BrainCircuit className="mr-2 h-4 w-4" aria-hidden="true" />
+                AI Planner
+              </CommandItem>
+            )}
             <CommandItem
               value="settings"
               onSelect={() => run(() => void navigate({ to: "/app/settings" }))}

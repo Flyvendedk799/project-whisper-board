@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Bell, Inbox, Palette, Plug, User } from "lucide-react";
@@ -39,6 +39,7 @@ import {
 import type { AntigravityConnection } from "@/lib/ai-auth/antigravity";
 
 import { getIntegrationStatus, listAppErrors, listOutbox } from "@/lib/admin-views.functions";
+import { updateWorkspace } from "@/lib/workspace.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { notificationPreferencesQuery, channelEnabled } from "@/data/notifications";
 import { qk } from "@/data/keys";
@@ -96,6 +97,11 @@ function SettingsPage() {
 
           <TabsContent value="you" className="mt-6 space-y-6">
             <ProfileCard />
+            {isAdmin && (
+              <SectionBoundary label="workspace">
+                <WorkspaceCard />
+              </SectionBoundary>
+            )}
             <SectionBoundary label="claude-account">
               <ClaudeAccountCard />
             </SectionBoundary>
@@ -137,13 +143,13 @@ function SettingsPage() {
 }
 
 function ProfileCard() {
-  const { user, roles } = useAuth();
+  const { user, roles, workspaceId } = useAuth();
   const [name, setName] = useState(user?.user_metadata?.full_name ?? "");
 
   const save = useDataMutation(
     "profiles.update",
     (input: { fullName: string }) => updateProfile({ id: user!.id, fullName: input.fullName }),
-    { success: "Saved", invalidate: [qk.profiles(), qk.workspacePeople()] },
+    { success: "Saved", invalidate: [qk.profiles(), qk.workspacePeople(workspaceId ?? undefined)] },
   );
 
   const [sending, setSending] = useState(false);
@@ -226,6 +232,106 @@ function AppearanceCard() {
           </SelectContent>
         </Select>
       </div>
+    </Card>
+  );
+}
+
+function WorkspaceCard() {
+  const { workspace, workspaceId, refetchWorkspaces } = useAuth();
+  const [name, setName] = useState(workspace?.name ?? "");
+  const [supportEmail, setSupportEmail] = useState(workspace?.support_email ?? "");
+  const [website, setWebsite] = useState(workspace?.website ?? "");
+  const [brandColor, setBrandColor] = useState(workspace?.brand_color ?? "");
+  const [invoicePrefix, setInvoicePrefix] = useState(workspace?.invoice_prefix ?? "");
+
+  useEffect(() => {
+    setName(workspace?.name ?? "");
+    setSupportEmail(workspace?.support_email ?? "");
+    setWebsite(workspace?.website ?? "");
+    setBrandColor(workspace?.brand_color ?? "");
+    setInvoicePrefix(workspace?.invoice_prefix ?? "");
+  }, [workspace]);
+
+  const save = useServerAction(useServerFn(updateWorkspace), {
+    label: "workspaces.update",
+    success: "Workspace saved",
+    invalidate: [qk.workspaces(), qk.workspace(workspaceId ?? undefined)],
+    onSuccess: () => refetchWorkspaces(),
+  });
+
+  if (!workspace || !workspaceId) return null;
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h2 className="font-display text-xl">Workspace</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          How this workspace appears to clients — name, contact details and invoice numbering.
+        </p>
+      </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.fire({
+            workspaceId,
+            name: name.trim() || undefined,
+            supportEmail: supportEmail.trim() || null,
+            website: website.trim() || null,
+            brandColor: brandColor.trim() || null,
+            invoicePrefix: invoicePrefix.trim() || undefined,
+          });
+        }}
+        className="space-y-3"
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="ws-name">Name</Label>
+          <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ws-support-email">Support email</Label>
+          <Input
+            id="ws-support-email"
+            type="email"
+            value={supportEmail}
+            onChange={(e) => setSupportEmail(e.target.value)}
+            placeholder="support@example.com"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ws-website">Website</Label>
+          <Input
+            id="ws-website"
+            type="url"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            placeholder="https://example.com"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="ws-brand-color">Brand colour</Label>
+            <Input
+              id="ws-brand-color"
+              value={brandColor}
+              onChange={(e) => setBrandColor(e.target.value)}
+              placeholder="#1a1a1a"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ws-invoice-prefix">Invoice prefix</Label>
+            <Input
+              id="ws-invoice-prefix"
+              value={invoicePrefix}
+              onChange={(e) => setInvoicePrefix(e.target.value)}
+              placeholder="INV"
+            />
+          </div>
+        </div>
+        <Button type="submit" size="sm" disabled={save.busy}>
+          {save.busy ? "Saving…" : "Save workspace"}
+        </Button>
+      </form>
     </Card>
   );
 }

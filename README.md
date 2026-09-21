@@ -16,9 +16,9 @@ A client portal and ticket platform for a software agency. Two sides, one app:
 | Server state | TanStack Query v5 — all reads/writes defined in `src/data/`                          |
 | Styling      | Tailwind CSS v4 (CSS-first tokens in `src/styles.css`) + shadcn/ui                   |
 | Backend      | Supabase — Postgres, Auth, Storage, Realtime. Access control is RLS                  |
-| Server logic | `createServerFn` handlers in `src/lib/*.functions.ts`, running on Cloudflare Workers |
+| Server logic | `createServerFn` handlers in `src/lib/*.functions.ts`, running on Nitro (Node) |
 | Tests        | Vitest (node + happy-dom projects), Playwright for smoke                             |
-| Deploy       | Cloudflare Workers (`wrangler.jsonc` → `src/server.ts`)                              |
+| Deploy       | Nitro `node-server` preset (`vite build` → `.output/`)                               |
 
 ## Getting started
 
@@ -123,3 +123,17 @@ isolation: error mapping, query-key nesting, billing arithmetic, the annotation 
 recorder state machine, quiet hours, and the provider adapters' behaviour with and without
 keys. The browser suite is deliberately four specs — it exists to catch the app not booting,
 not to re-test the above.
+
+## Deploy (Nitro node-server)
+
+Production builds use the Nitro `node-server` preset (see `vite.config.ts`).
+
+```sh
+npm install
+npm run build          # writes `.output/`
+node .output/server/index.mjs
+```
+
+Point your process manager (systemd, PM2, Docker, etc.) at `node .output/server/index.mjs`,
+set the same env vars as local (at minimum `SUPABASE_*` and `SITE_URL`), and put a reverse
+proxy in front for TLS. There is no Cloudflare Workers deploy path any more.

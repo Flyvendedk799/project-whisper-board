@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider + hooks share this module */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
@@ -6,45 +7,57 @@ import { qk } from "@/data/keys";
 import { DataError } from "@/lib/errors";
 import { getErrorTracker } from "@/lib/providers";
 import type { AppRole } from "@/data/enums";
+import type { WorkspaceSummary } from "@/lib/workspace.functions";
 
-/**
- * Auth, mounted once.
- *
- * `useAuth` used to be a plain hook, so every page that called it — the shell,
- * the sidebar, the bell, the header and half a dozen routes — registered its
- * own onAuthStateChange listener and fired its own user_roles query. Eight of
- * each, per page load.
- *
- * The more serious problem was this, in the old hook:
- *
- *   const { data } = await supabase.from("user_roles")...
- *   setRoles((data ?? []).map(...))
- *
- * The error was dropped, so a failed role fetch produced an empty role list,
- * which made `isAdmin` false, which silently showed an admin the client portal.
- * Roles now come from a query with a real error state, and `rolesStatus` lets
- * the app refuse to render a role-dependent view it is not sure about.
- */
+const ACTIVE_WS_KEY = "cf.activeWorkspaceId";
 
 export interface AuthValue {
   session: Session | null;
   user: User | null;
+  /** Memberships across all workspaces. */
+  workspaces: WorkspaceSummary[];
+  /** Active workspace id, or null if the user has none yet. */
+  workspaceId: string | null;
+  workspace: WorkspaceSummary | null;
   roles: AppRole[];
   isAdmin: boolean;
   isClientAdmin: boolean;
   /** 'error' means we could not determine the role — never assume 'client'. */
   rolesStatus: "pending" | "ready" | "error";
   loading: boolean;
+  needsWorkspace: boolean;
+  setActiveWorkspace: (id: string) => void;
+  refetchWorkspaces: () => void;
   refetchRoles: () => void;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | undefined>(undefined);
 
+function readStoredWorkspaceId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_WS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredWorkspaceId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(ACTIVE_WS_KEY, id);
+    else localStorage.removeItem(ACTIVE_WS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() =>
+    typeof window !== "undefined" ? readStoredWorkspaceId() : null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -52,21 +65,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const apply = (next: Session | null) => {
       if (!active) return;
       setSession(next);
-      // Realtime authorises the socket once, at connect. Without re-arming it
-      // on refresh, postgres_changes subscriptions go quiet about an hour after
-      // sign-in and never come back.
       if (next?.access_token) supabase.realtime.setAuth(next.access_token);
       getErrorTracker().setUser(next?.user ? { id: next.user.id, email: next.user.email } : null);
+      if (!next) {
+        setActiveWorkspaceId(null);
+        writeStoredWorkspaceId(null);
+      }
     };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, next) => {
       apply(next);
       if (event === "SIGNED_OUT") {
-        // Another person may sign in on this device; none of the previous
-        // one's data should still be sitting in the cache when they do.
         queryClient.removeQueries({ queryKey: qk.all });
       } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         void queryClient.invalidateQueries({ queryKey: qk.session() });
+        void queryClient.invalidateQueries({ queryKey: qk.workspaces() });
       }
     });
 
@@ -85,48 +98,120 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const userId = session?.user?.id;
 
-  const rolesQuery = useQuery({
-    queryKey: qk.session(),
+  const workspacesQuery = useQuery({
+    queryKey: qk.workspaces(),
     enabled: Boolean(userId),
-    staleTime: Infinity,
+    staleTime: 60_000,
     retry: 2,
-    queryFn: async (): Promise<AppRole[]> => {
+    queryFn: async (): Promise<WorkspaceSummary[]> => {
       const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
+        .from("workspace_members")
+        .select(
+          "role, workspace:workspaces(id, slug, name, logo_url, brand_color, support_email, website, invoice_prefix)",
+        )
         .eq("user_id", userId!);
-      if (error) throw new DataError("user_roles.list", error);
-      return (data ?? []).map((row) => row.role);
+      if (error) throw new DataError("workspaces.list", error);
+
+      const list: WorkspaceSummary[] = [];
+      for (const row of data ?? []) {
+        const raw = row.workspace as
+          | Omit<WorkspaceSummary, "role">
+          | Omit<WorkspaceSummary, "role">[]
+          | null;
+        const ws = Array.isArray(raw) ? raw[0] : raw;
+        if (!ws) continue;
+        list.push({ ...ws, role: row.role });
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      return list;
     },
   });
 
+  // Pick a valid active workspace once memberships load.
+  useEffect(() => {
+    const list = workspacesQuery.data;
+    if (!list) return;
+    if (list.length === 0) {
+      if (activeWorkspaceId) {
+        setActiveWorkspaceId(null);
+        writeStoredWorkspaceId(null);
+      }
+      return;
+    }
+    const stillValid = activeWorkspaceId && list.some((w) => w.id === activeWorkspaceId);
+    if (!stillValid) {
+      const next = list[0]!.id;
+      setActiveWorkspaceId(next);
+      writeStoredWorkspaceId(next);
+    }
+  }, [workspacesQuery.data, activeWorkspaceId]);
+
+  const setActiveWorkspace = useCallback(
+    (id: string) => {
+      setActiveWorkspaceId(id);
+      writeStoredWorkspaceId(id);
+      queryClient.removeQueries({
+        predicate: (q) => {
+          const key = q.queryKey;
+          if (!Array.isArray(key) || key[0] !== "cf") return false;
+          // Keep session + workspace list; drop domain data for the prior workspace.
+          const second = key[1];
+          return second !== "session" && second !== "workspaces";
+        },
+      });
+    },
+    [queryClient],
+  );
+
+  const workspace =
+    workspacesQuery.data?.find((w) => w.id === activeWorkspaceId) ??
+    workspacesQuery.data?.[0] ??
+    null;
+  const workspaceId = workspace?.id ?? null;
+
   const value = useMemo<AuthValue>(() => {
-    const roles = rolesQuery.data ?? [];
+    const workspaces = workspacesQuery.data ?? [];
     const rolesStatus: AuthValue["rolesStatus"] = !userId
       ? "ready"
-      : rolesQuery.isError
+      : workspacesQuery.isError
         ? "error"
-        : rolesQuery.isSuccess
+        : workspacesQuery.isSuccess
           ? "ready"
           : "pending";
+
+    const role = workspace?.role;
+    const roles: AppRole[] = role ? [role] : [];
 
     return {
       session,
       user: session?.user ?? null,
+      workspaces,
+      workspaceId,
+      workspace,
       roles,
-      // Deliberately false while pending or errored: the caller checks
-      // rolesStatus before drawing anything that depends on the answer.
-      isAdmin: rolesStatus === "ready" && roles.includes("admin"),
-      isClientAdmin: rolesStatus === "ready" && roles.includes("client_admin"),
+      isAdmin: rolesStatus === "ready" && role === "admin",
+      isClientAdmin: rolesStatus === "ready" && role === "client_admin",
       rolesStatus,
       loading: loading || (Boolean(userId) && rolesStatus === "pending"),
-      refetchRoles: () => void rolesQuery.refetch(),
+      needsWorkspace: rolesStatus === "ready" && Boolean(userId) && workspaces.length === 0,
+      setActiveWorkspace,
+      refetchWorkspaces: () => void workspacesQuery.refetch(),
+      refetchRoles: () => void workspacesQuery.refetch(),
       signOut: async () => {
         await supabase.auth.signOut();
         queryClient.removeQueries({ queryKey: qk.all });
       },
     };
-  }, [session, userId, loading, rolesQuery, queryClient]);
+  }, [
+    session,
+    userId,
+    loading,
+    workspacesQuery,
+    workspace,
+    workspaceId,
+    setActiveWorkspace,
+    queryClient,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -137,12 +222,16 @@ export function useAuth(): AuthValue {
   return value;
 }
 
-/** The signed-in user's id, for queries that cannot run without one. */
 export function useUserId(): string | undefined {
   return useAuth().user?.id;
 }
 
-/** Stable no-op-safe callback for components that only need to sign out. */
+export function useWorkspaceId(): string {
+  const { workspaceId } = useAuth();
+  if (!workspaceId) throw new Error("No active workspace");
+  return workspaceId;
+}
+
 export function useSignOut() {
   const { signOut } = useAuth();
   return useCallback(() => signOut(), [signOut]);

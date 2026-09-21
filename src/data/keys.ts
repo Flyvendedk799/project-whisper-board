@@ -16,14 +16,15 @@ export const qk = {
   all: ["cf"] as const,
 
   session: () => [...qk.all, "session"] as const,
-  workspace: () => [...qk.all, "workspace"] as const,
+  workspaces: () => [...qk.all, "workspaces"] as const,
+  workspace: (id?: string) => [...qk.all, "workspace", id ?? "none"] as const,
 
   profiles: () => [...qk.all, "profiles"] as const,
   profile: (id: string) => [...qk.profiles(), id] as const,
-  workspacePeople: () => [...qk.profiles(), "workspace"] as const,
+  workspacePeople: (wsId?: string) => [...qk.profiles(), "workspace", wsId ?? "none"] as const,
 
   projects: () => [...qk.all, "projects"] as const,
-  projectList: () => [...qk.projects(), "list"] as const,
+  projectList: (wsId?: string) => [...qk.projects(), "list", wsId ?? "none"] as const,
   project: (id: string) => [...qk.projects(), "detail", id] as const,
   projectMembers: (id: string) => [...qk.project(id), "members"] as const,
   projectMilestones: (id: string) => [...qk.project(id), "milestones"] as const,

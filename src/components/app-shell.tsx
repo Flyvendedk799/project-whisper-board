@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   Bug,
+  ChevronsUpDown,
   FolderKanban,
   Home,
   Inbox,
@@ -11,6 +12,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Plus,
   Settings,
   Sun,
   Ticket,
@@ -21,18 +23,34 @@ import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { unreadCountQuery } from "@/data/notifications";
 import { RunningTimerBar } from "@/features/time/running-timer-bar";
 import { CommandPalette } from "@/components/command-palette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-  const { user, isAdmin, loading, rolesStatus, refetchRoles } = useAuth();
+  const location = useLocation();
+  const { user, isAdmin, loading, rolesStatus, refetchRoles, needsWorkspace } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const onCreateWorkspace = location.pathname.startsWith("/app/create-workspace");
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
+
+  useEffect(() => {
+    if (!loading && user && needsWorkspace && !onCreateWorkspace) {
+      navigate({ to: "/app/create-workspace" });
+    }
+  }, [loading, user, needsWorkspace, onCreateWorkspace, navigate]);
 
   if (loading || !user) {
     return (
@@ -44,12 +62,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  /**
-   * Roles decide whether this person sees the admin workspace or the client
-   * portal. If the lookup failed we genuinely do not know which — and the old
-   * code's answer was to fall through to "client", quietly showing an admin the
-   * wrong app. Better to say so and offer a retry.
-   */
   if (rolesStatus === "error") {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
@@ -64,6 +76,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  if (needsWorkspace || onCreateWorkspace) {
+    return <div className="min-h-screen bg-background">{children}</div>;
   }
 
   return (
@@ -96,7 +112,68 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <CommandPalette />
       <RunningTimerBar />
-      {!isAdmin && <ReportFab />}
+      {isAdmin ? <AdminReportFab /> : <ReportFab />}
+    </div>
+  );
+}
+
+function WorkspaceSwitcher() {
+  const { workspace, workspaces, setActiveWorkspace, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  if (!workspace) return null;
+
+  if (workspaces.length <= 1) {
+    return (
+      <div className="border-b px-5 py-5">
+        <Link to="/app" className="font-display text-2xl">
+          {workspace.name}
+        </Link>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {isAdmin ? "Admin workspace" : "Client portal"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b px-3 py-3">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-auto w-full justify-between px-2 py-2 text-left">
+            <div className="min-w-0">
+              <div className="truncate font-display text-xl">{workspace.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {isAdmin ? "Admin workspace" : "Client portal"}
+              </div>
+            </div>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {workspaces.map((ws) => (
+            <DropdownMenuItem
+              key={ws.id}
+              onClick={() => {
+                setActiveWorkspace(ws.id);
+                void navigate({ to: "/app" });
+              }}
+            >
+              <span className="truncate">{ws.name}</span>
+              {ws.id === workspace.id ? (
+                <span className="ml-auto text-xs text-muted-foreground">Active</span>
+              ) : null}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => void navigate({ to: "/app/create-workspace" })}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            New workspace
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -119,14 +196,7 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
 
   return (
     <>
-      <div className="border-b px-5 py-5">
-        <Link to="/app" onClick={onNavigate} className="font-display text-2xl">
-          Consflow
-        </Link>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {isAdmin ? "Admin workspace" : "Client portal"}
-        </p>
-      </div>
+      <WorkspaceSwitcher />
 
       <nav aria-label="Main" className="flex-1 space-y-0.5 px-2 py-3 text-sm">
         {nav.map((item) => {
@@ -152,16 +222,23 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
         })}
       </nav>
 
-      {!isAdmin && (
-        <div className="px-3 pb-2">
+      <div className="space-y-2 px-3 pb-2">
+        {isAdmin ? (
+          <Button asChild className="w-full" variant="outline" onClick={onNavigate}>
+            <Link to="/app/report">
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              New ticket
+            </Link>
+          </Button>
+        ) : (
           <Button asChild className="w-full" onClick={onNavigate}>
             <Link to="/app/report">
               <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Report an issue
             </Link>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="space-y-2 border-t p-3">
         <div className="px-2 text-xs">
@@ -247,8 +324,6 @@ function NotificationBell() {
       <Link to="/app/inbox">
         <Bell className="h-4 w-4" aria-hidden="true" />
         {unread > 0 && (
-          // A bare dot told nobody how many, and told a screen reader nothing
-          // at all. The count is in the label above and visible here.
           <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
             {unread > 99 ? "99+" : unread}
           </span>
@@ -268,6 +343,22 @@ function ReportFab() {
       <Link to="/app/report">
         <Bug className="mr-2 h-5 w-5" aria-hidden="true" />
         Report
+      </Link>
+    </Button>
+  );
+}
+
+function AdminReportFab() {
+  return (
+    <Button
+      asChild
+      size="lg"
+      variant="outline"
+      className="fixed bottom-5 right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden"
+    >
+      <Link to="/app/report">
+        <Plus className="mr-2 h-5 w-5" aria-hidden="true" />
+        New ticket
       </Link>
     </Button>
   );

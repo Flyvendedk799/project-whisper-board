@@ -2,6 +2,29 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { Constants, type Database } from "@/integrations/supabase/types";
+
+const workspaceIdField = z.string().uuid().optional();
+const planStatusEnum = z.enum(Constants.public.Enums.plan_status);
+const planTaskStatusEnum = z.enum(Constants.public.Enums.plan_task_status);
+const planTaskPriorityEnum = z.enum(Constants.public.Enums.plan_task_priority);
+const planTaskComplexityEnum = z.enum(Constants.public.Enums.plan_task_complexity);
+
+type PlanUpdate = Database["public"]["Tables"]["plans"]["Update"];
+type PlanSectionUpdate = Database["public"]["Tables"]["plan_sections"]["Update"];
+type PlanTaskUpdate = Database["public"]["Tables"]["plan_tasks"]["Update"];
+
+async function resolveWorkspaceMembership(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  workspaceId?: string,
+) {
+  let query = supabase.from("workspace_members").select("workspace_id").eq("user_id", userId);
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data: membership } = await query.limit(1).single();
+  return requireFound(membership, "workspace_membership");
+}
 
 export const createPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -13,6 +36,7 @@ export const createPlan = createServerFn({ method: "POST" })
         projectId: z.string().uuid().optional(),
         githubRepo: z.string().optional(),
         githubBase: z.string().optional(),
+        workspaceId: workspaceIdField,
       })
       .parse(input),
   )
@@ -20,13 +44,7 @@ export const createPlan = createServerFn({ method: "POST" })
     guard("plans.create", async () => {
       const { supabase, userId } = context;
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
 
       const { data: plan, error } = await supabase
         .from("plans")
@@ -61,7 +79,8 @@ export const updatePlan = createServerFn({ method: "POST" })
         planId: z.string().uuid(),
         title: z.string().min(1).max(200).optional(),
         description: z.string().optional(),
-        status: z.string().optional(),
+        status: planStatusEnum.optional(),
+        projectId: z.string().uuid().nullable().optional(),
         githubRepo: z.string().optional(),
         githubBase: z.string().optional(),
       })
@@ -78,10 +97,11 @@ export const updatePlan = createServerFn({ method: "POST" })
         .eq("id", planId)
         .single();
 
-      const patch: Record<string, unknown> = {
+      const patch: PlanUpdate = {
         ...(fields.title !== undefined && { title: fields.title }),
         ...(fields.description !== undefined && { description: fields.description }),
         ...(fields.status !== undefined && { status: fields.status }),
+        ...(fields.projectId !== undefined && { project_id: fields.projectId }),
         ...(fields.githubRepo !== undefined && { github_repo: fields.githubRepo }),
         ...(fields.githubBase !== undefined && { github_base: fields.githubBase }),
       };
@@ -110,19 +130,19 @@ export const updatePlan = createServerFn({ method: "POST" })
 export const listPlans = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
-    z.object({ projectId: z.string().optional() }).optional().parse(input)
+    z
+      .object({
+        projectId: z.string().optional(),
+        workspaceId: workspaceIdField,
+      })
+      .optional()
+      .parse(input),
   )
   .handler(({ data, context }) =>
     guard("plans.list", async () => {
       const { supabase, userId } = context;
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data?.workspaceId);
 
       let query = supabase
         .from("plans")
@@ -149,12 +169,14 @@ export const listTasksByTicket = createServerFn({ method: "GET" })
       const { supabase } = context;
       const { data: tasks, error } = await supabase
         .from("plan_tasks")
-        .select(`
+        .select(
+          `
           *,
           plan:plans(id, title),
           assigned_agent:plan_agents(id, name, provider, model),
           assigned_user:profiles(id, full_name, email, avatar_url)
-        `)
+        `,
+        )
         .eq("ticket_id", data.ticketId)
         .order("created_at", { ascending: false });
 
@@ -191,9 +213,7 @@ export const getPlan = createServerFn({ method: "GET" })
         .order("position", { referencedTable: "plan_sections.plan_tasks", ascending: true })
         .single();
       if (error) throw error;
-      requireFound(plan, "plan");
-
-      return { plan };
+      return { plan: requireFound(plan, "plan") };
     }),
   );
 
@@ -263,14 +283,14 @@ export const updateSection = createServerFn({ method: "POST" })
       const { supabase, userId } = context;
       const { sectionId, ...fields } = data;
 
-      const { data: section } = await supabase
+      const { data: sectionRow } = await supabase
         .from("plan_sections")
         .select("plan_id")
         .eq("id", sectionId)
         .single();
-      requireFound(section, "section");
+      const section = requireFound(sectionRow, "section");
 
-      const patch: Record<string, unknown> = {
+      const patch: PlanSectionUpdate = {
         ...(fields.title !== undefined && { title: fields.title }),
         ...(fields.description !== undefined && { description: fields.description }),
         ...(fields.color !== undefined && { color: fields.color }),
@@ -337,8 +357,8 @@ export const createTask = createServerFn({ method: "POST" })
         sectionId: z.string().uuid(),
         title: z.string().min(1).max(200),
         description: z.string().optional(),
-        priority: z.string().optional(),
-        complexity: z.string().optional(),
+        priority: planTaskPriorityEnum.optional(),
+        complexity: planTaskComplexityEnum.optional(),
         labels: z.array(z.string()).optional(),
         dependsOn: z.array(z.string().uuid()).optional(),
         preferredProviders: z.array(z.string()).optional(),
@@ -370,14 +390,16 @@ export const createTask = createServerFn({ method: "POST" })
           section_id: data.sectionId,
           title: data.title,
           description: data.description ?? null,
-          priority: data.priority ?? null,
-          complexity: data.complexity ?? null,
-          labels: data.labels ?? null,
-          depends_on: data.dependsOn ?? null,
-          preferred_providers: data.preferredProviders ?? null,
-          preferred_models: data.preferredModels ?? null,
-          context_files: data.contextFiles ?? null,
-          acceptance_criteria: data.acceptanceCriteria ?? null,
+          ...(data.priority !== undefined && { priority: data.priority }),
+          ...(data.complexity !== undefined && { complexity: data.complexity }),
+          labels: data.labels ?? [],
+          depends_on: data.dependsOn ?? [],
+          preferred_providers: data.preferredProviders ?? [],
+          preferred_models: data.preferredModels ?? [],
+          context_files: data.contextFiles ?? [],
+          acceptance_criteria: data.acceptanceCriteria?.length
+            ? data.acceptanceCriteria.join("\n")
+            : null,
           estimated_minutes: data.estimatedMinutes ?? null,
           position,
         })
@@ -403,9 +425,9 @@ export const updateTask = createServerFn({ method: "POST" })
         taskId: z.string().uuid(),
         title: z.string().optional(),
         description: z.string().optional(),
-        status: z.string().optional(),
-        priority: z.string().optional(),
-        complexity: z.string().optional(),
+        status: planTaskStatusEnum.optional(),
+        priority: planTaskPriorityEnum.optional(),
+        complexity: planTaskComplexityEnum.optional(),
         labels: z.array(z.string()).optional(),
         dependsOn: z.array(z.string().uuid()).optional(),
         preferredProviders: z.array(z.string()).optional(),
@@ -424,14 +446,14 @@ export const updateTask = createServerFn({ method: "POST" })
       const { supabase, userId } = context;
       const { taskId, ...fields } = data;
 
-      const { data: before } = await supabase
+      const { data: beforeRow } = await supabase
         .from("plan_tasks")
         .select("plan_id, status")
         .eq("id", taskId)
         .single();
-      requireFound(before, "task");
+      const before = requireFound(beforeRow, "task");
 
-      const patch: Record<string, unknown> = {};
+      const patch: PlanTaskUpdate = {};
       if (fields.title !== undefined) patch.title = fields.title;
       if (fields.description !== undefined) patch.description = fields.description;
       if (fields.status !== undefined) patch.status = fields.status;
@@ -439,10 +461,15 @@ export const updateTask = createServerFn({ method: "POST" })
       if (fields.complexity !== undefined) patch.complexity = fields.complexity;
       if (fields.labels !== undefined) patch.labels = fields.labels;
       if (fields.dependsOn !== undefined) patch.depends_on = fields.dependsOn;
-      if (fields.preferredProviders !== undefined) patch.preferred_providers = fields.preferredProviders;
+      if (fields.preferredProviders !== undefined)
+        patch.preferred_providers = fields.preferredProviders;
       if (fields.preferredModels !== undefined) patch.preferred_models = fields.preferredModels;
       if (fields.contextFiles !== undefined) patch.context_files = fields.contextFiles;
-      if (fields.acceptanceCriteria !== undefined) patch.acceptance_criteria = fields.acceptanceCriteria ? fields.acceptanceCriteria.join("\n") : null;
+      if (fields.acceptanceCriteria !== undefined) {
+        patch.acceptance_criteria = fields.acceptanceCriteria.length
+          ? fields.acceptanceCriteria.join("\n")
+          : null;
+      }
       if (fields.estimatedMinutes !== undefined) patch.estimated_minutes = fields.estimatedMinutes;
       if (fields.branchName !== undefined) patch.branch_name = fields.branchName;
       if (fields.assignedUserId !== undefined) patch.assigned_user_id = fields.assignedUserId;
@@ -505,9 +532,9 @@ export const bulkUpdateTasks = createServerFn({ method: "POST" })
     z
       .object({
         taskIds: z.array(z.string().uuid()).min(1),
-        status: z.string().optional(),
-        priority: z.string().optional(),
-        complexity: z.string().optional(),
+        status: planTaskStatusEnum.optional(),
+        priority: planTaskPriorityEnum.optional(),
+        complexity: planTaskComplexityEnum.optional(),
       })
       .parse(input),
   )
@@ -515,7 +542,7 @@ export const bulkUpdateTasks = createServerFn({ method: "POST" })
     guard("tasks.bulkUpdate", async () => {
       const { supabase } = context;
 
-      const patch: Record<string, unknown> = {
+      const patch: PlanTaskUpdate = {
         ...(data.status !== undefined && { status: data.status }),
         ...(data.priority !== undefined && { priority: data.priority }),
         ...(data.complexity !== undefined && { complexity: data.complexity }),
@@ -544,23 +571,20 @@ export const deleteTask = createServerFn({ method: "POST" })
 
 export const listAgents = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(({ context }) =>
+  .validator((input: unknown) =>
+    z.object({ workspaceId: workspaceIdField }).optional().parse(input),
+  )
+  .handler(({ data, context }) =>
     guard("agents.list", async () => {
       const { supabase, userId } = context;
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data?.workspaceId);
 
       const { data: agents, error } = await supabase
         .from("plan_agents")
         .select("*")
         .eq("workspace_id", membership.workspace_id)
-        .order("last_active_at", { ascending: false, nullsFirst: false });
+        .order("last_seen_at", { ascending: false, nullsFirst: false });
       if (error) throw error;
 
       return { agents };
@@ -576,6 +600,7 @@ export const registerAgent = createServerFn({ method: "POST" })
         provider: z.string().min(1).max(100),
         model: z.string().optional(),
         capabilities: z.array(z.string()).optional(),
+        workspaceId: workspaceIdField,
       })
       .parse(input),
   )
@@ -583,13 +608,7 @@ export const registerAgent = createServerFn({ method: "POST" })
     guard("agents.register", async () => {
       const { supabase, userId } = context;
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
 
       const { data: agent, error } = await supabase
         .from("plan_agents")
@@ -598,7 +617,7 @@ export const registerAgent = createServerFn({ method: "POST" })
           name: data.name,
           provider: data.provider,
           model: data.model ?? null,
-          capabilities: data.capabilities ?? null,
+          capabilities: data.capabilities ?? [],
         })
         .select("id")
         .single();
@@ -627,7 +646,7 @@ export const getPlanEvents = createServerFn({ method: "GET" })
         .select(
           `
           *,
-          actor:profiles(id, display_name, avatar_url),
+          actor:profiles(id, full_name, email, avatar_url),
           agent:plan_agents(id, name, provider, model)
         `,
         )
@@ -654,12 +673,12 @@ export const addTaskComment = createServerFn({ method: "POST" })
     guard("comments.add", async () => {
       const { supabase, userId } = context;
 
-      const { data: task } = await supabase
+      const { data: taskRow } = await supabase
         .from("plan_tasks")
         .select("plan_id")
         .eq("id", data.taskId)
         .single();
-      requireFound(task, "task");
+      const task = requireFound(taskRow, "task");
 
       const { data: comment, error } = await supabase
         .from("plan_task_comments")
@@ -692,7 +711,7 @@ export const listTaskComments = createServerFn({ method: "GET" })
         .select(
           `
           *,
-          author:profiles(id, display_name, avatar_url),
+          author:profiles(id, full_name, email, avatar_url),
           agent:plan_agents(id, name, provider, model)
         `,
         )
@@ -711,6 +730,7 @@ export const createApiKey = createServerFn({ method: "POST" })
       .object({
         name: z.string().min(1).max(100),
         scopes: z.array(z.string()).optional(),
+        workspaceId: workspaceIdField,
       })
       .parse(input),
   )
@@ -719,13 +739,7 @@ export const createApiKey = createServerFn({ method: "POST" })
       const { supabase, userId } = context;
       const crypto = await import("node:crypto");
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
 
       const rawKey = `cpk_${crypto.randomBytes(16).toString("hex")}`;
       const hashedKey = crypto.createHash("sha256").update(rawKey).digest("hex");
@@ -751,17 +765,14 @@ export const createApiKey = createServerFn({ method: "POST" })
 
 export const listApiKeys = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(({ context }) =>
+  .validator((input: unknown) =>
+    z.object({ workspaceId: workspaceIdField }).optional().parse(input),
+  )
+  .handler(({ data, context }) =>
     guard("apiKeys.list", async () => {
       const { supabase, userId } = context;
 
-      const { data: membership } = await supabase
-        .from("workspace_members")
-        .select("workspace_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .single();
-      requireFound(membership, "workspace_membership");
+      const membership = await resolveWorkspaceMembership(supabase, userId, data?.workspaceId);
 
       const { data: keys, error } = await supabase
         .from("api_keys")
