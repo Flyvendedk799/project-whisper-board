@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { Settings, Github, Key } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, FolderKanban, Settings, Github, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { PageHeader, StatusPill } from "@/components/app-shell";
 import type { PlanWithSections } from "@/data";
 import { ApiKeyManager } from "@/features/planner/api-key-manager";
@@ -13,6 +20,28 @@ export function PlanHeader({ plan }: { plan: PlanWithSections }) {
 
   return (
     <>
+      <div className="flex items-center gap-2 border-b px-4 py-2 text-sm text-muted-foreground md:px-6 lg:px-8">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
+          <Link to="/app/planner" search={{ project: plan.project_id ?? undefined }}>
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+            Plans
+          </Link>
+        </Button>
+        {plan.project && (
+          <>
+            <span aria-hidden>/</span>
+            <Link
+              to="/app/projects/$projectId"
+              params={{ projectId: plan.project.id }}
+              search={{ tab: "plans" }}
+              className="inline-flex items-center gap-1.5 truncate hover:text-foreground"
+            >
+              <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{plan.project.title}</span>
+            </Link>
+          </>
+        )}
+      </div>
       <PageHeader
         title={plan.title}
         description={plan.description}
@@ -35,7 +64,7 @@ export function PlanHeader({ plan }: { plan: PlanWithSections }) {
             >
               {plan.status || "draft"}
             </StatusPill>
-            
+
             <Dialog open={apiKeysOpen} onOpenChange={setApiKeysOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">

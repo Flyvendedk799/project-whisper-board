@@ -24,6 +24,7 @@ import { Route as AppTriageRouteImport } from './routes/app.triage'
 import { Route as InviteAcceptRouteImport } from './routes/invite.accept'
 import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
+import { Route as AppPlannerIndexRouteImport } from './routes/app.planner.index'
 import { Route as AppPlannerPlanIdRouteImport } from './routes/app.planner.$planId'
 import { Route as AppProjectsIndexRouteImport } from './routes/app.projects.index'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/app.projects.$projectId'
@@ -105,6 +106,11 @@ const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   path: '/api/webhooks/stripe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppPlannerIndexRoute = AppPlannerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppPlannerRoute,
+} as any)
 const AppPlannerPlanIdRoute = AppPlannerPlanIdRouteImport.update({
   id: '/$planId',
   path: '/$planId',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/planner/': typeof AppPlannerIndexRoute
   '/app/projects/': typeof AppProjectsIndexRoute
   '/app/tickets/': typeof AppTicketsIndexRoute
 }
@@ -160,7 +167,6 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
-  '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/triage': typeof AppTriageRoute
@@ -171,6 +177,7 @@ export interface FileRoutesByTo {
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/planner': typeof AppPlannerIndexRoute
   '/app/projects': typeof AppProjectsIndexRoute
   '/app/tickets': typeof AppTicketsIndexRoute
 }
@@ -194,6 +201,7 @@ export interface FileRoutesById {
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/planner/': typeof AppPlannerIndexRoute
   '/app/projects/': typeof AppProjectsIndexRoute
   '/app/tickets/': typeof AppTicketsIndexRoute
 }
@@ -218,6 +226,7 @@ export interface FileRouteTypes {
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/planner/'
     | '/app/projects/'
     | '/app/tickets/'
   fileRoutesByTo: FileRoutesByTo
@@ -228,7 +237,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/app/create-workspace'
     | '/app/inbox'
-    | '/app/planner'
     | '/app/report'
     | '/app/settings'
     | '/app/triage'
@@ -239,6 +247,7 @@ export interface FileRouteTypes {
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/planner'
     | '/app/projects'
     | '/app/tickets'
   id:
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/planner/'
     | '/app/projects/'
     | '/app/tickets/'
   fileRoutesById: FileRoutesById
@@ -383,6 +393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/planner/': {
+      id: '/app/planner/'
+      path: '/'
+      fullPath: '/app/planner/'
+      preLoaderRoute: typeof AppPlannerIndexRouteImport
+      parentRoute: typeof AppPlannerRoute
+    }
     '/app/planner/$planId': {
       id: '/app/planner/$planId'
       path: '/$planId'
@@ -423,10 +440,12 @@ declare module '@tanstack/react-router' {
 
 interface AppPlannerRouteChildren {
   AppPlannerPlanIdRoute: typeof AppPlannerPlanIdRoute
+  AppPlannerIndexRoute: typeof AppPlannerIndexRoute
 }
 
 const AppPlannerRouteChildren: AppPlannerRouteChildren = {
   AppPlannerPlanIdRoute: AppPlannerPlanIdRoute,
+  AppPlannerIndexRoute: AppPlannerIndexRoute,
 }
 
 const AppPlannerRouteWithChildren = AppPlannerRoute._addFileChildren(

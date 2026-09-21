@@ -112,7 +112,15 @@ export type RelationWithTicket = TicketRelation & {
 
 // AI Planner composite types
 export type PlanAgentRef = Pick<PlanAgent, "id" | "name" | "provider" | "model">;
+export type PlanProjectRef = Pick<Project, "id" | "title"> | null;
+export type PlanListItem = Plan & {
+  project?: PlanProjectRef;
+  section_count?: number;
+  task_count?: number;
+  done_task_count?: number;
+};
 export type PlanWithSections = Plan & {
+  project?: PlanProjectRef;
   sections: (PlanSection & { tasks: TaskWithAgent[] })[];
 };
 export type TaskWithAgent = PlanTask & {

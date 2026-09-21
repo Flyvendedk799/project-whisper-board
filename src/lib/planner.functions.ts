@@ -146,7 +146,14 @@ export const listPlans = createServerFn({ method: "GET" })
 
       let query = supabase
         .from("plans")
-        .select("*")
+        .select(
+          `
+          *,
+          project:projects(id, title),
+          plan_sections(count),
+          plan_tasks(status)
+        `,
+        )
         .eq("workspace_id", membership.workspace_id)
         .order("updated_at", { ascending: false });
 
@@ -157,7 +164,21 @@ export const listPlans = createServerFn({ method: "GET" })
       const { data: plans, error } = await query;
       if (error) throw error;
 
-      return { plans };
+      return {
+        plans: (plans ?? []).map((plan) => {
+          const sectionCount = Array.isArray(plan.plan_sections)
+            ? (plan.plan_sections[0]?.count ?? 0)
+            : 0;
+          const tasks = Array.isArray(plan.plan_tasks) ? plan.plan_tasks : [];
+          const { plan_sections: _sections, plan_tasks: _tasks, ...rest } = plan;
+          return {
+            ...rest,
+            section_count: sectionCount,
+            task_count: tasks.length,
+            done_task_count: tasks.filter((task) => task.status === "done").length,
+          };
+        }),
+      };
     }),
   );
 
@@ -197,6 +218,7 @@ export const getPlan = createServerFn({ method: "GET" })
         .select(
           `
           *,
+          project:projects(id, title),
           sections:plan_sections(
             *,
             tasks:plan_tasks(
