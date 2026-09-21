@@ -6,11 +6,49 @@ import type { Database } from "@/integrations/supabase/types";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
 import { getPaymentsProvider } from "@/lib/providers";
+import { deliver, type NotifyTarget } from "@/lib/notifications.functions";
 
 function adminClient() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+async function notifyProjectMembers(opts: {
+  projectId: string;
+  actorId: string;
+  kind: NotifyTarget["kind"];
+  title: string;
+  body?: string;
+  link: string;
+  relatedType?: string;
+  relatedId?: string;
+}) {
+  const db = adminClient();
+  const { data: members } = await db
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", opts.projectId);
+
+  const recipients = [...new Set((members ?? []).map((m) => m.user_id))].filter(
+    (id) => id !== opts.actorId,
+  );
+
+  if (recipients.length === 0) return;
+
+  await deliver(
+    recipients.map((userId) => ({
+      userId,
+      kind: opts.kind,
+      title: opts.title,
+      body: opts.body,
+      link: opts.link,
+      emailSubject: opts.title,
+      emailBody: opts.body,
+      relatedType: opts.relatedType,
+      relatedId: opts.relatedId,
+    })),
+  );
 }
 
 const lineSchema = z.object({
@@ -98,6 +136,17 @@ export const sendQuote = createServerFn({ method: "POST" })
       });
       if (updateError) throw updateError;
 
+      await notifyProjectMembers({
+        projectId: quote.project_id,
+        actorId: context.userId,
+        kind: "invoice",
+        title: `Quote ready: ${quote.title}`,
+        body: "Review and accept it in Billing.",
+        link: `/app/projects/${quote.project_id}?tab=billing`,
+        relatedType: "quote",
+        relatedId: quote.id,
+      });
+
       return { ok: true };
     }),
   );
@@ -180,11 +229,14 @@ export const respondQuote = createServerFn({ method: "POST" })
             ? `Work is on. ${milestonesCreated} milestones added to the plan.`
             : "Work is on."
           : null,
-        data: { quote_id: quote.id },
+        data: {
+          quote_id: quote.id,
+          ...(data.accept && milestonesCreated > 0 ? { tab: "milestones" } : {}),
+        },
       });
       if (updateError) throw updateError;
 
-      return { ok: true, milestonesCreated };
+      return { ok: true, milestonesCreated, projectId: quote.project_id };
     }),
   );
 
@@ -356,8 +408,8 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
         amountCents: invoice.amount_cents,
         currency: invoice.currency,
         description: `${invoice.number ?? "Invoice"} — ${invoice.projects?.title ?? "Project"}`,
-        successUrl: `${origin}/app/projects/${invoice.project_id}?paid=1`,
-        cancelUrl: `${origin}/app/projects/${invoice.project_id}`,
+        successUrl: `${origin}/app/projects/${invoice.project_id}?tab=billing&paid=1`,
+        cancelUrl: `${origin}/app/projects/${invoice.project_id}?tab=billing`,
       });
 
       if (result.url) {

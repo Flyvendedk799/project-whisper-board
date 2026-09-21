@@ -1,24 +1,45 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
+import { projectListQuery } from "@/data/projects";
 import { toast } from "sonner";
 
+const INVITE_PROJECT_KEY = "cf.inviteProjectId";
+
 export const Route = createFileRoute("/invite/accept")({
+  validateSearch: z.object({
+    project: z.string().uuid().optional(),
+  }),
   head: () => ({ meta: [{ title: "Welcome · Consflow" }] }),
   component: InviteAcceptPage,
 });
 
 function InviteAcceptPage() {
   const navigate = useNavigate();
-  const { user, loading, workspace, setActiveWorkspace, workspaces, needsWorkspace } = useAuth();
+  const { project: projectFromSearch } = Route.useSearch();
+  const { user, loading, workspace, workspaceId, setActiveWorkspace, workspaces, needsWorkspace } =
+    useAuth();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+
+  const projects = useQuery({
+    ...projectListQuery(workspaceId),
+    enabled: Boolean(ready && workspaceId && !needsWorkspace),
+  });
+
+  useEffect(() => {
+    if (projectFromSearch) {
+      sessionStorage.setItem(INVITE_PROJECT_KEY, projectFromSearch);
+    }
+  }, [projectFromSearch]);
 
   // Invites land here after magic/invite link; session may arrive async.
   useEffect(() => {
@@ -43,11 +64,12 @@ function InviteAcceptPage() {
     }
   }, [workspaces, setActiveWorkspace]);
 
-  const projectId =
-    (user?.user_metadata?.project_id as string | undefined) ??
-    (typeof window !== "undefined"
-      ? (sessionStorage.getItem("cf.inviteProjectId") ?? undefined)
-      : undefined);
+  const fromMeta = user?.user_metadata?.project_id as string | undefined;
+  const fromStorage =
+    typeof window !== "undefined"
+      ? (sessionStorage.getItem(INVITE_PROJECT_KEY) ?? undefined)
+      : undefined;
+  const resolvedProjectId = projectFromSearch ?? fromMeta ?? fromStorage ?? projects.data?.[0]?.id;
 
   async function setPasswordAndContinue(e: React.FormEvent) {
     e.preventDefault();
@@ -64,8 +86,13 @@ function InviteAcceptPage() {
   }
 
   function goNext() {
-    if (projectId) {
-      navigate({ to: "/app/projects/$projectId", params: { projectId } });
+    if (resolvedProjectId) {
+      sessionStorage.removeItem(INVITE_PROJECT_KEY);
+      navigate({
+        to: "/app/projects/$projectId",
+        params: { projectId: resolvedProjectId },
+        search: { tab: "overview" },
+      });
     } else {
       navigate({ to: "/app" });
     }
@@ -121,10 +148,7 @@ function InviteAcceptPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "Saving…" : projectId ? "Open project" : "Continue to portal"}
-          </Button>
-          <Button type="button" variant="ghost" className="w-full" onClick={goNext}>
-            Skip for now
+            {busy ? "Saving…" : resolvedProjectId ? "Open project" : "Continue"}
           </Button>
         </form>
       </Card>

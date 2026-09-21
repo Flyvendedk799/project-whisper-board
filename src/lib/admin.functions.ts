@@ -34,7 +34,9 @@ export const inviteClient = createServerFn({ method: "POST" })
     }
 
     const origin = process.env.SITE_URL || "";
-    const redirectTo = origin ? `${origin}/invite/accept` : undefined;
+    const redirectTo = origin
+      ? `${origin}/invite/accept${data.projectId ? `?project=${data.projectId}` : ""}`
+      : undefined;
 
     const meta: Record<string, string> = {
       workspace_id: data.workspaceId,

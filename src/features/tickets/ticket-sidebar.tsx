@@ -307,12 +307,12 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
       </Card>
 
       <RelationsCard ticketId={ticket.id} relations={relations.data ?? []} />
-      <TicketAiTasks ticketId={ticket.id} />
+      <TicketAiTasks ticketId={ticket.id} projectId={ticket.project_id} />
     </div>
   );
 }
 
-function TicketAiTasks({ ticketId }: { ticketId: string }) {
+function TicketAiTasks({ ticketId, projectId }: { ticketId: string; projectId: string }) {
   const tasksQuery = useQuery(ticketTasksQuery(ticketId));
 
   if (!tasksQuery.data?.length) {
@@ -325,7 +325,8 @@ function TicketAiTasks({ ticketId }: { ticketId: string }) {
         <h2 className="text-sm font-medium">AI Tasks</h2>
         <Link
           to="/app/planner"
-          className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+          search={{ project: projectId }}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
         >
           View Planner
         </Link>
@@ -412,6 +413,7 @@ function RelationsCard({
                 className="min-w-0 flex-1 truncate underline underline-offset-2"
               >
                 #{relation.to_ticket.ticket_number}
+                {relation.to_ticket.title ? ` · ${relation.to_ticket.title}` : ""}
               </Link>
             )}
             <Button

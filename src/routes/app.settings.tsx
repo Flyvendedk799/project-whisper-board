@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { AlertTriangle, Bell, Inbox, Palette, Plug, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -55,6 +56,9 @@ import { formatRelative } from "@/lib/utils-format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/settings")({
+  validateSearch: z.object({
+    tab: z.enum(["you", "notifications", "integrations", "outbox", "errors"]).optional(),
+  }),
   component: SettingsPage,
 });
 
@@ -62,12 +66,26 @@ const KINDS = Constants.public.Enums.notification_kind;
 
 function SettingsPage() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const search = Route.useSearch();
+  const tab = search.tab ?? "you";
 
   return (
     <>
       <PageHeader title="Settings" />
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
-        <Tabs defaultValue="you">
+        <Tabs
+          value={tab}
+          onValueChange={(next) =>
+            void navigate({
+              search: (prev: { tab?: string }) => ({
+                ...prev,
+                tab: next as "you" | "notifications" | "integrations" | "outbox" | "errors",
+              }),
+              replace: true,
+            })
+          }
+        >
           <TabsList className="flex-wrap">
             <TabsTrigger value="you">
               <User className="mr-1.5 h-4 w-4" aria-hidden="true" />

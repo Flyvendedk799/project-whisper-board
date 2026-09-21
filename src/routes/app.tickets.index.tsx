@@ -112,7 +112,7 @@ function MyTicketsPage() {
                 <ul>
                   {rows.map((ticket) => (
                     <li key={ticket.id}>
-                      <TicketRow ticket={ticket} />
+                      <TicketRow ticket={ticket} origin={{ from: "tickets" }} />
                     </li>
                   ))}
                 </ul>

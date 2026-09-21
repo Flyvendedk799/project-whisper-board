@@ -12,6 +12,7 @@ import {
   TICKET_STATUS_TONE,
   TICKET_TYPE_LABEL,
 } from "@/data/enums";
+import type { TicketOrigin } from "@/data/ticket-origin";
 import type { TicketListRow } from "@/data/types";
 
 /**
@@ -26,14 +27,17 @@ export const TicketRow = memo(function TicketRow({
   onSelectedChange,
   active,
   showProject = true,
+  origin,
 }: {
   ticket: TicketListRow;
   selected?: boolean;
   onSelectedChange?: (next: boolean) => void;
   active?: boolean;
   showProject?: boolean;
+  origin?: TicketOrigin;
 }) {
   const who = ticket.assignee ?? ticket.reporter;
+  const search: TicketOrigin = origin ?? {};
 
   return (
     <div
@@ -53,6 +57,7 @@ export const TicketRow = memo(function TicketRow({
       <Link
         to="/app/tickets/$ticketId"
         params={{ ticketId: ticket.id }}
+        search={search}
         className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground">
@@ -76,14 +81,26 @@ export const TicketRow = memo(function TicketRow({
         <span className="hidden shrink-0 md:inline">
           <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
         </span>
+      </Link>
 
-        {showProject && ticket.project && (
-          <span className="hidden w-32 shrink-0 truncate text-xs text-muted-foreground lg:inline">
-            {ticket.project.title}
-          </span>
-        )}
+      {showProject && ticket.project && (
+        <Link
+          to="/app/projects/$projectId"
+          params={{ projectId: ticket.project.id }}
+          search={{ tab: "tickets" }}
+          className="hidden w-32 shrink-0 truncate text-xs text-muted-foreground underline-offset-2 hover:underline lg:inline"
+        >
+          {ticket.project.title}
+        </Link>
+      )}
 
-        <span className="hidden w-20 shrink-0 text-xs text-muted-foreground xl:inline">
+      <Link
+        to="/app/tickets/$ticketId"
+        params={{ ticketId: ticket.id }}
+        search={search}
+        className="flex shrink-0 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="hidden w-20 text-xs text-muted-foreground xl:inline">
           {TICKET_TYPE_LABEL[ticket.type]}
         </span>
 
@@ -91,12 +108,12 @@ export const TicketRow = memo(function TicketRow({
           {TICKET_STATUS_LABEL[ticket.status]}
         </StatusPill>
 
-        <span className="hidden w-16 shrink-0 text-right text-xs text-muted-foreground sm:inline">
+        <span className="hidden w-16 text-right text-xs text-muted-foreground sm:inline">
           {formatRelative(ticket.updated_at)}
         </span>
 
         <span
-          className="hidden h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] sm:grid"
+          className="hidden h-6 w-6 place-items-center rounded-full bg-accent text-[10px] sm:grid"
           title={who?.full_name ?? who?.email ?? "Unassigned"}
         >
           {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
@@ -107,11 +124,18 @@ export const TicketRow = memo(function TicketRow({
 });
 
 /** The same ticket as a card, for the board and for narrow screens. */
-export const TicketCard = memo(function TicketCard({ ticket }: { ticket: TicketListRow }) {
+export const TicketCard = memo(function TicketCard({
+  ticket,
+  origin,
+}: {
+  ticket: TicketListRow;
+  origin?: TicketOrigin;
+}) {
   return (
     <Link
       to="/app/tickets/$ticketId"
       params={{ ticketId: ticket.id }}
+      search={origin ?? {}}
       className="block rounded-lg border bg-card p-3 transition-colors hover:border-foreground/20"
     >
       <div className="mb-1.5 flex items-center gap-2">

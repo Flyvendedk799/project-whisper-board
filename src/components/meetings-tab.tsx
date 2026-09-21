@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarPlus, Check, ExternalLink, Sparkles, Ticket, Video, X } from "lucide-react";
@@ -150,6 +150,7 @@ function MeetingCard({
   projectId: string;
   canEdit: boolean;
 }) {
+  const navigate = useNavigate();
   const [notes, setNotes] = useState(meeting.notes ?? "");
   const [proposal, setProposal] = useState<ProposedActionItem[] | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
@@ -184,7 +185,11 @@ function MeetingCard({
           action: {
             label: "Open first",
             onClick: () => {
-              window.location.href = `/app/tickets/${firstId}`;
+              void navigate({
+                to: "/app/tickets/$ticketId",
+                params: { ticketId: firstId },
+                search: { from: "meeting", projectId },
+              });
             },
           },
         });

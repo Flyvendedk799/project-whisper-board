@@ -31,7 +31,7 @@ export function projectInvoicesQuery(projectId: string) {
     queryFn: async (): Promise<InvoiceWithLines[]> => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("*, invoice_line_items(*), payments(*)")
+        .select("*, invoice_line_items(*), payments(*), quote:quotes(id, title)")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .returns<InvoiceWithLines[]>();

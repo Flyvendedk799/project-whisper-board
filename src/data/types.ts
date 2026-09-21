@@ -99,6 +99,7 @@ export type QuoteWithLines = Quote & { quote_line_items: QuoteLineItem[] };
 export type InvoiceWithLines = Invoice & {
   invoice_line_items: InvoiceLineItem[];
   payments: Payment[];
+  quote?: Pick<Quote, "id" | "title"> | null;
 };
 export type MeetingWithActionItems = Meeting & { meeting_action_items: MeetingActionItem[] };
 export type ProjectWithOrg = Project & { organization: Pick<Organization, "id" | "name"> | null };

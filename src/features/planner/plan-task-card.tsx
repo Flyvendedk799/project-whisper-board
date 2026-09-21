@@ -1,4 +1,5 @@
 import { Bot, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import type { TaskWithAgent } from "@/data";
 
@@ -81,9 +82,20 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
             )}
           </div>
 
-          {task.ticket_id && (
+          {task.ticket_id && task.ticket && (
+            <Link
+              to="/app/tickets/$ticketId"
+              params={{ ticketId: task.ticket.id }}
+              search={{ from: "home" }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground/80 underline-offset-2 hover:underline"
+            >
+              Resolves #{task.ticket.ticket_number}
+            </Link>
+          )}
+          {task.ticket_id && !task.ticket && (
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
-              <span>Resolves #{task.ticket?.ticket_number || "TICKET"}</span>
+              <span>Resolves ticket</span>
             </div>
           )}
         </div>
