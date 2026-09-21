@@ -32,6 +32,7 @@ import { MeetingsTab } from "@/components/meetings-tab";
 import { UpdatesTab } from "@/components/updates-tab";
 import { BillingTab } from "@/components/billing-tab";
 import { ProjectTimeline } from "@/features/projects/project-timeline";
+import { ProjectAiPlansTab } from "@/features/projects/project-ai-plans";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { inviteClient } from "@/lib/admin.functions";
@@ -121,6 +122,7 @@ function ProjectPage() {
               <TabsList className="flex-wrap">
                 {!isAdmin && <TabsTrigger value="overview">Overview</TabsTrigger>}
                 <TabsTrigger value="tickets">Tickets</TabsTrigger>
+                <TabsTrigger value="plans">AI Plans</TabsTrigger>
                 <TabsTrigger value="updates">Updates</TabsTrigger>
                 <TabsTrigger value="meetings">Meetings</TabsTrigger>
                 <TabsTrigger value="milestones">Milestones</TabsTrigger>
@@ -141,6 +143,14 @@ function ProjectPage() {
                 <TabsContent value="tickets" className="mt-6" forceMount>
                   <SectionBoundary label="project-tickets">
                     <TicketsPanel projectId={projectId} viewerId={user?.id ?? ""} />
+                  </SectionBoundary>
+                </TabsContent>
+              )}
+
+              {tab === "plans" && (
+                <TabsContent value="plans" className="mt-6" forceMount>
+                  <SectionBoundary label="project-plans">
+                    <ProjectAiPlansTab projectId={projectId} />
                   </SectionBoundary>
                 </TabsContent>
               )}

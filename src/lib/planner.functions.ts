@@ -109,7 +109,10 @@ export const updatePlan = createServerFn({ method: "POST" })
 
 export const listPlans = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(({ context }) =>
+  .validator((input: unknown) =>
+    z.object({ projectId: z.string().optional() }).optional().parse(input)
+  )
+  .handler(({ data, context }) =>
     guard("plans.list", async () => {
       const { supabase, userId } = context;
 
@@ -121,14 +124,42 @@ export const listPlans = createServerFn({ method: "GET" })
         .single();
       requireFound(membership, "workspace_membership");
 
-      const { data: plans, error } = await supabase
+      let query = supabase
         .from("plans")
         .select("*")
         .eq("workspace_id", membership.workspace_id)
         .order("updated_at", { ascending: false });
+
+      if (data?.projectId) {
+        query = query.eq("project_id", data.projectId);
+      }
+
+      const { data: plans, error } = await query;
       if (error) throw error;
 
       return { plans };
+    }),
+  );
+
+export const listTasksByTicket = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ ticketId: z.string().uuid() }).parse(input))
+  .handler(({ data, context }) =>
+    guard("tasks.listByTicket", async () => {
+      const { supabase } = context;
+      const { data: tasks, error } = await supabase
+        .from("plan_tasks")
+        .select(`
+          *,
+          plan:plans(id, title),
+          assigned_agent:plan_agents(id, name, provider, model),
+          assigned_user:profiles(id, full_name, email, avatar_url)
+        `)
+        .eq("ticket_id", data.ticketId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return tasks ?? [];
     }),
   );
 
@@ -148,7 +179,9 @@ export const getPlan = createServerFn({ method: "GET" })
             *,
             tasks:plan_tasks(
               *,
-              agent:plan_agents(name, provider, model)
+              assigned_agent:plan_agents(id, name, provider, model),
+              assigned_user:profiles(id, full_name, email, avatar_url),
+              ticket:tickets(id, ticket_number, title)
             )
           )
         `,
@@ -381,6 +414,8 @@ export const updateTask = createServerFn({ method: "POST" })
         acceptanceCriteria: z.array(z.string()).optional(),
         estimatedMinutes: z.number().optional(),
         branchName: z.string().optional(),
+        assignedUserId: z.string().uuid().nullable().optional(),
+        ticketId: z.string().uuid().nullable().optional(),
       })
       .parse(input),
   )
@@ -396,7 +431,22 @@ export const updateTask = createServerFn({ method: "POST" })
         .single();
       requireFound(before, "task");
 
-      const patch: Record<string, unknown> = { ...fields };
+      const patch: Record<string, unknown> = {};
+      if (fields.title !== undefined) patch.title = fields.title;
+      if (fields.description !== undefined) patch.description = fields.description;
+      if (fields.status !== undefined) patch.status = fields.status;
+      if (fields.priority !== undefined) patch.priority = fields.priority;
+      if (fields.complexity !== undefined) patch.complexity = fields.complexity;
+      if (fields.labels !== undefined) patch.labels = fields.labels;
+      if (fields.dependsOn !== undefined) patch.depends_on = fields.dependsOn;
+      if (fields.preferredProviders !== undefined) patch.preferred_providers = fields.preferredProviders;
+      if (fields.preferredModels !== undefined) patch.preferred_models = fields.preferredModels;
+      if (fields.contextFiles !== undefined) patch.context_files = fields.contextFiles;
+      if (fields.acceptanceCriteria !== undefined) patch.acceptance_criteria = fields.acceptanceCriteria ? fields.acceptanceCriteria.join("\n") : null;
+      if (fields.estimatedMinutes !== undefined) patch.estimated_minutes = fields.estimatedMinutes;
+      if (fields.branchName !== undefined) patch.branch_name = fields.branchName;
+      if (fields.assignedUserId !== undefined) patch.assigned_user_id = fields.assignedUserId;
+      if (fields.ticketId !== undefined) patch.ticket_id = fields.ticketId;
 
       if (fields.status && fields.status !== before.status) {
         if (fields.status === "done") {

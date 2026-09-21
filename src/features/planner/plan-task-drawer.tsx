@@ -17,6 +17,7 @@ import { useServerAction } from "@/lib/use-server-action";
 import { updateTask } from "@/lib/planner.functions";
 import { taskCommentsQuery } from "@/data/planner";
 import { qk } from "@/data/keys";
+import { workspacePeopleQuery } from "@/data/projects";
 
 export function PlanTaskDrawer({
   taskId,
@@ -32,6 +33,7 @@ export function PlanTaskDrawer({
 
   // Use a query for comments if taskId is present
   const commentsQuery = useQuery(taskCommentsQuery(taskId || ""));
+  const peopleQuery = useQuery(workspacePeopleQuery());
 
   const update = useServerAction(useServerFn(updateTask), {
     label: "tasks.update",
@@ -114,7 +116,56 @@ export function PlanTaskDrawer({
               <h4 className="flex items-center gap-2 font-medium">
                 <Bot className="h-4 w-4" /> Agent Assignment
               </h4>
-              <div className="text-sm text-muted-foreground">No agent assigned yet.</div>
+              <div className="text-sm text-muted-foreground">
+                {task.assigned_agent_id ? "Agent assigned." : "No agent assigned yet."}
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+              <h4 className="flex items-center gap-2 font-medium">
+                Human Assignee
+              </h4>
+              <Select 
+                value={task.assigned_user_id || "unassigned"}
+                onValueChange={(val) => 
+                  handleUpdate({ 
+                    assignedUserId: val === "unassigned" ? null : val 
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a user" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {peopleQuery.data?.map(person => (
+                    <SelectItem key={person.id} value={person.id}>
+                      {person.full_name || person.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+              <h4 className="flex items-center gap-2 font-medium">
+                Ticket Link
+              </h4>
+              <Input 
+                placeholder="Paste Ticket ID..."
+                defaultValue={task.ticket_id || ""}
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  if (val !== task.ticket_id) {
+                    handleUpdate({ ticketId: val || null });
+                  }
+                }}
+              />
+              {task.ticket && (
+                <div className="text-sm text-muted-foreground mt-2">
+                  Linked to Ticket #{task.ticket.ticket_number}: {task.ticket.title}
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
