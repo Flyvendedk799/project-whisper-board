@@ -27,7 +27,7 @@ export interface AuthValue {
   loading: boolean;
   needsWorkspace: boolean;
   setActiveWorkspace: (id: string) => void;
-  refetchWorkspaces: () => void;
+  refetchWorkspaces: () => Promise<unknown>;
   refetchRoles: () => void;
   signOut: () => Promise<void>;
 }
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading: loading || (Boolean(userId) && rolesStatus === "pending"),
       needsWorkspace: rolesStatus === "ready" && Boolean(userId) && workspaces.length === 0,
       setActiveWorkspace,
-      refetchWorkspaces: () => void workspacesQuery.refetch(),
+      refetchWorkspaces: () => workspacesQuery.refetch(),
       refetchRoles: () => void workspacesQuery.refetch(),
       signOut: async () => {
         await supabase.auth.signOut();

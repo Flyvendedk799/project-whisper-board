@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- wizard + incomplete helper for Home */
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -57,6 +58,22 @@ function clearOnboardingStorage(workspaceId: string | null) {
   }
 }
 
+/** True when the first-run wizard still has invite/share steps left. */
+export function isOnboardingIncomplete(workspaceId: string | null): boolean {
+  if (!workspaceId || typeof sessionStorage === "undefined") return false;
+  try {
+    const step = Number(sessionStorage.getItem(stepStorageKey(workspaceId)));
+    const projectId = sessionStorage.getItem(projectStorageKey(workspaceId));
+    // Step 2/3 means we created a project and must finish invite/share.
+    if (step === 2 || step === 3) return true;
+    // Project saved but step not advanced yet (race after create).
+    if (projectId && step === 1) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const { workspaceId } = useAuth();
@@ -82,8 +99,18 @@ export function OnboardingWizard() {
   const project = useDataMutation("projects.insert", createProject, {
     success: "Project created",
     invalidate: [qk.projects()],
-    onSuccess: (project) => {
-      setProjectId(project.id);
+    onSuccess: (created) => {
+      // Persist before parent re-renders from invalidation, otherwise Home
+      // unmounts this wizard the moment projects.length > 0.
+      if (workspaceId) {
+        try {
+          sessionStorage.setItem(stepStorageKey(workspaceId), "2");
+          sessionStorage.setItem(projectStorageKey(workspaceId), created.id);
+        } catch {
+          /* ignore */
+        }
+      }
+      setProjectId(created.id);
       setStep(2);
     },
   });

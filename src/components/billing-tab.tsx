@@ -82,8 +82,11 @@ export function BillingTab({
                 title="No quotes yet"
                 description={
                   isAdmin
-                    ? "Draft one here. Accepting it turns the line items into milestones."
+                    ? "Draft a quote to kick off billing — accepting it turns line items into milestones."
                     : "Any quote we send you will appear here to accept or decline."
+                }
+                action={
+                  isAdmin ? <NewQuoteButton projectId={projectId} currency={currency} /> : undefined
                 }
               />
             </Card>
@@ -116,7 +119,16 @@ export function BillingTab({
               <EmptyState
                 icon={Receipt}
                 title="No invoices yet"
-                description={isAdmin ? "Raise one when a milestone lands." : "Nothing outstanding."}
+                description={
+                  isAdmin
+                    ? "Raise an invoice when a milestone lands, or bill time you've logged."
+                    : "Nothing outstanding."
+                }
+                action={
+                  isAdmin ? (
+                    <NewInvoiceButton projectId={projectId} currency={currency} />
+                  ) : undefined
+                }
               />
             </Card>
           }

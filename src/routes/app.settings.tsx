@@ -256,7 +256,9 @@ function WorkspaceCard() {
     label: "workspaces.update",
     success: "Workspace saved",
     invalidate: [qk.workspaces(), qk.workspace(workspaceId ?? undefined)],
-    onSuccess: () => refetchWorkspaces(),
+    onSuccess: () => {
+      void refetchWorkspaces();
+    },
   });
 
   if (!workspace || !workspaceId) return null;

@@ -27,6 +27,28 @@ export interface QueryStateProps<T> {
 function isEmpty(value: unknown): boolean {
   if (value == null) return true;
   if (Array.isArray(value)) return value.length === 0;
+  if (typeof value !== "object" || value === null) return false;
+
+  // TanStack infinite queries nest rows under `pages`.
+  if ("pages" in value && Array.isArray((value as { pages: unknown }).pages)) {
+    const pages = (value as { pages: unknown[] }).pages;
+    if (pages.length === 0) return true;
+    const rows = pages.flatMap((page) => {
+      if (Array.isArray(page)) return page;
+      if (page && typeof page === "object" && "rows" in page) {
+        const r = (page as { rows: unknown }).rows;
+        return Array.isArray(r) ? r : [];
+      }
+      return [];
+    });
+    return rows.length === 0;
+  }
+
+  // listPlans returns `{ plans: Plan[] }` rather than a bare array.
+  if ("plans" in value && Array.isArray((value as { plans: unknown }).plans)) {
+    return (value as { plans: unknown[] }).plans.length === 0;
+  }
+
   return false;
 }
 
