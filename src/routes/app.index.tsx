@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueries, useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useMemo } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,10 +32,12 @@ import { projectTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
 import { formatCents, formatRelative } from "@/lib/utils-format";
 import type { TicketFilters } from "@/data/filters";
-import type { InvoiceWithLines } from "@/data/types";
-import type { TimeEntry } from "@/data/types";
+import type { InvoiceWithLines, TimeEntry } from "@/data/types";
 
 export const Route = createFileRoute("/app/")({
+  validateSearch: z.object({
+    project: z.string().uuid().optional(),
+  }),
   component: HomePage,
 });
 
@@ -169,7 +172,7 @@ function AdminHome() {
                 <ul>
                   {recentRows.map((ticket) => (
                     <li key={ticket.id}>
-                      <TicketRow ticket={ticket} />
+                      <TicketRow ticket={ticket} origin={{ from: "home" }} />
                     </li>
                   ))}
                 </ul>
@@ -294,6 +297,19 @@ function MoneyCard({ projects }: { projects: Array<{ id: string; currency: strin
               <>
                 <strong className="tabular-nums">{formatCents(owed, currency)}</strong>{" "}
                 <span className="text-muted-foreground">outstanding</span>
+                {!loading && owed > 0 && projects[0] && (
+                  <>
+                    {" · "}
+                    <Link
+                      to="/app/projects/$projectId"
+                      params={{ projectId: projects[0].id }}
+                      search={{ tab: "billing" }}
+                      className="underline underline-offset-2"
+                    >
+                      Open billing
+                    </Link>
+                  </>
+                )}
               </>
             )}
           </span>
@@ -317,16 +333,25 @@ function MoneyCard({ projects }: { projects: Array<{ id: string; currency: strin
 }
 
 function ClientHome() {
+  const navigate = useNavigate({ from: Route.fullPath });
+  const { project: projectFromSearch } = Route.useSearch();
   const { workspaceId } = useAuth();
   const projects = useQuery(projectListQuery(workspaceId));
-  const first = projects.data?.[0];
+  const selected =
+    projects.data?.find((p) => p.id === projectFromSearch) ?? projects.data?.[0] ?? null;
 
   const milestones = useQuery({
-    ...projectMilestonesQuery(first?.id ?? ""),
-    enabled: Boolean(first),
+    ...projectMilestonesQuery(selected?.id ?? ""),
+    enabled: Boolean(selected),
   });
-  const meetings = useQuery({ ...projectMeetingsQuery(first?.id ?? ""), enabled: Boolean(first) });
-  const invoices = useQuery({ ...projectInvoicesQuery(first?.id ?? ""), enabled: Boolean(first) });
+  const meetings = useQuery({
+    ...projectMeetingsQuery(selected?.id ?? ""),
+    enabled: Boolean(selected),
+  });
+  const invoices = useQuery({
+    ...projectInvoicesQuery(selected?.id ?? ""),
+    enabled: Boolean(selected),
+  });
 
   return (
     <QueryState
@@ -352,10 +377,29 @@ function ClientHome() {
     >
       {(data) => (
         <div className="space-y-8">
-          {first && (
+          {data.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {data.map((project) => (
+                <Button
+                  key={project.id}
+                  size="sm"
+                  variant={selected?.id === project.id ? "secondary" : "ghost"}
+                  onClick={() =>
+                    void navigate({
+                      search: (prev: { project?: string }) => ({ ...prev, project: project.id }),
+                    })
+                  }
+                >
+                  {project.title}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {selected && (
             <SectionBoundary label="client-timeline">
               <ProjectTimeline
-                project={first}
+                project={selected}
                 milestones={milestones.data ?? []}
                 meetings={meetings.data ?? []}
                 invoices={invoices.data ?? []}

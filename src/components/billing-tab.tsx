@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CreditCard, Download, FileText, Plus, Receipt, Trash2 } from "lucide-react";
@@ -299,6 +300,7 @@ function QuoteCard({
   projectId: string;
   canEdit: boolean;
 }) {
+  const navigate = useNavigate();
   const invalidate = [
     qk.projectQuotes(projectId),
     qk.projectMilestones(projectId),
@@ -319,6 +321,15 @@ function QuoteCard({
         ? `Accepted — ${result.milestonesCreated} milestones added to the plan`
         : "Thanks, that's noted",
     invalidate,
+    onSuccess: (result) => {
+      if (result.milestonesCreated > 0) {
+        void navigate({
+          to: "/app/projects/$projectId",
+          params: { projectId },
+          search: { tab: "milestones" },
+        });
+      }
+    },
   });
 
   const doc = useServerAction(useServerFn(generateBillingDocument), {
@@ -595,6 +606,9 @@ function InvoiceCard({
           </div>
           {invoice.due_date && (
             <p className="mt-1 text-xs text-muted-foreground">Due {formatDate(invoice.due_date)}</p>
+          )}
+          {invoice.quote && (
+            <p className="mt-1 text-xs text-muted-foreground">From quote: {invoice.quote.title}</p>
           )}
         </div>
         <div className="text-right">

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -34,6 +34,7 @@ import {
 } from "@/data/tickets";
 import { workspacePeopleQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
+import { ticketOriginSchema } from "@/data/ticket-origin";
 import {
   TICKET_PRIORITY_LABEL,
   TICKET_PRIORITY_TONE,
@@ -46,6 +47,7 @@ import { toast } from "sonner";
 import type { PersonRef } from "@/data/types";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
+  validateSearch: ticketOriginSchema,
   component: TicketPage,
 });
 
@@ -61,6 +63,55 @@ function plainText(html: string) {
 
 function replyDraftKey(ticketId: string) {
   return `cf.reply.draft.${ticketId}`;
+}
+
+function TicketBackButton({ isAdmin, projectId }: { isAdmin: boolean; projectId?: string | null }) {
+  const router = useRouter();
+  const origin = Route.useSearch();
+
+  const fallback =
+    origin.from === "project" && (origin.projectId || projectId)
+      ? ({
+          to: "/app/projects/$projectId" as const,
+          params: { projectId: origin.projectId ?? projectId! },
+          search: { tab: "tickets" as const },
+        } as const)
+      : origin.from === "inbox"
+        ? ({ to: "/app/inbox" as const } as const)
+        : origin.from === "home"
+          ? ({ to: "/app" as const } as const)
+          : origin.from === "tickets" || (!isAdmin && origin.from !== "triage")
+            ? ({ to: "/app/tickets" as const } as const)
+            : ({ to: "/app/triage" as const } as const);
+
+  if (router.history.canGoBack()) {
+    return (
+      <Button variant="ghost" onClick={() => router.history.back()}>
+        <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+        Back
+      </Button>
+    );
+  }
+
+  if (fallback.to === "/app/projects/$projectId") {
+    return (
+      <Button variant="ghost" asChild>
+        <Link to={fallback.to} params={fallback.params} search={fallback.search}>
+          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+          Back
+        </Link>
+      </Button>
+    );
+  }
+
+  return (
+    <Button variant="ghost" asChild>
+      <Link to={fallback.to}>
+        <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+        Back
+      </Link>
+    </Button>
+  );
 }
 
 function TicketPage() {
@@ -126,6 +177,7 @@ function TicketPage() {
                     <Link
                       to="/app/projects/$projectId"
                       params={{ projectId: t.project.id }}
+                      search={{ tab: "tickets" }}
                       className="underline underline-offset-2"
                     >
                       {t.project.title}
@@ -134,14 +186,7 @@ function TicketPage() {
                 )}
               </span>
             }
-            action={
-              <Button variant="ghost" asChild>
-                <Link to={isAdmin ? "/app/triage" : "/app/tickets"}>
-                  <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
-                  Back
-                </Link>
-              </Button>
-            }
+            action={<TicketBackButton isAdmin={isAdmin} projectId={t.project_id} />}
           />
 
           <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:px-8 md:py-8 lg:grid-cols-[1fr_300px] lg:gap-8">

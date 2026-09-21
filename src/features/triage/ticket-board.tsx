@@ -85,7 +85,7 @@ export function TicketBoard({
                     dragging === ticket.id ? "opacity-40" : ""
                   }`}
                 >
-                  <TicketCard ticket={ticket} />
+                  <TicketCard ticket={ticket} origin={{ from: "triage" }} />
                 </li>
               ))}
               {column.length === 0 && (

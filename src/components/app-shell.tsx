@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { unreadCountQuery } from "@/data/notifications";
 import { RunningTimerBar } from "@/features/time/running-timer-bar";
+import { runningTimerQuery } from "@/data/time";
 import { CommandPalette } from "@/components/command-palette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, loading, rolesStatus, refetchRoles, needsWorkspace } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const onCreateWorkspace = location.pathname.startsWith("/app/create-workspace");
+
+  const timer = useQuery({
+    ...runningTimerQuery(user?.id ?? ""),
+    enabled: Boolean(user && isAdmin),
+  });
+  const timerRaised = Boolean(timer.data);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -112,7 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <CommandPalette />
       <RunningTimerBar />
-      {isAdmin ? <AdminReportFab /> : <ReportFab />}
+      {isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />}
     </div>
   );
 }
@@ -189,7 +196,9 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
       ? [{ to: "/app/triage", label: "Triage", icon: ListFilter, exact: false }]
       : [{ to: "/app/tickets", label: "My tickets", icon: Ticket, exact: true }]),
     { to: "/app/projects", label: "Projects", icon: FolderKanban, exact: false },
-    { to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false },
+    ...(isAdmin
+      ? [{ to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false }]
+      : []),
     { to: "/app/inbox", label: "Inbox", icon: Inbox, exact: false },
     { to: "/app/settings", label: "Settings", icon: Settings, exact: false },
   ];
@@ -333,12 +342,14 @@ function NotificationBell() {
   );
 }
 
-function ReportFab() {
+function ReportFab({ raised = false }: { raised?: boolean }) {
   return (
     <Button
       asChild
       size="lg"
-      className="fixed bottom-5 right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden"
+      className={`fixed right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden ${
+        raised ? "bottom-24" : "bottom-5"
+      }`}
     >
       <Link to="/app/report">
         <Bug className="mr-2 h-5 w-5" aria-hidden="true" />
@@ -348,13 +359,15 @@ function ReportFab() {
   );
 }
 
-function AdminReportFab() {
+function AdminReportFab({ raised = false }: { raised?: boolean }) {
   return (
     <Button
       asChild
       size="lg"
       variant="outline"
-      className="fixed bottom-5 right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden"
+      className={`fixed right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden ${
+        raised ? "bottom-24" : "bottom-5"
+      }`}
     >
       <Link to="/app/report">
         <Plus className="mr-2 h-5 w-5" aria-hidden="true" />

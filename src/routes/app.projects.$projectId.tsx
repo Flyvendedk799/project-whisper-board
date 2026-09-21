@@ -76,7 +76,22 @@ function ProjectPage() {
   const [pendingInvite, setPendingInvite] = useState<string | null>(null);
 
   const project = useQuery(projectQuery(projectId));
-  const tab = search.tab ?? (isAdmin ? "tickets" : "overview");
+  const requestedTab = search.tab ?? (isAdmin ? "tickets" : "overview");
+  const tab =
+    !isAdmin && requestedTab === "overview"
+      ? "overview"
+      : isAdmin && requestedTab === "overview"
+        ? "tickets"
+        : requestedTab;
+
+  useEffect(() => {
+    if (isAdmin && search.tab === "overview") {
+      void navigate({
+        search: (prev: { tab?: string; paid?: string }) => ({ ...prev, tab: "tickets" }),
+        replace: true,
+      });
+    }
+  }, [isAdmin, search.tab, navigate]);
 
   useEffect(() => {
     if (search.paid !== "1") return;
@@ -95,6 +110,13 @@ function ProjectPage() {
     <QueryState query={project} errorTitle="Couldn't load this project">
       {(p) => (
         <>
+          <div className="flex items-center gap-2 border-b px-4 py-2 text-sm text-muted-foreground md:px-6 lg:px-8">
+            <Link to="/app/projects" className="hover:text-foreground">
+              Projects
+            </Link>
+            <span aria-hidden>/</span>
+            <span className="truncate text-foreground">{p.title}</span>
+          </div>
           <PageHeader
             title={p.title}
             description={p.description ?? p.organization?.name ?? undefined}
@@ -308,7 +330,11 @@ function TicketsPanel({
           <ul>
             {rows.map((ticket) => (
               <li key={ticket.id}>
-                <TicketRow ticket={ticket} showProject={false} />
+                <TicketRow
+                  ticket={ticket}
+                  showProject={false}
+                  origin={{ from: "project", projectId }}
+                />
               </li>
             ))}
           </ul>

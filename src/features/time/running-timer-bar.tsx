@@ -60,6 +60,7 @@ export function RunningTimerBar() {
                 className="underline underline-offset-2"
               >
                 #{running.ticket.ticket_number}
+                {running.ticket.title ? ` · ${running.ticket.title}` : ""}
               </Link>
             </>
           )}

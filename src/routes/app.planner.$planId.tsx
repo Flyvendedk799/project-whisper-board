@@ -39,9 +39,10 @@ function PlanDetailPage() {
     label: "tasks.create",
     success: "Task created",
     invalidate: [qk.plan(planId)],
-    onSuccess: () => {
+    onSuccess: (result) => {
       setCreateSectionId(null);
       setTaskTitle("");
+      if (result?.id) setDrawerTaskId(result.id);
     },
   });
 

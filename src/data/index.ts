@@ -10,6 +10,7 @@ export { qk } from "./keys";
 export * from "./types";
 export * from "./enums";
 export * from "./filters";
+export * from "./ticket-origin";
 export * from "./tickets";
 export * from "./projects";
 export * from "./billing";

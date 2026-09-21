@@ -306,6 +306,7 @@ function TriagePage() {
                             ticket={ticket}
                             selected={selected.has(ticket.id)}
                             onSelectedChange={(next) => toggleSelected(ticket.id, next)}
+                            origin={{ from: "triage" }}
                           />
                         </li>
                       ))}

@@ -83,7 +83,14 @@ export function ProjectTimeline({
                 <p className="text-sm font-medium">
                   {formatCents(owed, project.currency)} outstanding
                 </p>
-                <p className="text-xs text-muted-foreground">See the Billing tab to settle it.</p>
+                <Link
+                  to="/app/projects/$projectId"
+                  params={{ projectId: project.id }}
+                  search={{ tab: "billing" }}
+                  className="text-xs text-muted-foreground underline underline-offset-2"
+                >
+                  Open Billing to settle it
+                </Link>
               </div>
             </div>
           )}
