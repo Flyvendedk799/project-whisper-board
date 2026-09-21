@@ -45,6 +45,15 @@ export type OutboundMessage = Row<"outbound_messages">;
 export type AppErrorRow = Row<"app_errors">;
 export type SlaPolicy = Row<"sla_policies">;
 
+// AI Planner
+export type Plan = Row<"plans">;
+export type PlanSection = Row<"plan_sections">;
+export type PlanTask = Row<"plan_tasks">;
+export type PlanAgent = Row<"plan_agents">;
+export type PlanEvent = Row<"plan_events">;
+export type PlanTaskComment = Row<"plan_task_comments">;
+export type ApiKey = Row<"api_keys">;
+
 /** The subset of a profile shown next to something someone did. */
 export type PersonRef = Pick<Profile, "id" | "full_name" | "email" | "avatar_url">;
 export const PERSON_REF_COLUMNS = "id, full_name, email, avatar_url" as const;
@@ -99,6 +108,26 @@ export type TimeEntryWithRefs = TimeEntry & {
 };
 export type RelationWithTicket = TicketRelation & {
   to_ticket: Pick<Ticket, "id" | "ticket_number" | "title" | "status"> | null;
+};
+
+// AI Planner composite types
+export type PlanAgentRef = Pick<PlanAgent, "id" | "name" | "provider" | "model">;
+export type PlanWithSections = Plan & {
+  plan_sections: (PlanSection & { plan_tasks: PlanTask[] })[];
+};
+export type TaskWithAgent = PlanTask & {
+  assigned_agent: PlanAgentRef | null;
+};
+export type TaskWithComments = PlanTask & {
+  plan_task_comments: (PlanTaskComment & {
+    author: PersonRef | null;
+    agent: PlanAgentRef | null;
+  })[];
+  assigned_agent: PlanAgentRef | null;
+};
+export type EventWithRefs = PlanEvent & {
+  actor: PersonRef | null;
+  agent: PlanAgentRef | null;
 };
 
 /** One page of a keyset-paginated list. */

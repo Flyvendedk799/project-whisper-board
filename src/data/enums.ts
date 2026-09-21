@@ -23,6 +23,11 @@ export type UpdateKind = Enums<"update_kind">;
 export type AppRole = Enums<"app_role">;
 export type ActionItemStatus = Enums<"action_item_status">;
 export type TicketRelationKind = Enums<"ticket_relation_kind">;
+export type PlanStatus = Enums<"plan_status">;
+export type PlanTaskStatus = Enums<"plan_task_status">;
+export type PlanTaskPriority = Enums<"plan_task_priority">;
+export type PlanTaskComplexity = Enums<"plan_task_complexity">;
+export type PlanEventKind = Enums<"plan_event_kind">;
 
 export const TICKET_STATUSES = Constants.public.Enums.ticket_status;
 export const TICKET_TYPES = Constants.public.Enums.ticket_type;
@@ -32,6 +37,10 @@ export const MILESTONE_STATUSES = Constants.public.Enums.milestone_status;
 export const QUOTE_STATUSES = Constants.public.Enums.quote_status;
 export const INVOICE_STATUSES = Constants.public.Enums.invoice_status;
 export const TICKET_RELATION_KINDS = Constants.public.Enums.ticket_relation_kind;
+export const PLAN_STATUSES = Constants.public.Enums.plan_status;
+export const PLAN_TASK_STATUSES = Constants.public.Enums.plan_task_status;
+export const PLAN_TASK_PRIORITIES = Constants.public.Enums.plan_task_priority;
+export const PLAN_TASK_COMPLEXITIES = Constants.public.Enums.plan_task_complexity;
 
 /** Semantic tone, mapped to a colour by StatusPill. */
 export type Tone = "default" | "success" | "warning" | "info" | "destructive";
@@ -244,6 +253,103 @@ export const TICKET_RELATION_INVERSE: Record<TicketRelationKind, TicketRelationK
   blocked_by: "blocks",
   relates_to: "relates_to",
   parent_of: "parent_of",
+};
+
+export const PLAN_STATUS_LABEL: Record<PlanStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+  completed: "Completed",
+  archived: "Archived",
+};
+
+export const PLAN_STATUS_TONE: Record<PlanStatus, Tone> = {
+  draft: "default",
+  active: "success",
+  paused: "warning",
+  completed: "info",
+  archived: "default",
+};
+
+export const PLAN_TASK_STATUS_LABEL: Record<PlanTaskStatus, string> = {
+  backlog: "Backlog",
+  available: "Available",
+  claimed: "Claimed",
+  in_progress: "In progress",
+  in_review: "In review",
+  done: "Done",
+  blocked: "Blocked",
+};
+
+export const PLAN_TASK_STATUS_TONE: Record<PlanTaskStatus, Tone> = {
+  backlog: "default",
+  available: "info",
+  claimed: "warning",
+  in_progress: "info",
+  in_review: "warning",
+  done: "success",
+  blocked: "destructive",
+};
+
+/** Board column order — tasks flow left to right through this pipeline. */
+export const PLAN_TASK_BOARD_ORDER: readonly PlanTaskStatus[] = [
+  "backlog",
+  "available",
+  "claimed",
+  "in_progress",
+  "in_review",
+  "done",
+];
+
+export const PLAN_TASK_PRIORITY_LABEL: Record<PlanTaskPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+export const PLAN_TASK_PRIORITY_TONE: Record<PlanTaskPriority, Tone> = {
+  low: "info",
+  medium: "default",
+  high: "warning",
+  critical: "destructive",
+};
+
+export const PLAN_TASK_PRIORITY_RANK: Record<PlanTaskPriority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+export const PLAN_TASK_COMPLEXITY_LABEL: Record<PlanTaskComplexity, string> = {
+  trivial: "Trivial",
+  small: "Small",
+  medium: "Medium",
+  large: "Large",
+  epic: "Epic",
+};
+
+export const PLAN_EVENT_KIND_LABEL: Record<PlanEventKind, string> = {
+  task_created: "created a task",
+  task_updated: "updated a task",
+  task_claimed: "claimed a task",
+  task_unclaimed: "released a task",
+  task_started: "started work on a task",
+  task_completed: "completed a task",
+  task_blocked: "blocked a task",
+  task_reviewed: "reviewed a task",
+  pr_opened: "opened a pull request",
+  pr_merged: "merged a pull request",
+  pr_closed: "closed a pull request",
+  section_created: "created a section",
+  section_updated: "updated a section",
+  plan_created: "created a plan",
+  plan_activated: "activated a plan",
+  plan_completed: "completed a plan",
+  agent_registered: "registered as an agent",
+  agent_deactivated: "was deactivated",
+  comment_added: "commented",
 };
 
 /** `[{ value, label }]` for a Select, in the database's own order. */

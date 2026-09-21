@@ -17,3 +17,4 @@ export * from "./meetings";
 export * from "./notifications";
 export * from "./time";
 export * from "./views";
+export * from "./planner";
