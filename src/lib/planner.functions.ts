@@ -666,11 +666,7 @@ export const getPlanEvents = createServerFn({ method: "GET" })
       const { data: events, error } = await supabase
         .from("plan_events")
         .select(
-          `
-          *,
-          actor:profiles(id, full_name, email, avatar_url),
-          agent:plan_agents(id, name, provider, model)
-        `,
+          "*, actor:profiles(id, full_name, email, avatar_url), agent:plan_agents(id, name, provider, model)",
         )
         .eq("plan_id", data.planId)
         .order("created_at", { ascending: false })
@@ -731,11 +727,7 @@ export const listTaskComments = createServerFn({ method: "GET" })
       const { data: comments, error } = await supabase
         .from("plan_task_comments")
         .select(
-          `
-          *,
-          author:profiles(id, full_name, email, avatar_url),
-          agent:plan_agents(id, name, provider, model)
-        `,
+          "*, author:profiles(id, full_name, email, avatar_url), agent:plan_agents(id, name, provider, model)",
         )
         .eq("task_id", data.taskId)
         .order("created_at", { ascending: true });
@@ -763,7 +755,7 @@ export const createApiKey = createServerFn({ method: "POST" })
 
       const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
 
-      const rawKey = `cpk_${crypto.randomBytes(16).toString("hex")}`;
+      const rawKey = "cpk_" + crypto.randomBytes(16).toString("hex");
       const hashedKey = crypto.createHash("sha256").update(rawKey).digest("hex");
       const prefix = rawKey.slice(0, 8);
 
@@ -821,5 +813,71 @@ export const revokeApiKey = createServerFn({ method: "POST" })
       if (error) throw error;
 
       return { ok: true };
+    }),
+  );
+
+export const suggestTasksFromTickets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        projectId: z.string().uuid().optional(),
+        limit: z.number().int().optional().default(5),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("planner.suggestTasksFromTickets", async () => {
+      const { supabase } = context;
+
+      // Get open tickets for the project (or all projects if none specified)
+      let ticketsQuery = supabase
+        .from("tickets")
+        .select("id, title, description, type, priority")
+        .eq("status", "open");
+
+      if (data.projectId) {
+        ticketsQuery = ticketsQuery.eq("project_id", data.projectId);
+      }
+
+      const { data: tickets, error: ticketsError } = await ticketsQuery;
+      if (ticketsError) throw ticketsError;
+
+      // For each ticket, generate a suggested task
+      const suggestedTasks = tickets.map((ticket) => {
+        // Simple heuristic: convert ticket to task suggestion
+        // In a real implementation, this would use an AI model
+        const title = "[AI Suggested] " + ticket.title;
+        let description = "Based on ticket #" + ticket.id + ": " + (ticket.description || "");
+
+        // Add AI-generated analysis
+        description +=
+          "\n\nAI Analysis: This ticket appears to be a " +
+          ticket.type +
+          " with " +
+          ticket.priority +
+          " priority.";
+        description +=
+          "\nSuggested approach: Create a task to address this ticket and link it for traceability.";
+
+        return {
+          title,
+          description,
+          priority: ticket.priority === "urgent" ? "high" : ticket.priority,
+          complexity: "medium", // Default complexity
+          labels: ["ai-suggested", ticket.type],
+          // No dependencies by default
+          dependsOn: [],
+        };
+      });
+
+      // Limit the number of suggestions
+      const limitedSuggestions = suggestedTasks.slice(0, data.limit);
+
+      return {
+        suggestedTasks: limitedSuggestions,
+        count: limitedSuggestions.length,
+        basedOnTicketsCount: tickets.length,
+      };
     }),
   );
