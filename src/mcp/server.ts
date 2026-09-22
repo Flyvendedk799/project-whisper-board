@@ -1,19 +1,43 @@
 /* eslint-disable no-restricted-syntax */
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "node:path";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-// Setup API connection
-const apiUrl = process.env.PLANNER_API_URL || (process.env.NODE_ENV === "production" ? "https://boared.online/api/planner" : "http://localhost:3000/api/planner");
-const apiKey = process.env.PLANNER_API_KEY;
+// Load environment variables: CWD -> Boared project root -> ~/.boared.env
+dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.join(os.homedir(), ".boared.env") });
 
-if (!apiKey) {
-  console.error("Missing required environment variable: PLANNER_API_KEY");
-  process.exit(1);
+// Setup API connection
+const apiUrl =
+  process.env.PLANNER_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:3000/api/planner"
+    : "https://boared.online/api/planner");
+function getApiKey(): string {
+  let key = process.env.PLANNER_API_KEY;
+  if (!key) {
+    dotenv.config();
+    dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+    dotenv.config({ path: path.join(os.homedir(), ".boared.env") });
+    key = process.env.PLANNER_API_KEY;
+  }
+  if (!key) {
+    throw new Error(
+      "Missing PLANNER_API_KEY. Please generate an API key in the Boared Planner UI (https://boared.online/planner) and set PLANNER_API_KEY in your .env or ~/.boared.env"
+    );
+  }
+  return key;
 }
 
 const fetchApi = async (path: string, options: RequestInit = {}): Promise<unknown> => {
+  const apiKey = getApiKey();
   const url = `${apiUrl}/${path.replace(/^\//, "")}`;
   const response = await fetch(url, {
     ...options,
