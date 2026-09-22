@@ -152,3 +152,88 @@ export const getPullRequestStatus = createServerFn({ method: "GET" })
       };
     }),
   );
+
+export const listGitHubIssues = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        repo: z.string(),
+        state: z.enum(["open", "closed", "all"]).optional().default("open"),
+        page: z.number().int().optional().default(1),
+        perPage: z.number().int().optional().default(30),
+      })
+      .parse(input),
+  )
+  .handler(({ data }) =>
+    guard("github.listIssues", async () => {
+      const octokit = getOctokit();
+
+      const [owner, repo] = data.repo.split("/");
+      if (!owner || !repo) {
+        throw new Error("Invalid repo format. Expected owner/repo.");
+      }
+
+      const response = await octokit.rest.issues.listForRepo({
+        owner,
+        repo,
+        state: data.state,
+        page: data.page,
+        per_page: data.perPage,
+      });
+
+      const issues = response.data.map((issue) => ({
+        id: issue.id,
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        createdAt: issue.created_at,
+        updatedAt: issue.updated_at,
+        user: {
+          login: issue.user?.login,
+          id: issue.user?.id,
+        },
+        labels: Array.isArray(issue.labels)
+          ? issue.labels
+              .filter(
+                (
+                  label,
+                ): label is {
+                  id: number;
+                  name: string;
+                  color: string;
+                  description?: string | null;
+                } =>
+                  typeof label === "object" &&
+                  label !== null &&
+                  "id" in label &&
+                  "name" in label &&
+                  "color" in label,
+              )
+              .map((label) => ({
+                id: label.id,
+                name: label.name,
+                color: label.color,
+                description: label.description ?? null,
+              }))
+          : [],
+        assignee:
+          typeof issue.assignee === "object" &&
+          issue.assignee !== null &&
+          "login" in issue.assignee &&
+          "id" in issue.assignee
+            ? {
+                login: issue.assignee.login,
+                id: issue.assignee.id,
+              }
+            : null,
+      }));
+
+      return {
+        issues,
+        totalCount: response.headers["x-total-ratelimit-remaining"]
+          ? parseInt(String(response.headers["x-total-ratelimit-remaining"]), 10)
+          : undefined,
+      };
+    }),
+  );
