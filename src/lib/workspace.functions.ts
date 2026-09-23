@@ -91,6 +91,7 @@ export const updateWorkspace = createServerFn({ method: "POST" })
         website: z.string().max(200).optional().nullable(),
         brandColor: z.string().max(32).optional().nullable(),
         invoicePrefix: z.string().min(1).max(12).optional(),
+        logoUrl: z.string().max(500).optional().nullable(),
       })
       .parse(input),
   )
@@ -106,6 +107,7 @@ export const updateWorkspace = createServerFn({ method: "POST" })
         _website: blank(data.website),
         _brand_color: blank(data.brandColor),
         _invoice_prefix: data.invoicePrefix ?? null,
+        _logo_url: data.logoUrl == null ? null : data.logoUrl,
       });
       if (error) throw error;
       return { workspace: requireFound(ws, "workspace") };

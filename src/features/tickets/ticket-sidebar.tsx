@@ -23,6 +23,7 @@ import { autoTriageTicket, summarizeTicket } from "@/lib/ai.functions";
 import { startTimer, stopTimer } from "@/lib/time.functions";
 import { ticketRelationsQuery } from "@/data/tickets";
 import { TicketPlanLink } from "@/features/tickets/ticket-plan-link";
+import { LabelEditor } from "@/features/tickets/label-editor";
 import { repoWebUrl } from "@/lib/github-url";
 import { runningTimerQuery, ticketTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { workspacePeopleQuery } from "@/data/projects";
@@ -95,6 +96,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
 
   return (
     <div className="space-y-4">
+      <LabelEditor ticket={ticket} />
       <Card className="space-y-3 p-4">
         <h2 className="text-sm font-medium">Manage</h2>
 

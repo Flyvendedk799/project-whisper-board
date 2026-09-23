@@ -39,6 +39,7 @@ export const Route = createFileRoute("/app/projects/")({
 function ProjectsPage() {
   const { isAdmin, workspaceId } = useAuth();
   const projects = useQuery(projectListQuery(workspaceId));
+  const [showArchived, setShowArchived] = useState(false);
 
   return (
     <>
@@ -49,6 +50,16 @@ function ProjectsPage() {
       />
 
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+        {isAdmin && (
+          <label className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+            />
+            Show archived
+          </label>
+        )}
         <QueryState
           query={projects}
           errorTitle="Couldn't load projects"
@@ -75,51 +86,67 @@ function ProjectsPage() {
             </Card>
           }
         >
-          {(data) => (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {data.map((project) => (
-                <Link
-                  key={project.id}
-                  to="/app/projects/$projectId"
-                  params={{ projectId: project.id }}
-                >
-                  <Card className="flex h-full flex-col p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
-                        {PROJECT_STATUS_LABEL[project.status]}
-                      </StatusPill>
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {project.progress}%
-                      </span>
-                    </div>
+          {(data) => {
+            const visible = showArchived
+              ? data
+              : data.filter((project) => project.status !== "archived");
+            if (visible.length === 0) {
+              return (
+                <Card>
+                  <EmptyState
+                    icon={FolderKanban}
+                    title="No active projects"
+                    description="Archived projects are hidden. Turn on “Show archived” to find them."
+                  />
+                </Card>
+              );
+            }
+            return (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {visible.map((project) => (
+                  <Link
+                    key={project.id}
+                    to="/app/projects/$projectId"
+                    params={{ projectId: project.id }}
+                  >
+                    <Card className="flex h-full flex-col p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
+                          {PROJECT_STATUS_LABEL[project.status]}
+                        </StatusPill>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {project.progress}%
+                        </span>
+                      </div>
 
-                    <h2 className="font-display text-xl">{project.title}</h2>
-                    {project.organization && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {project.organization.name}
-                      </p>
-                    )}
-                    {project.description && (
-                      <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">
-                        {project.description}
-                      </p>
-                    )}
+                      <h2 className="font-display text-xl">{project.title}</h2>
+                      {project.organization && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {project.organization.name}
+                        </p>
+                      )}
+                      {project.description && (
+                        <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">
+                          {project.description}
+                        </p>
+                      )}
 
-                    <ProgressBar
-                      value={project.progress}
-                      label={`${project.title} progress`}
-                      className="mt-4"
-                    />
-                    {project.end_date && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Target {formatDate(project.end_date)}
-                      </p>
-                    )}
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          )}
+                      <ProgressBar
+                        value={project.progress}
+                        label={`${project.title} progress`}
+                        className="mt-4"
+                      />
+                      {project.end_date && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Target {formatDate(project.end_date)}
+                        </p>
+                      )}
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            );
+          }}
         </QueryState>
       </div>
     </>

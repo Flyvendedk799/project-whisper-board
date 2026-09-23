@@ -14,18 +14,24 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ApiV1RouteImport } from './routes/api.v1'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppCreateWorkspaceRouteImport } from './routes/app.create-workspace'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
+import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppPlannerRouteImport } from './routes/app.planner'
 import { Route as AppReportRouteImport } from './routes/app.report'
+import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppTeamRouteImport } from './routes/app.team'
+import { Route as AppTimeRouteImport } from './routes/app.time'
 import { Route as AppTriageRouteImport } from './routes/app.triage'
 import { Route as InviteAcceptRouteImport } from './routes/invite.accept'
 import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
-import { Route as ApiV1RouteImport } from './routes/api.v1'
 import { Route as ApiV1SplatRouteImport } from './routes/api.v1.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
+import { Route as AppOrganizationsIndexRouteImport } from './routes/app.organizations.index'
+import { Route as AppOrganizationsOrgIdRouteImport } from './routes/app.organizations.$orgId'
 import { Route as AppPlannerIndexRouteImport } from './routes/app.planner.index'
 import { Route as AppPlannerPlanIdRouteImport } from './routes/app.planner.$planId'
 import { Route as AppProjectsIndexRouteImport } from './routes/app.projects.index'
@@ -58,6 +64,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1Route = ApiV1RouteImport.update({
+  id: '/api/v1',
+  path: '/api/v1',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -73,6 +84,11 @@ const AppInboxRoute = AppInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPlannerRoute = AppPlannerRouteImport.update({
   id: '/planner',
   path: '/planner',
@@ -83,9 +99,24 @@ const AppReportRoute = AppReportRouteImport.update({
   path: '/report',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTeamRoute = AppTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTimeRoute = AppTimeRouteImport.update({
+  id: '/time',
+  path: '/time',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTriageRoute = AppTriageRouteImport.update({
@@ -103,20 +134,25 @@ const ApiPlannerSplatRoute = ApiPlannerSplatRouteImport.update({
   path: '/api/planner/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiV1Route = ApiV1RouteImport.update({
-  id: '/api/v1',
-  path: '/api/v1',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
-  id: '/api/v1/$',
-  path: '/api/v1/$',
-  getParentRoute: () => rootRouteImport,
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => ApiV1Route,
 } as any)
 const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   id: '/api/webhooks/stripe',
   path: '/api/webhooks/stripe',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppOrganizationsIndexRoute = AppOrganizationsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOrganizationsRoute,
+} as any)
+const AppOrganizationsOrgIdRoute = AppOrganizationsOrgIdRouteImport.update({
+  id: '/$orgId',
+  path: '/$orgId',
+  getParentRoute: () => AppOrganizationsRoute,
 } as any)
 const AppPlannerIndexRoute = AppPlannerIndexRouteImport.update({
   id: '/',
@@ -155,21 +191,27 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/v1': typeof ApiV1RouteWithChildren
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/organizations': typeof AppOrganizationsRouteWithChildren
   '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
+  '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/team': typeof AppTeamRoute
+  '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
-  '/api/v1': typeof ApiV1Route
   '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/organizations/': typeof AppOrganizationsIndexRoute
   '/app/planner/': typeof AppPlannerIndexRoute
   '/app/projects/': typeof AppProjectsIndexRoute
   '/app/tickets/': typeof AppTicketsIndexRoute
@@ -179,20 +221,25 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/v1': typeof ApiV1RouteWithChildren
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/report': typeof AppReportRoute
+  '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/team': typeof AppTeamRoute
+  '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/app': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
-  '/api/v1': typeof ApiV1Route
   '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/organizations': typeof AppOrganizationsIndexRoute
   '/app/planner': typeof AppPlannerIndexRoute
   '/app/projects': typeof AppProjectsIndexRoute
   '/app/tickets': typeof AppTicketsIndexRoute
@@ -204,21 +251,27 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/v1': typeof ApiV1RouteWithChildren
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/organizations': typeof AppOrganizationsRouteWithChildren
   '/app/planner': typeof AppPlannerRouteWithChildren
   '/app/report': typeof AppReportRoute
+  '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
+  '/app/team': typeof AppTeamRoute
+  '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
-  '/api/v1': typeof ApiV1Route
   '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/app/tickets/$ticketId': typeof AppTicketsTicketIdRoute
+  '/app/organizations/': typeof AppOrganizationsIndexRoute
   '/app/planner/': typeof AppPlannerIndexRoute
   '/app/projects/': typeof AppProjectsIndexRoute
   '/app/tickets/': typeof AppTicketsIndexRoute
@@ -231,21 +284,27 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/api/v1'
     | '/app/create-workspace'
     | '/app/inbox'
+    | '/app/organizations'
     | '/app/planner'
     | '/app/report'
+    | '/app/reports'
     | '/app/settings'
+    | '/app/team'
+    | '/app/time'
     | '/app/triage'
     | '/invite/accept'
     | '/app/'
-  | '/api/planner/$'
-  | '/api/v1'
-  | '/api/v1/$'
-  | '/api/webhooks/stripe'
+    | '/api/planner/$'
+    | '/api/v1/$'
+    | '/api/webhooks/stripe'
+    | '/app/organizations/$orgId'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/organizations/'
     | '/app/planner/'
     | '/app/projects/'
     | '/app/tickets/'
@@ -255,20 +314,25 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/api/v1'
     | '/app/create-workspace'
     | '/app/inbox'
     | '/app/report'
+    | '/app/reports'
     | '/app/settings'
+    | '/app/team'
+    | '/app/time'
     | '/app/triage'
     | '/invite/accept'
     | '/app'
-  | '/api/planner/$'
-  | '/api/v1'
-  | '/api/v1/$'
-  | '/api/webhooks/stripe'
+    | '/api/planner/$'
+    | '/api/v1/$'
+    | '/api/webhooks/stripe'
+    | '/app/organizations/$orgId'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/organizations'
     | '/app/planner'
     | '/app/projects'
     | '/app/tickets'
@@ -279,21 +343,27 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/api/v1'
     | '/app/create-workspace'
     | '/app/inbox'
+    | '/app/organizations'
     | '/app/planner'
     | '/app/report'
+    | '/app/reports'
     | '/app/settings'
+    | '/app/team'
+    | '/app/time'
     | '/app/triage'
     | '/invite/accept'
     | '/app/'
-  | '/api/planner/$'
-  | '/api/v1'
-  | '/api/v1/$'
-  | '/api/webhooks/stripe'
+    | '/api/planner/$'
+    | '/api/v1/$'
+    | '/api/webhooks/stripe'
+    | '/app/organizations/$orgId'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
+    | '/app/organizations/'
     | '/app/planner/'
     | '/app/projects/'
     | '/app/tickets/'
@@ -305,10 +375,9 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiV1Route: typeof ApiV1RouteWithChildren
   InviteAcceptRoute: typeof InviteAcceptRoute
   ApiPlannerSplatRoute: typeof ApiPlannerSplatRoute
-  ApiV1Route: typeof ApiV1Route
-  ApiV1SplatRoute: typeof ApiV1SplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
 
@@ -349,6 +418,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1': {
+      id: '/api/v1'
+      path: '/api/v1'
+      fullPath: '/api/v1'
+      preLoaderRoute: typeof ApiV1RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/': {
       id: '/app/'
       path: '/'
@@ -370,6 +446,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/organizations': {
+      id: '/app/organizations'
+      path: '/organizations'
+      fullPath: '/app/organizations'
+      preLoaderRoute: typeof AppOrganizationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/planner': {
       id: '/app/planner'
       path: '/planner'
@@ -384,11 +467,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/reports': {
+      id: '/app/reports'
+      path: '/reports'
+      fullPath: '/app/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/settings': {
       id: '/app/settings'
       path: '/settings'
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/team': {
+      id: '/app/team'
+      path: '/team'
+      fullPath: '/app/team'
+      preLoaderRoute: typeof AppTeamRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/time': {
+      id: '/app/time'
+      path: '/time'
+      fullPath: '/app/time'
+      preLoaderRoute: typeof AppTimeRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/triage': {
@@ -412,19 +516,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPlannerSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/v1': {
-      id: '/api/v1'
-      path: '/api/v1'
-      fullPath: '/api/v1'
-      preLoaderRoute: typeof ApiV1RouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/v1/$': {
       id: '/api/v1/$'
-      path: '/api/v1/$'
+      path: '/$'
       fullPath: '/api/v1/$'
       preLoaderRoute: typeof ApiV1SplatRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ApiV1Route
     }
     '/api/webhooks/stripe': {
       id: '/api/webhooks/stripe'
@@ -432,6 +529,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/webhooks/stripe'
       preLoaderRoute: typeof ApiWebhooksStripeRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/app/organizations/': {
+      id: '/app/organizations/'
+      path: '/'
+      fullPath: '/app/organizations/'
+      preLoaderRoute: typeof AppOrganizationsIndexRouteImport
+      parentRoute: typeof AppOrganizationsRoute
+    }
+    '/app/organizations/$orgId': {
+      id: '/app/organizations/$orgId'
+      path: '/$orgId'
+      fullPath: '/app/organizations/$orgId'
+      preLoaderRoute: typeof AppOrganizationsOrgIdRouteImport
+      parentRoute: typeof AppOrganizationsRoute
     }
     '/app/planner/': {
       id: '/app/planner/'
@@ -478,6 +589,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppOrganizationsRouteChildren {
+  AppOrganizationsOrgIdRoute: typeof AppOrganizationsOrgIdRoute
+  AppOrganizationsIndexRoute: typeof AppOrganizationsIndexRoute
+}
+
+const AppOrganizationsRouteChildren: AppOrganizationsRouteChildren = {
+  AppOrganizationsOrgIdRoute: AppOrganizationsOrgIdRoute,
+  AppOrganizationsIndexRoute: AppOrganizationsIndexRoute,
+}
+
+const AppOrganizationsRouteWithChildren =
+  AppOrganizationsRoute._addFileChildren(AppOrganizationsRouteChildren)
+
 interface AppPlannerRouteChildren {
   AppPlannerPlanIdRoute: typeof AppPlannerPlanIdRoute
   AppPlannerIndexRoute: typeof AppPlannerIndexRoute
@@ -495,9 +619,13 @@ const AppPlannerRouteWithChildren = AppPlannerRoute._addFileChildren(
 interface AppRouteChildren {
   AppCreateWorkspaceRoute: typeof AppCreateWorkspaceRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppOrganizationsRoute: typeof AppOrganizationsRouteWithChildren
   AppPlannerRoute: typeof AppPlannerRouteWithChildren
   AppReportRoute: typeof AppReportRoute
+  AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppTeamRoute: typeof AppTeamRoute
+  AppTimeRoute: typeof AppTimeRoute
   AppTriageRoute: typeof AppTriageRoute
   AppIndexRoute: typeof AppIndexRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
@@ -509,9 +637,13 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppCreateWorkspaceRoute: AppCreateWorkspaceRoute,
   AppInboxRoute: AppInboxRoute,
+  AppOrganizationsRoute: AppOrganizationsRouteWithChildren,
   AppPlannerRoute: AppPlannerRouteWithChildren,
   AppReportRoute: AppReportRoute,
+  AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppTeamRoute: AppTeamRoute,
+  AppTimeRoute: AppTimeRoute,
   AppTriageRoute: AppTriageRoute,
   AppIndexRoute: AppIndexRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
@@ -522,16 +654,25 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface ApiV1RouteChildren {
+  ApiV1SplatRoute: typeof ApiV1SplatRoute
+}
+
+const ApiV1RouteChildren: ApiV1RouteChildren = {
+  ApiV1SplatRoute: ApiV1SplatRoute,
+}
+
+const ApiV1RouteWithChildren = ApiV1Route._addFileChildren(ApiV1RouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiV1Route: ApiV1RouteWithChildren,
   InviteAcceptRoute: InviteAcceptRoute,
   ApiPlannerSplatRoute: ApiPlannerSplatRoute,
-  ApiV1Route: ApiV1Route,
-  ApiV1SplatRoute: ApiV1SplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport

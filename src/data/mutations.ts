@@ -56,6 +56,78 @@ export const createMilestone = (input: Insert<"milestones">) =>
 export const createTicketRow = (input: Insert<"tickets">) =>
   supabase.from("tickets").insert(input).select("id, ticket_number").single();
 
+export const updateOrganization = (input: {
+  id: string;
+  name: string;
+  website?: string | null;
+  notes?: string | null;
+  logoUrl?: string | null;
+}) =>
+  supabase
+    .from("organizations")
+    .update({
+      name: input.name,
+      website: input.website ?? null,
+      notes: input.notes ?? null,
+      logo_url: input.logoUrl ?? null,
+    })
+    .eq("id", input.id)
+    .select("*")
+    .single();
+
+export const deleteOrganization = (input: { id: string }) =>
+  supabase.from("organizations").delete().eq("id", input.id).select("id");
+
+export const reassignOrganizationProjects = (input: { fromId: string; toId: string }) =>
+  supabase
+    .from("projects")
+    .update({ organization_id: input.toId })
+    .eq("organization_id", input.fromId)
+    .select("id");
+
+export const saveSlaPolicy = (input: {
+  workspaceId: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  firstResponseMinutes: number;
+  resolutionMinutes: number;
+}) =>
+  supabase
+    .from("sla_policies")
+    .upsert(
+      {
+        workspace_id: input.workspaceId,
+        priority: input.priority,
+        first_response_minutes: input.firstResponseMinutes,
+        resolution_minutes: input.resolutionMinutes,
+      },
+      { onConflict: "workspace_id,priority" },
+    )
+    .select("*")
+    .single();
+
+export const upsertWorkspaceLabel = (input: {
+  workspaceId: string;
+  name: string;
+  color: string;
+  description?: string | null;
+}) =>
+  supabase
+    .from("workspace_labels")
+    .upsert(
+      {
+        workspace_id: input.workspaceId,
+        name: input.name,
+        color: input.color,
+        description: input.description ?? null,
+      },
+      { onConflict: "workspace_id,name" },
+    )
+    .select("*")
+    .single();
+
+export const deleteWorkspaceLabel = (input: { id: string }) =>
+  supabase.from("workspace_labels").delete().eq("id", input.id).select("id");
+
 export const updateProfile = (input: { id: string; fullName: string }) =>
   supabase
     .from("profiles")

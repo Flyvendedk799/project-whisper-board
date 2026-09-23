@@ -39,6 +39,12 @@ export const startTimer = createServerFn({ method: "POST" })
         throw new AppError("no_project", "Pick a ticket or a project to track time against.");
       }
 
+      const { data: project } = await supabase
+        .from("projects")
+        .select("hourly_rate_cents")
+        .eq("id", projectId)
+        .maybeSingle();
+
       const { data: entry, error } = await supabase
         .from("time_entries")
         .insert({
@@ -46,6 +52,7 @@ export const startTimer = createServerFn({ method: "POST" })
           ticket_id: data.ticketId ?? null,
           user_id: userId,
           note: data.note ?? null,
+          rate_cents: project?.hourly_rate_cents ?? null,
         })
         .select("id, started_at")
         .single();
@@ -117,6 +124,12 @@ export const logTime = createServerFn({ method: "POST" })
       const endedAt = data.endedAt ? new Date(data.endedAt) : new Date();
       const startedAt = new Date(endedAt.getTime() - data.minutes * 60_000);
 
+      const { data: project } = await context.supabase
+        .from("projects")
+        .select("hourly_rate_cents")
+        .eq("id", data.projectId)
+        .maybeSingle();
+
       const { data: entry, error } = await context.supabase
         .from("time_entries")
         .insert({
@@ -127,6 +140,7 @@ export const logTime = createServerFn({ method: "POST" })
           ended_at: endedAt.toISOString(),
           note: data.note ?? null,
           billable: data.billable,
+          rate_cents: data.billable ? (project?.hourly_rate_cents ?? null) : null,
         })
         .select("id, duration_minutes")
         .single();
@@ -156,6 +170,74 @@ export const deleteTimeEntry = createServerFn({ method: "POST" })
       }
 
       const { error } = await context.supabase.from("time_entries").delete().eq("id", data.entryId);
+      if (error) throw error;
+      return { ok: true };
+    }),
+  );
+
+export const updateTimeEntry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        entryId: z.string().uuid(),
+        note: z.string().max(500).nullable().optional(),
+        billable: z.boolean().optional(),
+        minutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(24 * 60)
+          .optional(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("time.update", async () => {
+      const { data: existing } = await context.supabase
+        .from("time_entries")
+        .select("id, invoice_id, started_at, ended_at, project_id, rate_cents, billable")
+        .eq("id", data.entryId)
+        .maybeSingle();
+      const entry = requireFound(existing, "time entry");
+      if (entry.invoice_id) {
+        throw new AppError(
+          "already_invoiced",
+          "That time is already on an invoice. Void the invoice first.",
+        );
+      }
+
+      const billable = data.billable ?? entry.billable;
+      let rate = entry.rate_cents;
+      if (billable && rate == null) {
+        const { data: project } = await context.supabase
+          .from("projects")
+          .select("hourly_rate_cents")
+          .eq("id", entry.project_id)
+          .maybeSingle();
+        rate = project?.hourly_rate_cents ?? null;
+      }
+      if (!billable) rate = null;
+
+      let endedAt = entry.ended_at;
+      if (data.minutes != null) {
+        if (!entry.ended_at) {
+          throw new AppError("timer_running", "Stop the timer before changing its length.");
+        }
+        endedAt = new Date(
+          new Date(entry.started_at).getTime() + data.minutes * 60_000,
+        ).toISOString();
+      }
+
+      const { error } = await context.supabase
+        .from("time_entries")
+        .update({
+          ...(data.note !== undefined ? { note: data.note } : {}),
+          ...(data.billable !== undefined ? { billable } : {}),
+          rate_cents: rate,
+          ...(data.minutes != null ? { ended_at: endedAt } : {}),
+        })
+        .eq("id", entry.id);
       if (error) throw error;
       return { ok: true };
     }),

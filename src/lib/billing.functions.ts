@@ -74,6 +74,7 @@ export const createQuote = createServerFn({ method: "POST" })
         title: z.string().min(1).max(200),
         currency: z.string().length(3).default("USD"),
         notes: z.string().max(5000).optional(),
+        validUntil: z.string().optional(),
         lines: z.array(lineSchema).min(1).max(50),
       })
       .parse(input),
@@ -90,6 +91,7 @@ export const createQuote = createServerFn({ method: "POST" })
           title: data.title,
           currency: data.currency,
           notes: data.notes ?? null,
+          valid_until: data.validUntil || null,
           subtotal_cents: subtotal,
           total_cents: subtotal,
         })

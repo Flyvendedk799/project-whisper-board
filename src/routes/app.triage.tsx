@@ -20,6 +20,7 @@ import { bulkUpdateTickets, deleteView, saveView } from "@/lib/tickets.functions
 import { EMPTY_FILTERS, isFiltered, ticketFiltersSchema, type TicketFilters } from "@/data/filters";
 import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
 import { projectListQuery, workspacePeopleQuery } from "@/data/projects";
+import { workspaceLabelsQuery } from "@/data/labels";
 import { savedViewsQuery } from "@/data/views";
 import { qk } from "@/data/keys";
 import type { TicketPriority, TicketStatus } from "@/data/enums";
@@ -74,6 +75,7 @@ function TriagePage() {
   const counts = useQuery(ticketCountsQuery(viewerId, workspaceId));
   const projects = useQuery(projectListQuery(workspaceId));
   const people = useQuery(workspacePeopleQuery(workspaceId));
+  const labelPalette = useQuery(workspaceLabelsQuery(workspaceId));
   const views = useQuery(savedViewsQuery());
 
   const rows = useMemo(
@@ -247,6 +249,10 @@ function TriagePage() {
             onChange={(next) => setFilters(next, undefined)}
             projects={projects.data ?? []}
             people={people.data ?? []}
+            labelOptions={(labelPalette.data ?? []).map((label) => ({
+              name: label.name,
+              color: label.color,
+            }))}
           />
 
           <BulkBar

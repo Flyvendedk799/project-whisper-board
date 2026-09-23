@@ -10,7 +10,7 @@ import { planListQuery } from "@/data/planner";
 import { PLAN_STATUS_TONE, type PlanListItem } from "@/data";
 
 export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
-  const { workspaceId } = useAuth();
+  const { workspaceId, isAdmin } = useAuth();
   const plansQuery = useQuery(planListQuery(workspaceId, projectId));
 
   return (
@@ -21,19 +21,48 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
         <EmptyState
           icon={BrainCircuit}
           title="No AI Plans yet"
-          description="Create an AI plan to orchestrate agent tasks for this project."
+          description={
+            isAdmin
+              ? "Create an AI plan to orchestrate agent tasks for this project."
+              : "When your agency plans work here, progress will show up on this tab."
+          }
           action={
-            <Button asChild>
-              <Link to="/app/planner" search={{ project: projectId, create: true }}>
-                Create plan for this project
-              </Link>
-            </Button>
+            isAdmin ? (
+              <Button asChild>
+                <Link to="/app/planner" search={{ project: projectId, create: true }}>
+                  Create plan for this project
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
       }
     >
       {(data) => {
         const rows = data.plans as PlanListItem[];
+        if (!isAdmin) {
+          const tasks = rows.reduce((total, plan) => total + (plan.task_count ?? 0), 0);
+          const done = rows.reduce((total, plan) => total + (plan.done_task_count ?? 0), 0);
+          const percent = tasks === 0 ? 0 : Math.round((100 * done) / tasks);
+          return (
+            <Card className="space-y-2 p-5">
+              <h3 className="font-display text-xl">Plan progress</h3>
+              <p className="text-sm text-muted-foreground">
+                {done} of {tasks} planned tasks are done ({percent}%).
+              </p>
+              <ul className="space-y-2">
+                {rows.map((plan) => (
+                  <li key={plan.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate">{plan.title}</span>
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {plan.done_task_count ?? 0}/{plan.task_count ?? 0}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          );
+        }
         return (
           <div className="space-y-4">
             <div className="flex justify-end">

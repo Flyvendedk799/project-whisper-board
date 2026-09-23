@@ -927,6 +927,7 @@ export type Database = {
           subtotal_cents: number
           title: string
           total_cents: number
+          valid_until: string | null
           workspace_id: string
         }
         Insert: {
@@ -941,6 +942,7 @@ export type Database = {
           subtotal_cents?: number
           title: string
           total_cents?: number
+          valid_until?: string | null
           workspace_id?: string
         }
         Update: {
@@ -955,6 +957,7 @@ export type Database = {
           subtotal_cents?: number
           title?: string
           total_cents?: number
+          valid_until?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -1637,6 +1640,41 @@ export type Database = {
           },
         ]
       }
+      workspace_labels: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_labels_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           brand_color: string | null
@@ -2221,6 +2259,7 @@ export type Database = {
           _website?: string | null
           _brand_color?: string | null
           _invoice_prefix?: string | null
+          _logo_url?: string | null
         }
         Returns: Database["public"]["Tables"]["workspaces"]["Row"]
       }

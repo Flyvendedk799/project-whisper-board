@@ -3,7 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bug,
+  BarChart3,
   BrainCircuit,
+  Building2,
+  Clock,
   FolderKanban,
   Home,
   Inbox,
@@ -14,6 +17,7 @@ import {
   Settings,
   Sun,
   Ticket,
+  Users,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -198,13 +202,43 @@ export function CommandPalette() {
               <CommandShortcut>g i</CommandShortcut>
             </CommandItem>
             {isAdmin && (
-              <CommandItem
-                value="planner"
-                onSelect={() => run(() => void navigate({ to: "/app/planner" }))}
-              >
-                <BrainCircuit className="mr-2 h-4 w-4" aria-hidden="true" />
-                AI Planner
-              </CommandItem>
+              <>
+                <CommandItem
+                  value="clients"
+                  onSelect={() => run(() => void navigate({ to: "/app/organizations" }))}
+                >
+                  <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Clients
+                </CommandItem>
+                <CommandItem
+                  value="time"
+                  onSelect={() => run(() => void navigate({ to: "/app/time" }))}
+                >
+                  <Clock className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Time
+                </CommandItem>
+                <CommandItem
+                  value="reports"
+                  onSelect={() => run(() => void navigate({ to: "/app/reports" }))}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Reports
+                </CommandItem>
+                <CommandItem
+                  value="team"
+                  onSelect={() => run(() => void navigate({ to: "/app/team" }))}
+                >
+                  <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Team
+                </CommandItem>
+                <CommandItem
+                  value="planner"
+                  onSelect={() => run(() => void navigate({ to: "/app/planner" }))}
+                >
+                  <BrainCircuit className="mr-2 h-4 w-4" aria-hidden="true" />
+                  AI Planner
+                </CommandItem>
+              </>
             )}
             <CommandItem
               value="settings"

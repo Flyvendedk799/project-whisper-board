@@ -20,7 +20,7 @@ export const inviteClient = createServerFn({ method: "POST" })
         workspaceId: z.string().uuid(),
         projectId: z.string().uuid().optional(),
         fullName: z.string().min(1).max(120).optional(),
-        role: z.enum(["client", "client_admin"]).default("client"),
+        role: z.enum(["admin", "client", "client_admin"]).default("client"),
       })
       .parse(input),
   )
@@ -28,9 +28,8 @@ export const inviteClient = createServerFn({ method: "POST" })
     const a = admin();
     const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
 
-    // Only workspace admins may invite another client_admin.
-    if (data.role === "client_admin" && inviterRole !== "admin") {
-      throw new Error("Forbidden: only admins can invite client leads");
+    if (data.role !== "client" && inviterRole !== "admin") {
+      throw new Error("Forbidden: only admins can invite that role");
     }
 
     const origin = process.env.SITE_URL || "";
@@ -152,6 +151,112 @@ export const setProjectMemberRole = createServerFn({ method: "POST" })
         .eq("project_id", data.projectId)
         .eq("user_id", data.userId);
     }
+
+    return { ok: true };
+  });
+
+export const setWorkspaceMemberRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+        role: z.enum(["admin", "client", "client_admin"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    await assertWorkspaceAdmin(context.userId, data.workspaceId);
+
+    const { count } = await a
+      .from("workspace_members")
+      .select("user_id", { count: "exact", head: true })
+      .eq("workspace_id", data.workspaceId)
+      .eq("role", "admin");
+
+    const { data: current } = await a
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (!current) throw new Error("That person is not in this workspace");
+
+    if (current.role === "admin" && data.role !== "admin" && (count ?? 0) <= 1) {
+      throw new Error("This workspace needs at least one admin");
+    }
+
+    await a
+      .from("workspace_members")
+      .update({ role: data.role })
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+
+    await a
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .eq("workspace_id", data.workspaceId);
+    await a.from("user_roles").insert({
+      user_id: data.userId,
+      workspace_id: data.workspaceId,
+      role: data.role,
+    });
+
+    return { ok: true };
+  });
+
+export const removeWorkspaceMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    await assertWorkspaceAdmin(context.userId, data.workspaceId);
+    if (data.userId === context.userId) {
+      throw new Error("You can't remove yourself");
+    }
+
+    const { data: current } = await a
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (!current) throw new Error("That person is not in this workspace");
+
+    if (current.role === "admin") {
+      const { count } = await a
+        .from("workspace_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("workspace_id", data.workspaceId)
+        .eq("role", "admin");
+      if ((count ?? 0) <= 1) throw new Error("This workspace needs at least one admin");
+    }
+
+    await a
+      .from("project_members")
+      .delete()
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+    await a
+      .from("user_roles")
+      .delete()
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+    await a
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
 
     return { ok: true };
   });
