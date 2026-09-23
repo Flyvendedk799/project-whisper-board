@@ -86,7 +86,9 @@ export type TicketListRow = Pick<
 };
 
 export type TicketDetail = Ticket & {
-  project: ProjectRef | null;
+  project:
+    | (ProjectRef & { github_repo: string | null; github_default_branch: string | null })
+    | null;
   reporter: PersonRef | null;
   assignee: PersonRef | null;
 };
@@ -113,7 +115,12 @@ export type RelationWithTicket = TicketRelation & {
 
 // AI Planner composite types
 export type PlanAgentRef = Pick<PlanAgent, "id" | "name" | "provider" | "model">;
-export type PlanProjectRef = Pick<Project, "id" | "title"> | null;
+export type PlanProjectRef =
+  | (Pick<Project, "id" | "title"> & {
+      github_repo?: string | null;
+      github_default_branch?: string | null;
+    })
+  | null;
 export type PlanListItem = Plan & {
   project?: PlanProjectRef;
   section_count?: number;
@@ -127,7 +134,7 @@ export type PlanWithSections = Plan & {
 export type TaskWithAgent = PlanTask & {
   assigned_agent: PlanAgentRef | null;
   assigned_user?: PersonRef | null;
-  ticket?: Pick<Ticket, "id" | "ticket_number" | "title"> | null;
+  ticket?: Pick<Ticket, "id" | "ticket_number" | "title" | "status"> | null;
 };
 export type TaskWithComments = PlanTask & {
   plan_task_comments: (PlanTaskComment & {

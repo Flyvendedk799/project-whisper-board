@@ -90,7 +90,8 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
               onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-1 text-[10px] text-muted-foreground/80 underline-offset-2 hover:underline"
             >
-              Resolves #{task.ticket.ticket_number}
+              #{task.ticket.ticket_number}
+              {task.ticket.status ? ` · ${task.ticket.status.replace(/_/g, " ")}` : ""}
             </Link>
           )}
           {task.ticket_id && !task.ticket && (

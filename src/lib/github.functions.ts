@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { AppError } from "@/lib/errors";
 import { guard, requireFound } from "@/lib/server-errors";
+import { parsePullRequestUrl, parseRepoSlug } from "@/lib/github-url";
 import { Octokit } from "octokit";
 
 function getOctokit() {
@@ -235,5 +237,86 @@ export const listGitHubIssues = createServerFn({ method: "GET" })
           ? parseInt(String(response.headers["x-total-ratelimit-remaining"]), 10)
           : undefined,
       };
+    }),
+  );
+
+export const setProjectRepository = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        projectId: z.string().uuid(),
+        githubRepo: z.string().max(200).nullable(),
+        githubDefaultBranch: z.string().max(200).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("projects.setRepository", async () => {
+      const repo = data.githubRepo?.trim() || null;
+      if (repo && !parseRepoSlug(repo)) {
+        throw new AppError("github_repo", "Use owner/name, for example acme/app.");
+      }
+
+      const { data: project } = await context.supabase
+        .from("projects")
+        .select("id")
+        .eq("id", data.projectId)
+        .maybeSingle();
+      requireFound(project, "project");
+
+      const { error } = await context.supabase
+        .from("projects")
+        .update({
+          github_repo: repo,
+          ...(data.githubDefaultBranch !== undefined && {
+            github_default_branch: data.githubDefaultBranch?.trim() || null,
+          }),
+        })
+        .eq("id", data.projectId);
+      if (error) throw error;
+      return { ok: true, githubRepo: repo };
+    }),
+  );
+
+export const refreshTaskPullRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ taskId: z.string().uuid() }).parse(input))
+  .handler(({ data, context }) =>
+    guard("github.refreshPullRequest", async () => {
+      const { supabase } = context;
+      const { data: taskRow } = await supabase
+        .from("plan_tasks")
+        .select("id, pr_url, pr_number")
+        .eq("id", data.taskId)
+        .maybeSingle();
+      const task = requireFound(taskRow, "task");
+      if (!task.pr_url) {
+        throw new AppError("github_pr", "This task has no pull request yet.");
+      }
+      const parsed = parsePullRequestUrl(task.pr_url);
+      if (!parsed) {
+        throw new AppError("github_pr", "That pull request link is not a GitHub URL.");
+      }
+
+      const octokit = getOctokit();
+      const { data: pr } = await octokit.rest.pulls.get({
+        owner: parsed.owner,
+        repo: parsed.repo,
+        pull_number: parsed.number,
+      });
+      const prStatus = pr.merged ? "merged" : pr.state;
+
+      const { error } = await supabase
+        .from("plan_tasks")
+        .update({
+          pr_number: pr.number,
+          pr_url: pr.html_url,
+          pr_status: prStatus,
+        })
+        .eq("id", task.id);
+      if (error) throw error;
+
+      return { state: prStatus, merged: pr.merged, url: pr.html_url, number: pr.number };
     }),
   );

@@ -34,6 +34,7 @@ import { UpdatesTab } from "@/components/updates-tab";
 import { BillingTab } from "@/components/billing-tab";
 import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { ProjectAiPlansTab } from "@/features/projects/project-ai-plans";
+import { ProjectRepoControl } from "@/features/projects/project-repo";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
@@ -159,6 +160,13 @@ function ProjectPage() {
                 </StatusPill>
               )}
               <span className="text-muted-foreground">{p.progress}% complete</span>
+              {isAdmin && (
+                <ProjectRepoControl
+                  projectId={projectId}
+                  repo={p.github_repo}
+                  branch={p.github_default_branch}
+                />
+              )}
               <ProgressBar
                 value={p.progress}
                 label={`${p.title} progress`}

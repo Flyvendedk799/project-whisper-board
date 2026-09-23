@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { verifyApiKey } from "@/lib/api-auth";
+import { allowsPlanner } from "@/lib/api-scopes";
 import type { Database } from "@/integrations/supabase/types";
 
 // Helper to create Supabase service role client
@@ -36,7 +37,7 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
       });
     }
 
-    if (!auth.scopes.includes("planner")) {
+    if (!allowsPlanner(auth.scopes)) {
       return new Response(JSON.stringify({ error: "Forbidden: requires planner scope" }), {
         status: 403,
         headers: { "Content-Type": "application/json" },

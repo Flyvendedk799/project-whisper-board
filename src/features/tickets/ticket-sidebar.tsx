@@ -22,7 +22,8 @@ import { notifyTicketChanged } from "@/lib/notifications.functions";
 import { autoTriageTicket, summarizeTicket } from "@/lib/ai.functions";
 import { startTimer, stopTimer } from "@/lib/time.functions";
 import { ticketRelationsQuery } from "@/data/tickets";
-import { ticketTasksQuery } from "@/data/planner";
+import { TicketPlanLink } from "@/features/tickets/ticket-plan-link";
+import { repoWebUrl } from "@/lib/github-url";
 import { runningTimerQuery, ticketTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { workspacePeopleQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
@@ -306,50 +307,41 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
         )}
       </Card>
 
+      <ProjectRepoCard repo={ticket.project?.github_repo ?? null} projectId={ticket.project_id} />
       <RelationsCard ticketId={ticket.id} relations={relations.data ?? []} />
-      <TicketAiTasks ticketId={ticket.id} projectId={ticket.project_id} />
+      <TicketPlanLink ticketId={ticket.id} projectId={ticket.project_id} />
     </div>
   );
 }
 
-function TicketAiTasks({ ticketId, projectId }: { ticketId: string; projectId: string }) {
-  const tasksQuery = useQuery(ticketTasksQuery(ticketId));
-
-  if (!tasksQuery.data?.length) {
-    return null;
-  }
-
+function ProjectRepoCard({ repo, projectId }: { repo: string | null; projectId: string }) {
+  const href = repo ? repoWebUrl(repo) : null;
   return (
-    <Card className="space-y-3 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">AI Tasks</h2>
-        <Link
-          to="/app/planner"
-          search={{ project: projectId }}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+    <Card className="space-y-2 p-4">
+      <h2 className="text-sm font-medium">Repository</h2>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm underline underline-offset-2"
         >
-          View Planner
-        </Link>
-      </div>
-      <ul className="space-y-2">
-        {tasksQuery.data.map((task) => (
-          <li key={task.id} className="text-sm">
-            <Link
-              to="/app/planner/$planId"
-              params={{ planId: task.plan_id }}
-              className="group block rounded-md border p-2 transition-colors hover:bg-muted/50"
-            >
-              <div className="font-medium">{task.title}</div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                <StatusPill tone="default">{task.status}</StatusPill>
-                <span className="truncate">
-                  Plan: {task.plan && "title" in task.plan ? String(task.plan.title) : "—"}
-                </span>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+          {repo}
+        </a>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          This project has no repository yet.{" "}
+          <Link
+            to="/app/projects/$projectId"
+            params={{ projectId }}
+            search={{ tab: "tickets" }}
+            className="underline underline-offset-2"
+          >
+            Connect one
+          </Link>
+          .
+        </p>
+      )}
     </Card>
   );
 }
