@@ -802,6 +802,8 @@ export type Database = {
           currency: string
           description: string | null
           end_date: string | null
+          github_default_branch: string | null
+          github_repo: string | null
           hourly_rate_cents: number | null
           id: string
           organization_id: string | null
@@ -819,6 +821,8 @@ export type Database = {
           currency?: string
           description?: string | null
           end_date?: string | null
+          github_default_branch?: string | null
+          github_repo?: string | null
           hourly_rate_cents?: number | null
           id?: string
           organization_id?: string | null
@@ -836,6 +840,8 @@ export type Database = {
           currency?: string
           description?: string | null
           end_date?: string | null
+          github_default_branch?: string | null
+          github_repo?: string | null
           hourly_rate_cents?: number | null
           id?: string
           organization_id?: string | null

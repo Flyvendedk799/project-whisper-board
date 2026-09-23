@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bot, GitBranch } from "lucide-react";
+import { Bot, GitBranch, RefreshCw } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
-import { updateTask } from "@/lib/planner.functions";
+import { addTaskComment, updateTask } from "@/lib/planner.functions";
+import { refreshTaskPullRequest } from "@/lib/github.functions";
 import { planDetailQuery, taskCommentsQuery } from "@/data/planner";
 import { ticketSearchQuery } from "@/data/tickets";
 import { workspacePeopleQuery } from "@/data/projects";
@@ -51,6 +53,8 @@ export function PlanTaskDrawer({
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [commentBody, setCommentBody] = useState("");
   const [ticketTerm, setTicketTerm] = useState("");
   const [debouncedTicket, setDebouncedTicket] = useState("");
 
@@ -58,6 +62,7 @@ export function PlanTaskDrawer({
     if (!task) return;
     setTitle(task.title ?? "");
     setDescription(task.description ?? "");
+    setBranchName(task.branch_name ?? "");
   }, [task]);
 
   useEffect(() => {
@@ -73,6 +78,17 @@ export function PlanTaskDrawer({
   const update = useServerAction(useServerFn(updateTask), {
     label: "tasks.update",
     invalidate: [qk.plan(planId), qk.taskComments(taskId || "")],
+  });
+  const refreshPr = useServerAction(useServerFn(refreshTaskPullRequest), {
+    label: "github.refreshPullRequest",
+    success: (result) => `PR is ${result.state}`,
+    invalidate: [qk.plan(planId)],
+  });
+  const comment = useServerAction(useServerFn(addTaskComment), {
+    label: "comments.add",
+    success: "Comment added",
+    invalidate: [qk.taskComments(taskId || "")],
+    onSuccess: () => setCommentBody(""),
   });
 
   const handleUpdate = (fields: Record<string, unknown>) => {
@@ -236,36 +252,88 @@ export function PlanTaskDrawer({
               )}
             </div>
 
-            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
               <h4 className="flex items-center gap-2 font-medium">
                 <GitBranch className="h-4 w-4" /> GitHub connection
               </h4>
-              <div className="text-sm text-muted-foreground">
-                {task.branch_name ? `Branch ${task.branch_name}` : "No branch or PR linked."}
+              <div className="space-y-2">
+                <Label htmlFor="task-branch">Branch</Label>
+                <Input
+                  id="task-branch"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  onBlur={() => {
+                    if (branchName !== (task.branch_name ?? "")) {
+                      handleUpdate({ branchName: branchName.trim() || undefined });
+                    }
+                  }}
+                  placeholder="feature/…"
+                />
               </div>
+              {task.pr_url ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <a
+                    href={task.pr_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    PR #{task.pr_number}
+                    {task.pr_status ? ` · ${task.pr_status}` : ""}
+                  </a>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    disabled={refreshPr.busy}
+                    onClick={() => refreshPr.fire({ taskId: task.id })}
+                  >
+                    <RefreshCw className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                    Refresh
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No pull request linked yet.</p>
+              )}
             </div>
 
             <div className="mt-8 border-t pt-6">
               <h4 className="mb-4 font-medium">Comments</h4>
               {Array.isArray(commentsQuery.data?.comments) &&
               commentsQuery.data.comments.length > 0 ? (
-                <div className="space-y-4">
-                  {commentsQuery.data.comments.map((comment) => {
-                    const author = comment.author as
-                      | { full_name?: string | null }
-                      | null
-                      | undefined;
+                <div className="mb-4 space-y-4">
+                  {commentsQuery.data.comments.map((entry) => {
+                    const author = entry.author as { full_name?: string | null } | null | undefined;
                     return (
-                      <div key={comment.id} className="rounded-lg border p-3 text-sm">
+                      <div key={entry.id} className="rounded-lg border p-3 text-sm">
                         <div className="mb-1 font-medium">{author?.full_name ?? "Someone"}</div>
-                        <div>{comment.body}</div>
+                        <div>{entry.body}</div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">No comments yet.</div>
+                <div className="mb-4 text-sm text-muted-foreground">No comments yet.</div>
               )}
+              <form
+                className="space-y-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!taskId || !commentBody.trim()) return;
+                  comment.fire({ taskId, body: commentBody.trim() });
+                }}
+              >
+                <Textarea
+                  value={commentBody}
+                  onChange={(e) => setCommentBody(e.target.value)}
+                  placeholder="Leave a note for agents or teammates…"
+                  rows={3}
+                />
+                <Button type="submit" size="sm" disabled={comment.busy || !commentBody.trim()}>
+                  {comment.busy ? "Posting…" : "Add comment"}
+                </Button>
+              </form>
             </div>
           </div>
         )}

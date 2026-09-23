@@ -166,6 +166,10 @@ function describeEvent(event: EventWithActor): React.ReactNode {
       return to ? `estimated ${to} hours` : "removed the estimate";
     case "attached":
       return "attached a file";
+    case "planner_linked":
+      return to ? `added planner task “${to}”` : "linked a planner task";
+    case "planner_done":
+      return to ? `finished planner task “${to}”` : "finished the linked planner task";
     default:
       return event.kind.replace(/_/g, " ");
   }

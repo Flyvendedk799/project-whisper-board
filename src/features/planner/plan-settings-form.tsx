@@ -17,6 +17,7 @@ import { qk } from "@/data/keys";
 import { updatePlan } from "@/lib/planner.functions";
 import { projectListQuery } from "@/data/projects";
 import { useAuth } from "@/components/auth-provider";
+import { GitHubRepoField } from "@/features/github/repo-field";
 import { type PlanStatus, type PlanWithSections } from "@/data";
 
 export function PlanSettingsForm({
@@ -35,6 +36,7 @@ export function PlanSettingsForm({
   const [githubBase, setGithubBase] = useState(plan.github_base ?? "");
 
   const projectsQuery = useQuery(projectListQuery(workspaceId));
+  const selectedProject = projectsQuery.data?.find((project) => project.id === projectId);
 
   const save = useServerAction(useServerFn(updatePlan), {
     label: "plans.update",
@@ -52,8 +54,8 @@ export function PlanSettingsForm({
       description: description || undefined,
       status,
       projectId: projectId || undefined,
-      githubRepo: githubRepo || undefined,
-      githubBase: githubBase || undefined,
+      githubRepo: githubRepo.trim() || null,
+      githubBase: githubBase.trim() || null,
     });
   };
 
@@ -112,12 +114,23 @@ export function PlanSettingsForm({
 
       <div className="space-y-2">
         <Label htmlFor="githubRepo">GitHub Repository</Label>
-        <Input
-          id="githubRepo"
-          placeholder="owner/repo"
-          value={githubRepo}
-          onChange={(e) => setGithubRepo(e.target.value)}
-        />
+        <GitHubRepoField id="githubRepo" value={githubRepo} onChange={setGithubRepo} />
+        {selectedProject?.github_repo && selectedProject.github_repo !== githubRepo && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => {
+              setGithubRepo(selectedProject.github_repo ?? "");
+              if (!githubBase && selectedProject.github_default_branch) {
+                setGithubBase(selectedProject.github_default_branch);
+              }
+            }}
+          >
+            Use project repository ({selectedProject.github_repo})
+          </Button>
+        )}
       </div>
 
       <div className="space-y-2">

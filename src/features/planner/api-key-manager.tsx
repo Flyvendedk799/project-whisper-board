@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,7 +27,7 @@ import {
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import { apiKeysQuery } from "@/data/planner";
-import { createApiKey, revokeApiKey } from "@/lib/planner.functions";
+import { createApiKey, revokeApiKey, updateApiKeyScopes } from "@/lib/planner.functions";
 import { useAuth } from "@/components/auth-provider";
 
 export function ApiKeyManager() {
@@ -36,6 +37,7 @@ export function ApiKeyManager() {
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [scopes, setScopes] = useState<Array<"planner" | "account">>(["planner", "account"]);
 
   const create = useServerAction(useServerFn(createApiKey), {
     label: "apikeys.create",
@@ -56,7 +58,20 @@ export function ApiKeyManager() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !workspaceId) return;
-    create.fire({ name, workspaceId });
+    create.fire({ name, workspaceId, scopes });
+  };
+
+  const grantAccount = useServerAction(useServerFn(updateApiKeyScopes), {
+    label: "apikeys.updateScopes",
+    success: "Account access granted",
+    invalidate: [qk.apiKeys()],
+  });
+
+  const toggleScope = (scope: "planner" | "account", checked: boolean) => {
+    setScopes((current) => {
+      const next = checked ? [...current, scope] : current.filter((item) => item !== scope);
+      return next.length > 0 ? next : current;
+    });
   };
 
   const rows = keys.data?.keys ?? [];
@@ -66,7 +81,10 @@ export function ApiKeyManager() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium">API Keys</h3>
-          <p className="text-sm text-muted-foreground">Manage keys for agent access to the API.</p>
+          <p className="text-sm text-muted-foreground">
+            Planner keys reach <span className="font-mono">/api/planner</span>. Account keys also
+            reach projects, tickets, and plans at <span className="font-mono">/api/v1</span>.
+          </p>
         </div>
         <Button onClick={() => setIsCreating(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -80,6 +98,7 @@ export function ApiKeyManager() {
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Prefix</th>
+              <th className="px-4 py-3 font-medium">Access</th>
               <th className="px-4 py-3 font-medium">Created</th>
               <th className="px-4 py-3 font-medium">Last used</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -90,6 +109,29 @@ export function ApiKeyManager() {
               <tr key={k.id} className={k.revoked_at ? "opacity-50" : ""}>
                 <td className="px-4 py-3 font-medium">{k.name}</td>
                 <td className="px-4 py-3 font-mono text-muted-foreground">{k.key_prefix}...</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{(k.scopes ?? ["planner"]).join(", ")}</span>
+                    {!k.revoked_at && !(k.scopes ?? []).includes("account") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7"
+                        disabled={grantAccount.busy}
+                        onClick={() =>
+                          grantAccount.fire({
+                            keyId: k.id,
+                            scopes: [
+                              ...new Set([...(k.scopes ?? ["planner"]), "account"]),
+                            ] as Array<"planner" | "account">,
+                          })
+                        }
+                      >
+                        Grant account
+                      </Button>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {new Date(k.created_at).toLocaleDateString()}
                 </td>
@@ -115,7 +157,7 @@ export function ApiKeyManager() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   No API keys generated yet.
                 </td>
               </tr>
@@ -142,6 +184,23 @@ export function ApiKeyManager() {
                 autoFocus
               />
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Access</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={scopes.includes("planner")}
+                  onCheckedChange={(checked) => toggleScope("planner", checked === true)}
+                />
+                Planner — tasks on AI plans
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={scopes.includes("account")}
+                  onCheckedChange={(checked) => toggleScope("account", checked === true)}
+                />
+                Account — projects, tickets, and plans
+              </label>
+            </fieldset>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
                 Cancel

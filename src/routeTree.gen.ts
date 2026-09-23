@@ -23,6 +23,8 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTriageRouteImport } from './routes/app.triage'
 import { Route as InviteAcceptRouteImport } from './routes/invite.accept'
 import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
+import { Route as ApiV1RouteImport } from './routes/api.v1'
+import { Route as ApiV1SplatRouteImport } from './routes/api.v1.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as AppPlannerIndexRouteImport } from './routes/app.planner.index'
 import { Route as AppPlannerPlanIdRouteImport } from './routes/app.planner.$planId'
@@ -101,6 +103,16 @@ const ApiPlannerSplatRoute = ApiPlannerSplatRouteImport.update({
   path: '/api/planner/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1Route = ApiV1RouteImport.update({
+  id: '/api/v1',
+  path: '/api/v1',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
+  id: '/api/v1/$',
+  path: '/api/v1/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   id: '/api/webhooks/stripe',
   path: '/api/webhooks/stripe',
@@ -152,6 +164,8 @@ export interface FileRoutesByFullPath {
   '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
+  '/api/v1': typeof ApiV1Route
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -173,6 +187,8 @@ export interface FileRoutesByTo {
   '/invite/accept': typeof InviteAcceptRoute
   '/app': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
+  '/api/v1': typeof ApiV1Route
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -197,6 +213,8 @@ export interface FileRoutesById {
   '/invite/accept': typeof InviteAcceptRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
+  '/api/v1': typeof ApiV1Route
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/planner/$planId': typeof AppPlannerPlanIdRoute
   '/app/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -221,8 +239,10 @@ export interface FileRouteTypes {
     | '/app/triage'
     | '/invite/accept'
     | '/app/'
-    | '/api/planner/$'
-    | '/api/webhooks/stripe'
+  | '/api/planner/$'
+  | '/api/v1'
+  | '/api/v1/$'
+  | '/api/webhooks/stripe'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
@@ -242,8 +262,10 @@ export interface FileRouteTypes {
     | '/app/triage'
     | '/invite/accept'
     | '/app'
-    | '/api/planner/$'
-    | '/api/webhooks/stripe'
+  | '/api/planner/$'
+  | '/api/v1'
+  | '/api/v1/$'
+  | '/api/webhooks/stripe'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
@@ -265,8 +287,10 @@ export interface FileRouteTypes {
     | '/app/triage'
     | '/invite/accept'
     | '/app/'
-    | '/api/planner/$'
-    | '/api/webhooks/stripe'
+  | '/api/planner/$'
+  | '/api/v1'
+  | '/api/v1/$'
+  | '/api/webhooks/stripe'
     | '/app/planner/$planId'
     | '/app/projects/$projectId'
     | '/app/tickets/$ticketId'
@@ -283,6 +307,8 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   InviteAcceptRoute: typeof InviteAcceptRoute
   ApiPlannerSplatRoute: typeof ApiPlannerSplatRoute
+  ApiV1Route: typeof ApiV1Route
+  ApiV1SplatRoute: typeof ApiV1SplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
 
@@ -384,6 +410,20 @@ declare module '@tanstack/react-router' {
       path: '/api/planner/$'
       fullPath: '/api/planner/$'
       preLoaderRoute: typeof ApiPlannerSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1': {
+      id: '/api/v1'
+      path: '/api/v1'
+      fullPath: '/api/v1'
+      preLoaderRoute: typeof ApiV1RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/$': {
+      id: '/api/v1/$'
+      path: '/api/v1/$'
+      fullPath: '/api/v1/$'
+      preLoaderRoute: typeof ApiV1SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/stripe': {
@@ -490,6 +530,8 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   InviteAcceptRoute: InviteAcceptRoute,
   ApiPlannerSplatRoute: ApiPlannerSplatRoute,
+  ApiV1Route: ApiV1Route,
+  ApiV1SplatRoute: ApiV1SplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport

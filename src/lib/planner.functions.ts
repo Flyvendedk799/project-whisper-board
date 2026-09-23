@@ -3,6 +3,14 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AppError } from "@/lib/errors";
+import {
+  OPEN_TICKET_STATUSES,
+  taskDescriptionFromTicket,
+  taskTitleFromTicket,
+  ticketPriorityToTask,
+} from "@/lib/ticket-task";
+import { normalizeScopes } from "@/lib/api-scopes";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
 const workspaceIdField = z.string().uuid().optional();
@@ -14,6 +22,56 @@ const planTaskComplexityEnum = z.enum(Constants.public.Enums.plan_task_complexit
 type PlanUpdate = Database["public"]["Tables"]["plans"]["Update"];
 type PlanSectionUpdate = Database["public"]["Tables"]["plan_sections"]["Update"];
 type PlanTaskUpdate = Database["public"]["Tables"]["plan_tasks"]["Update"];
+type TicketPriority = Database["public"]["Enums"]["ticket_priority"];
+
+async function noteTicketPlannerEvent(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  ticketId: string,
+  kind: "planner_linked" | "planner_done",
+  taskTitle: string,
+) {
+  const { error } = await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    actor_id: userId,
+    kind,
+    new_value: taskTitle.slice(0, 200),
+  });
+  if (error) console.error("[planner] ticket event", error.message);
+}
+
+async function sectionForPlan(
+  supabase: SupabaseClient<Database>,
+  planId: string,
+  sectionId?: string,
+) {
+  if (sectionId) {
+    const { data } = await supabase
+      .from("plan_sections")
+      .select("id")
+      .eq("id", sectionId)
+      .eq("plan_id", planId)
+      .maybeSingle();
+    return requireFound(data, "section").id;
+  }
+
+  const { data: existing } = await supabase
+    .from("plan_sections")
+    .select("id")
+    .eq("plan_id", planId)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: created, error } = await supabase
+    .from("plan_sections")
+    .insert({ plan_id: planId, title: "From tickets", position: 1 })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return created.id;
+}
 
 async function resolveWorkspaceMembership(
   supabase: SupabaseClient<Database>,
@@ -46,6 +104,18 @@ export const createPlan = createServerFn({ method: "POST" })
 
       const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
 
+      let githubRepo = data.githubRepo ?? null;
+      let githubBase = data.githubBase ?? null;
+      if (data.projectId && (!githubRepo || !githubBase)) {
+        const { data: project } = await supabase
+          .from("projects")
+          .select("github_repo, github_default_branch")
+          .eq("id", data.projectId)
+          .maybeSingle();
+        if (!githubRepo) githubRepo = project?.github_repo ?? null;
+        if (!githubBase) githubBase = project?.github_default_branch ?? null;
+      }
+
       const { data: plan, error } = await supabase
         .from("plans")
         .insert({
@@ -53,8 +123,8 @@ export const createPlan = createServerFn({ method: "POST" })
           title: data.title,
           description: data.description ?? null,
           project_id: data.projectId ?? null,
-          github_repo: data.githubRepo ?? null,
-          github_base: data.githubBase ?? null,
+          github_repo: githubRepo,
+          github_base: githubBase,
           created_by: userId,
         })
         .select("id")
@@ -81,8 +151,8 @@ export const updatePlan = createServerFn({ method: "POST" })
         description: z.string().optional(),
         status: planStatusEnum.optional(),
         projectId: z.string().uuid().nullable().optional(),
-        githubRepo: z.string().optional(),
-        githubBase: z.string().optional(),
+        githubRepo: z.string().max(200).nullable().optional(),
+        githubBase: z.string().max(200).nullable().optional(),
       })
       .parse(input),
   )
@@ -218,14 +288,14 @@ export const getPlan = createServerFn({ method: "GET" })
         .select(
           `
           *,
-          project:projects(id, title),
+          project:projects(id, title, github_repo, github_default_branch),
           sections:plan_sections(
             *,
             tasks:plan_tasks(
               *,
               assigned_agent:plan_agents(id, name, provider, model),
               assigned_user:profiles(id, full_name, email, avatar_url),
-              ticket:tickets(id, ticket_number, title)
+              ticket:tickets(id, ticket_number, title, status)
             )
           )
         `,
@@ -388,6 +458,7 @@ export const createTask = createServerFn({ method: "POST" })
         contextFiles: z.array(z.string()).optional(),
         acceptanceCriteria: z.array(z.string()).optional(),
         estimatedMinutes: z.number().optional(),
+        ticketId: z.string().uuid().optional(),
       })
       .parse(input),
   )
@@ -424,6 +495,7 @@ export const createTask = createServerFn({ method: "POST" })
             : null,
           estimated_minutes: data.estimatedMinutes ?? null,
           position,
+          ...(data.ticketId ? { ticket_id: data.ticketId } : {}),
         })
         .select("id")
         .single();
@@ -434,6 +506,10 @@ export const createTask = createServerFn({ method: "POST" })
         actor_id: userId,
         kind: "task_created",
       });
+
+      if (data.ticketId) {
+        await noteTicketPlannerEvent(supabase, userId, data.ticketId, "planner_linked", data.title);
+      }
 
       return { id: task.id };
     }),
@@ -470,7 +546,7 @@ export const updateTask = createServerFn({ method: "POST" })
 
       const { data: beforeRow } = await supabase
         .from("plan_tasks")
-        .select("plan_id, status")
+        .select("plan_id, status, ticket_id, title")
         .eq("id", taskId)
         .single();
       const before = requireFound(beforeRow, "task");
@@ -518,6 +594,21 @@ export const updateTask = createServerFn({ method: "POST" })
       await supabase
         .from("plan_events")
         .insert({ plan_id: before.plan_id, actor_id: userId, kind: "task_updated" });
+
+      const linkedTicket = fields.ticketId !== undefined ? fields.ticketId : before.ticket_id;
+      const taskTitle = fields.title ?? before.title;
+      if (fields.ticketId) {
+        await noteTicketPlannerEvent(
+          supabase,
+          userId,
+          fields.ticketId,
+          "planner_linked",
+          taskTitle,
+        );
+      }
+      if (fields.status === "done" && fields.status !== before.status && linkedTicket) {
+        await noteTicketPlannerEvent(supabase, userId, linkedTicket, "planner_done", taskTitle);
+      }
 
       return { ok: true };
     }),
@@ -766,7 +857,7 @@ export const createApiKey = createServerFn({ method: "POST" })
           name: data.name,
           key_prefix: prefix,
           key_hash: hashedKey,
-          scopes: data.scopes ?? ["planner"],
+          scopes: normalizeScopes(data.scopes ?? ["planner"]),
           created_by: userId,
         })
         .select("id")
@@ -790,7 +881,7 @@ export const listApiKeys = createServerFn({ method: "GET" })
 
       const { data: keys, error } = await supabase
         .from("api_keys")
-        .select("id, name, key_prefix, last_used_at, created_at, revoked_at")
+        .select("id, name, key_prefix, scopes, last_used_at, created_at, revoked_at")
         .eq("workspace_id", membership.workspace_id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -816,13 +907,208 @@ export const revokeApiKey = createServerFn({ method: "POST" })
     }),
   );
 
+export const updateApiKeyScopes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        keyId: z.string().uuid(),
+        scopes: z.array(z.enum(["planner", "account"])).min(1),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("apiKeys.updateScopes", async () => {
+      const { supabase } = context;
+      const { error } = await supabase
+        .from("api_keys")
+        .update({ scopes: normalizeScopes(data.scopes) })
+        .eq("id", data.keyId)
+        .is("revoked_at", null);
+      if (error) throw error;
+      return { ok: true };
+    }),
+  );
+
+export const createTaskFromTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        ticketId: z.string().uuid(),
+        planId: z.string().uuid(),
+        sectionId: z.string().uuid().optional(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("tasks.createFromTicket", async () => {
+      const { supabase, userId } = context;
+
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .select("id, ticket_number, title, description, type, priority, project_id")
+        .eq("id", data.ticketId)
+        .maybeSingle();
+      const found = requireFound(ticket, "ticket");
+
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("id, project_id")
+        .eq("id", data.planId)
+        .maybeSingle();
+      const foundPlan = requireFound(plan, "plan");
+      if (foundPlan.project_id && foundPlan.project_id !== found.project_id) {
+        throw new AppError("plan_project", "That plan belongs to a different project.");
+      }
+
+      const { data: existing } = await supabase
+        .from("plan_tasks")
+        .select("id")
+        .eq("plan_id", data.planId)
+        .eq("ticket_id", found.id)
+        .maybeSingle();
+      if (existing) return { id: existing.id, created: false };
+
+      const sectionId = await sectionForPlan(supabase, data.planId, data.sectionId);
+      const { data: maxPosTask } = await supabase
+        .from("plan_tasks")
+        .select("position")
+        .eq("section_id", sectionId)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const position = maxPosTask ? (maxPosTask.position || 0) + 1 : 1;
+      const title = taskTitleFromTicket(found.title);
+
+      const { data: task, error } = await supabase
+        .from("plan_tasks")
+        .insert({
+          plan_id: data.planId,
+          section_id: sectionId,
+          title,
+          description: taskDescriptionFromTicket(found),
+          priority: ticketPriorityToTask(found.priority),
+          labels: [found.type],
+          ticket_id: found.id,
+          position,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await supabase.from("plan_events").insert({
+        plan_id: data.planId,
+        actor_id: userId,
+        kind: "task_created",
+      });
+      await noteTicketPlannerEvent(supabase, userId, found.id, "planner_linked", title);
+
+      return { id: task.id, created: true };
+    }),
+  );
+
+export const importOpenTickets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        planId: z.string().uuid(),
+        sectionId: z.string().uuid().optional(),
+        ticketIds: z.array(z.string().uuid()).optional(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("tasks.importOpenTickets", async () => {
+      const { supabase, userId } = context;
+
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("id, project_id")
+        .eq("id", data.planId)
+        .maybeSingle();
+      const foundPlan = requireFound(plan, "plan");
+      if (!foundPlan.project_id) {
+        throw new AppError("plan_project", "Link this plan to a project before importing tickets.");
+      }
+
+      let ticketsQuery = supabase
+        .from("tickets")
+        .select("id, ticket_number, title, description, type, priority, status")
+        .eq("project_id", foundPlan.project_id)
+        .in("status", [...OPEN_TICKET_STATUSES]);
+      if (data.ticketIds?.length) ticketsQuery = ticketsQuery.in("id", data.ticketIds);
+
+      const { data: tickets, error: ticketsError } = await ticketsQuery;
+      if (ticketsError) throw ticketsError;
+
+      const { data: linked, error: linkedError } = await supabase
+        .from("plan_tasks")
+        .select("ticket_id")
+        .eq("plan_id", data.planId)
+        .not("ticket_id", "is", null);
+      if (linkedError) throw linkedError;
+      const linkedIds = new Set((linked ?? []).map((row) => row.ticket_id));
+
+      const pending = (tickets ?? []).filter((ticket) => !linkedIds.has(ticket.id));
+      if (pending.length === 0) return { created: 0, skipped: (tickets ?? []).length, taskIds: [] };
+
+      const sectionId = await sectionForPlan(supabase, data.planId, data.sectionId);
+      const { data: maxPosTask } = await supabase
+        .from("plan_tasks")
+        .select("position")
+        .eq("section_id", sectionId)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let position = maxPosTask ? (maxPosTask.position || 0) + 1 : 1;
+
+      const taskIds: string[] = [];
+      for (const ticket of pending) {
+        const title = taskTitleFromTicket(ticket.title);
+        const { data: task, error } = await supabase
+          .from("plan_tasks")
+          .insert({
+            plan_id: data.planId,
+            section_id: sectionId,
+            title,
+            description: taskDescriptionFromTicket(ticket),
+            priority: ticketPriorityToTask(ticket.priority as TicketPriority),
+            labels: [ticket.type],
+            ticket_id: ticket.id,
+            position,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        position += 1;
+        taskIds.push(task.id);
+        await noteTicketPlannerEvent(supabase, userId, ticket.id, "planner_linked", title);
+      }
+
+      await supabase.from("plan_events").insert({
+        plan_id: data.planId,
+        actor_id: userId,
+        kind: "task_created",
+      });
+
+      return {
+        created: taskIds.length,
+        skipped: (tickets ?? []).length - taskIds.length,
+        taskIds,
+      };
+    }),
+  );
+
 export const suggestTasksFromTickets = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
     z
       .object({
         projectId: z.string().uuid().optional(),
-        limit: z.number().int().optional().default(5),
+        planId: z.string().uuid().optional(),
+        limit: z.number().int().optional().default(8),
       })
       .parse(input),
   )
@@ -830,11 +1116,10 @@ export const suggestTasksFromTickets = createServerFn({ method: "POST" })
     guard("planner.suggestTasksFromTickets", async () => {
       const { supabase } = context;
 
-      // Get open tickets for the project (or all projects if none specified)
       let ticketsQuery = supabase
         .from("tickets")
-        .select("id, title, description, type, priority")
-        .eq("status", "open");
+        .select("id, ticket_number, title, description, type, priority, status")
+        .in("status", [...OPEN_TICKET_STATUSES]);
 
       if (data.projectId) {
         ticketsQuery = ticketsQuery.eq("project_id", data.projectId);
@@ -843,41 +1128,34 @@ export const suggestTasksFromTickets = createServerFn({ method: "POST" })
       const { data: tickets, error: ticketsError } = await ticketsQuery;
       if (ticketsError) throw ticketsError;
 
-      // For each ticket, generate a suggested task
-      const suggestedTasks = tickets.map((ticket) => {
-        // Simple heuristic: convert ticket to task suggestion
-        // In a real implementation, this would use an AI model
-        const title = "[AI Suggested] " + ticket.title;
-        let description = "Based on ticket #" + ticket.id + ": " + (ticket.description || "");
+      let linkedIds = new Set<string | null>();
+      if (data.planId) {
+        const { data: linked, error: linkedError } = await supabase
+          .from("plan_tasks")
+          .select("ticket_id")
+          .eq("plan_id", data.planId)
+          .not("ticket_id", "is", null);
+        if (linkedError) throw linkedError;
+        linkedIds = new Set((linked ?? []).map((row) => row.ticket_id));
+      }
 
-        // Add AI-generated analysis
-        description +=
-          "\n\nAI Analysis: This ticket appears to be a " +
-          ticket.type +
-          " with " +
-          ticket.priority +
-          " priority.";
-        description +=
-          "\nSuggested approach: Create a task to address this ticket and link it for traceability.";
-
-        return {
-          title,
-          description,
-          priority: ticket.priority === "urgent" ? "high" : ticket.priority,
-          complexity: "medium", // Default complexity
-          labels: ["ai-suggested", ticket.type],
-          // No dependencies by default
-          dependsOn: [],
-        };
-      });
-
-      // Limit the number of suggestions
-      const limitedSuggestions = suggestedTasks.slice(0, data.limit);
+      const suggestedTasks = (tickets ?? [])
+        .filter((ticket) => !linkedIds.has(ticket.id))
+        .slice(0, data.limit)
+        .map((ticket) => ({
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticket_number,
+          title: taskTitleFromTicket(ticket.title),
+          description: taskDescriptionFromTicket(ticket),
+          priority: ticketPriorityToTask(ticket.priority),
+          labels: [ticket.type],
+          status: ticket.status,
+        }));
 
       return {
-        suggestedTasks: limitedSuggestions,
-        count: limitedSuggestions.length,
-        basedOnTicketsCount: tickets.length,
+        suggestedTasks,
+        count: suggestedTasks.length,
+        basedOnTicketsCount: tickets?.length ?? 0,
       };
     }),
   );

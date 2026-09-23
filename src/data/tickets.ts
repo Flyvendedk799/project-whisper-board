@@ -34,7 +34,7 @@ const LIST_SELECT = `
 
 const DETAIL_SELECT = `
   *,
-  project:projects(id, title, status),
+  project:projects(id, title, status, github_repo, github_default_branch),
   reporter:profiles!tickets_reporter_id_fkey(${PERSON_REF_COLUMNS}),
   assignee:profiles!tickets_assignee_id_fkey(${PERSON_REF_COLUMNS})
 `;

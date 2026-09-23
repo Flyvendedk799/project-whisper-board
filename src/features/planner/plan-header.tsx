@@ -12,7 +12,9 @@ import {
 import { PageHeader, StatusPill } from "@/components/app-shell";
 import type { PlanWithSections } from "@/data";
 import { ApiKeyManager } from "@/features/planner/api-key-manager";
+import { ImportTicketsButton } from "@/features/planner/import-tickets-button";
 import { PlanSettingsForm } from "@/features/planner/plan-settings-form";
+import { repoWebUrl } from "@/lib/github-url";
 
 export function PlanHeader({ plan }: { plan: PlanWithSections }) {
   const [apiKeysOpen, setApiKeysOpen] = useState(false);
@@ -47,11 +49,17 @@ export function PlanHeader({ plan }: { plan: PlanWithSections }) {
         description={plan.description}
         action={
           <div className="flex items-center gap-2">
-            {plan.github_repo && (
-              <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground">
+            <ImportTicketsButton planId={plan.id} projectId={plan.project_id} />
+            {plan.github_repo && repoWebUrl(plan.github_repo) && (
+              <a
+                href={repoWebUrl(plan.github_repo)!}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
                 <Github className="h-4 w-4" />
                 {plan.github_repo}
-              </div>
+              </a>
             )}
             <StatusPill
               tone={
