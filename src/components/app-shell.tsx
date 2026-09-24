@@ -5,6 +5,9 @@ import {
   Bell,
   Bug,
   ChevronsUpDown,
+  BarChart3,
+  Building2,
+  Clock,
   FolderKanban,
   Home,
   Inbox,
@@ -16,6 +19,7 @@ import {
   Settings,
   Sun,
   Ticket,
+  Users,
   BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -36,10 +40,18 @@ import { RunningTimerBar } from "@/features/time/running-timer-bar";
 import { runningTimerQuery } from "@/data/time";
 import { CommandPalette } from "@/components/command-palette";
 
+function brandStyle(color: string | null | undefined): React.CSSProperties | undefined {
+  const value = color?.trim() ?? "";
+  if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return undefined;
+  return { "--primary": value } as React.CSSProperties;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAdmin, loading, rolesStatus, refetchRoles, needsWorkspace } = useAuth();
+  const { user, isAdmin, loading, rolesStatus, refetchRoles, needsWorkspace, workspace } =
+    useAuth();
+  const branded = brandStyle(workspace?.brand_color);
   const [mobileOpen, setMobileOpen] = useState(false);
   const onCreateWorkspace = location.pathname.startsWith("/app/create-workspace");
 
@@ -90,12 +102,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background" style={branded}>
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
         <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
       </aside>
 
-      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-3 backdrop-blur md:hidden">
+      <div
+        className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-3 backdrop-blur md:hidden"
+        style={branded}
+      >
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Open navigation" className="h-11 w-11">
@@ -107,8 +122,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarInner isAdmin={isAdmin} onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
-        <Link to="/app" className="font-display text-xl">
-          Consflow
+        <Link to="/app" className="flex min-w-0 items-center gap-2 font-display text-xl">
+          {workspace?.logo_url ? (
+            <img src={workspace.logo_url} alt="" className="h-6 w-6 rounded object-contain" />
+          ) : null}
+          <span className="truncate">{workspace?.name ?? "Workspace"}</span>
         </Link>
         <NotificationBell />
       </div>
@@ -133,8 +151,11 @@ function WorkspaceSwitcher() {
   if (workspaces.length <= 1) {
     return (
       <div className="border-b px-5 py-5">
-        <Link to="/app" className="font-display text-2xl">
-          {workspace.name}
+        <Link to="/app" className="flex items-center gap-2 font-display text-2xl">
+          {workspace.logo_url ? (
+            <img src={workspace.logo_url} alt="" className="h-8 w-8 rounded object-contain" />
+          ) : null}
+          <span className="truncate">{workspace.name}</span>
         </Link>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {isAdmin ? "Admin workspace" : "Client portal"}
@@ -148,10 +169,19 @@ function WorkspaceSwitcher() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-auto w-full justify-between px-2 py-2 text-left">
-            <div className="min-w-0">
-              <div className="truncate font-display text-xl">{workspace.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {isAdmin ? "Admin workspace" : "Client portal"}
+            <div className="flex min-w-0 items-center gap-2">
+              {workspace.logo_url ? (
+                <img
+                  src={workspace.logo_url}
+                  alt=""
+                  className="h-8 w-8 shrink-0 rounded object-contain"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <div className="truncate font-display text-xl">{workspace.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {isAdmin ? "Admin workspace" : "Client portal"}
+                </div>
               </div>
             </div>
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
@@ -197,7 +227,13 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
       : [{ to: "/app/tickets", label: "My tickets", icon: Ticket, exact: true }]),
     { to: "/app/projects", label: "Projects", icon: FolderKanban, exact: false },
     ...(isAdmin
-      ? [{ to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false }]
+      ? [
+          { to: "/app/organizations", label: "Clients", icon: Building2, exact: false },
+          { to: "/app/time", label: "Time", icon: Clock, exact: false },
+          { to: "/app/reports", label: "Reports", icon: BarChart3, exact: false },
+          { to: "/app/team", label: "Team", icon: Users, exact: false },
+          { to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false },
+        ]
       : []),
     { to: "/app/inbox", label: "Inbox", icon: Inbox, exact: false },
     { to: "/app/settings", label: "Settings", icon: Settings, exact: false },

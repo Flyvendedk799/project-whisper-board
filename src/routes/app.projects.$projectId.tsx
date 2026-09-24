@@ -5,6 +5,16 @@ import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { Bug, GripVertical, Plus, Ticket, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +45,9 @@ import { BillingTab } from "@/components/billing-tab";
 import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { ProjectAiPlansTab } from "@/features/projects/project-ai-plans";
 import { ProjectRepoControl } from "@/features/projects/project-repo";
+import { ProjectSettingsDialog } from "@/features/projects/project-settings-dialog";
+import { ProjectPlanProgress } from "@/features/projects/project-plan-progress";
+import { TimeSheet } from "@/features/time/time-sheet";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
@@ -123,6 +136,7 @@ function ProjectPage() {
             description={p.description ?? p.organization?.name ?? undefined}
             action={
               <div className="flex flex-wrap gap-2">
+                {isAdmin && <ProjectSettingsDialog project={p} />}
                 {(isAdmin || isClientAdmin) && (
                   <InviteClientButton
                     projectId={projectId}
@@ -160,6 +174,12 @@ function ProjectPage() {
                 </StatusPill>
               )}
               <span className="text-muted-foreground">{p.progress}% complete</span>
+              <ProjectPlanProgress projectId={projectId} linked={isAdmin} />
+              {isAdmin && p.budget_cents != null && (
+                <span className="text-muted-foreground">
+                  Budget {p.currency} {(p.budget_cents / 100).toLocaleString()}
+                </span>
+              )}
               {isAdmin && (
                 <ProjectRepoControl
                   projectId={projectId}
@@ -190,6 +210,7 @@ function ProjectPage() {
                 <TabsTrigger value="meetings">Meetings</TabsTrigger>
                 <TabsTrigger value="milestones">Milestones</TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
+                {isAdmin && <TabsTrigger value="time">Time</TabsTrigger>}
                 <TabsTrigger value="people">People</TabsTrigger>
               </TabsList>
 
@@ -250,6 +271,14 @@ function ProjectPage() {
                 <TabsContent value="billing" className="mt-6" forceMount>
                   <SectionBoundary label="project-billing">
                     <BillingTab projectId={projectId} currency={p.currency} />
+                  </SectionBoundary>
+                </TabsContent>
+              )}
+
+              {isAdmin && tab === "time" && (
+                <TabsContent value="time" className="mt-6" forceMount>
+                  <SectionBoundary label="project-time">
+                    <TimeSheet projectId={projectId} />
                   </SectionBoundary>
                 </TabsContent>
               )}
@@ -616,27 +645,52 @@ function PeoplePanel({
 
 function ProjectStatusSelect({ projectId, status }: { projectId: string; status: ProjectStatus }) {
   const { workspaceId } = useAuth();
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const update = useServerAction(useServerFn(setProjectStatus), {
     label: "projects.setStatus",
     invalidate: [qk.project(projectId), qk.projectList(workspaceId ?? undefined)],
   });
 
+  const apply = (value: ProjectStatus) => {
+    if (value === "archived" && status !== "archived") {
+      setConfirmArchive(true);
+      return;
+    }
+    update.fire({ projectId, status: value });
+  };
+
   return (
-    <Select
-      value={status}
-      onValueChange={(value) => update.fire({ projectId, status: value as ProjectStatus })}
-    >
-      <SelectTrigger className="h-8 w-40" aria-label="Project status">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {PROJECT_STATUSES.map((value) => (
-          <SelectItem key={value} value={value}>
-            {PROJECT_STATUS_LABEL[value]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <>
+      <Select value={status} onValueChange={(value) => apply(value as ProjectStatus)}>
+        <SelectTrigger className="h-8 w-40" aria-label="Project status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PROJECT_STATUSES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {PROJECT_STATUS_LABEL[value]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <AlertDialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It drops off the project list until you choose to show archived work. Tickets and
+              invoices stay where they are.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it active</AlertDialogCancel>
+            <AlertDialogAction onClick={() => update.fire({ projectId, status: "archived" })}>
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

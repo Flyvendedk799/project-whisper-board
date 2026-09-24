@@ -2,9 +2,15 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataError } from "@/lib/errors";
 import { qk } from "./keys";
-import { PERSON_REF_COLUMNS, type TimeEntry, type TimeEntryWithRefs } from "./types";
+import {
+  PERSON_REF_COLUMNS,
+  type TimeEntry,
+  type TimeEntryWithRefs,
+  type TimeSheetEntry,
+} from "./types";
 
 const WITH_REFS = `*, ticket:tickets(id, ticket_number, title), user:profiles(${PERSON_REF_COLUMNS})`;
+const WITH_PROJECT = `${WITH_REFS}, project:projects(id, title)`;
 
 /**
  * The timer currently running for this person, if any. The database allows at
@@ -82,6 +88,38 @@ export function unbilledTimeQuery(projectId: string) {
 
       if (error) throw new DataError("time_entries.unbilled", error);
       return data ?? [];
+    },
+  });
+}
+
+/** Finished and running entries in a date window, for the timesheet. */
+export function workspaceTimeQuery(
+  workspaceId: string | null | undefined,
+  fromIso: string,
+  toIso: string,
+) {
+  return queryOptions({
+    queryKey: [...qk.workspaceTime(workspaceId ?? undefined), fromIso, toIso] as const,
+    enabled: Boolean(workspaceId),
+    queryFn: async (): Promise<TimeSheetEntry[]> => {
+      const pageSize = 1000;
+      const rows: TimeSheetEntry[] = [];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("time_entries")
+          .select(WITH_PROJECT)
+          .eq("workspace_id", workspaceId!)
+          .gte("started_at", fromIso)
+          .lt("started_at", toIso)
+          .order("started_at", { ascending: false })
+          .range(from, from + pageSize - 1)
+          .returns<TimeSheetEntry[]>();
+        if (error) throw new DataError("time_entries.workspace", error);
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
+      return rows;
     },
   });
 }

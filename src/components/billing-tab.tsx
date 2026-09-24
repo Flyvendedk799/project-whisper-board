@@ -2,7 +2,16 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CreditCard, Download, FileText, Plus, Receipt, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  CreditCard,
+  Download,
+  FileText,
+  Plus,
+  Receipt,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -199,16 +208,48 @@ function LineEditor({
             value={line.quantity}
             onChange={(e) => patch(index, { quantity: Number(e.target.value) })}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={`Remove line ${index + 1}`}
-            disabled={lines.length === 1}
-            onClick={() => onChange(lines.filter((_, i) => i !== index))}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <div className="flex">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Move line ${index + 1} up`}
+              disabled={index === 0}
+              onClick={() => {
+                const next = [...lines];
+                const [item] = next.splice(index, 1);
+                next.splice(index - 1, 0, item);
+                onChange(next);
+              }}
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Move line ${index + 1} down`}
+              disabled={index === lines.length - 1}
+              onClick={() => {
+                const next = [...lines];
+                const [item] = next.splice(index, 1);
+                next.splice(index + 1, 0, item);
+                onChange(next);
+              }}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove line ${index + 1}`}
+              disabled={lines.length === 1}
+              onClick={() => onChange(lines.filter((_, i) => i !== index))}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
       ))}
 
@@ -266,6 +307,7 @@ function NewQuoteButton({ projectId, currency }: { projectId: string; currency: 
               currency,
               title: String(form.get("title")),
               notes: String(form.get("notes")) || undefined,
+              validUntil: String(form.get("valid")) || undefined,
               lines: lines.filter((l) => l.description.trim()),
             });
           }}
@@ -276,6 +318,10 @@ function NewQuoteButton({ projectId, currency }: { projectId: string; currency: 
             <Input id="q-title" name="title" required placeholder="Phase 2 — reporting" />
           </div>
           <LineEditor lines={lines} onChange={setLines} currency={currency} />
+          <div className="space-y-1.5">
+            <Label htmlFor="q-valid">Valid until</Label>
+            <Input id="q-valid" name="valid" type="date" />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="q-notes">Notes</Label>
             <Textarea id="q-notes" name="notes" rows={2} />
@@ -349,7 +395,10 @@ function QuoteCard({
               {QUOTE_STATUS_LABEL[quote.status]}
             </StatusPill>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{formatDate(quote.created_at)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatDate(quote.created_at)}
+            {quote.valid_until ? ` · valid until ${formatDate(quote.valid_until)}` : ""}
+          </p>
         </div>
         <div className="text-lg font-medium tabular-nums">
           {formatCents(quote.total_cents, quote.currency)}

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { AlertTriangle, Bell, Inbox, Palette, Plug, User } from "lucide-react";
+import { AlertTriangle, Bell, Inbox, Palette, Plug, Tag, Timer, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,8 @@ import type { AntigravityConnection } from "@/lib/ai-auth/antigravity";
 
 import { getIntegrationStatus, listAppErrors, listOutbox } from "@/lib/admin-views.functions";
 import { updateWorkspace } from "@/lib/workspace.functions";
+import { SlaPoliciesCard } from "@/features/settings/sla-policies-card";
+import { LabelsCard } from "@/features/settings/labels-card";
 import { supabase } from "@/integrations/supabase/client";
 import { notificationPreferencesQuery, channelEnabled } from "@/data/notifications";
 import { qk } from "@/data/keys";
@@ -57,7 +59,9 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/settings")({
   validateSearch: z.object({
-    tab: z.enum(["you", "notifications", "integrations", "outbox", "errors"]).optional(),
+    tab: z
+      .enum(["you", "notifications", "sla", "labels", "integrations", "outbox", "errors"])
+      .optional(),
   }),
   component: SettingsPage,
 });
@@ -80,7 +84,14 @@ function SettingsPage() {
             void navigate({
               search: (prev: { tab?: string }) => ({
                 ...prev,
-                tab: next as "you" | "notifications" | "integrations" | "outbox" | "errors",
+                tab: next as
+                  | "you"
+                  | "notifications"
+                  | "sla"
+                  | "labels"
+                  | "integrations"
+                  | "outbox"
+                  | "errors",
               }),
               replace: true,
             })
@@ -95,6 +106,18 @@ function SettingsPage() {
               <Bell className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Notifications
             </TabsTrigger>
+            {isAdmin && (
+              <>
+                <TabsTrigger value="sla">
+                  <Timer className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  SLA
+                </TabsTrigger>
+                <TabsTrigger value="labels">
+                  <Tag className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Labels
+                </TabsTrigger>
+              </>
+            )}
             {isAdmin && (
               <>
                 <TabsTrigger value="integrations">
@@ -134,6 +157,21 @@ function SettingsPage() {
               <NotificationsCard />
             </SectionBoundary>
           </TabsContent>
+
+          {isAdmin && (
+            <>
+              <TabsContent value="sla" className="mt-6">
+                <SectionBoundary label="sla-policies">
+                  <SlaPoliciesCard />
+                </SectionBoundary>
+              </TabsContent>
+              <TabsContent value="labels" className="mt-6">
+                <SectionBoundary label="labels">
+                  <LabelsCard />
+                </SectionBoundary>
+              </TabsContent>
+            </>
+          )}
 
           {isAdmin && (
             <>
@@ -260,6 +298,7 @@ function WorkspaceCard() {
   const [supportEmail, setSupportEmail] = useState(workspace?.support_email ?? "");
   const [website, setWebsite] = useState(workspace?.website ?? "");
   const [brandColor, setBrandColor] = useState(workspace?.brand_color ?? "");
+  const [logoUrl, setLogoUrl] = useState(workspace?.logo_url ?? "");
   const [invoicePrefix, setInvoicePrefix] = useState(workspace?.invoice_prefix ?? "");
 
   useEffect(() => {
@@ -267,6 +306,7 @@ function WorkspaceCard() {
     setSupportEmail(workspace?.support_email ?? "");
     setWebsite(workspace?.website ?? "");
     setBrandColor(workspace?.brand_color ?? "");
+    setLogoUrl(workspace?.logo_url ?? "");
     setInvoicePrefix(workspace?.invoice_prefix ?? "");
   }, [workspace]);
 
@@ -299,6 +339,7 @@ function WorkspaceCard() {
             supportEmail: supportEmail.trim() || null,
             website: website.trim() || null,
             brandColor: brandColor.trim() || null,
+            logoUrl: logoUrl.trim(),
             invoicePrefix: invoicePrefix.trim() || undefined,
           });
         }}
@@ -330,13 +371,37 @@ function WorkspaceCard() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="ws-brand-color">Brand colour</Label>
+            <Label htmlFor="ws-logo">Logo URL</Label>
             <Input
-              id="ws-brand-color"
-              value={brandColor}
-              onChange={(e) => setBrandColor(e.target.value)}
-              placeholder="#1a1a1a"
+              id="ws-logo"
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              placeholder="https://…/logo.png"
             />
+            <p className="text-xs text-muted-foreground">
+              Shown in the sidebar and on the client portal. Use a square image.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ws-brand-color">Brand colour</Label>
+            <div className="flex gap-2">
+              <Input
+                id="ws-brand-color"
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
+                placeholder="#1a1a1a"
+              />
+              <Input
+                aria-label="Pick brand colour"
+                type="color"
+                className="w-14 px-1"
+                value={/^#[0-9a-f]{6}$/i.test(brandColor) ? brandColor : "#1a1a1a"}
+                onChange={(e) => setBrandColor(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Applied to buttons and highlights for everyone in this workspace, including clients.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ws-invoice-prefix">Invoice prefix</Label>

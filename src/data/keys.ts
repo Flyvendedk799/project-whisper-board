@@ -34,6 +34,12 @@ export const qk = {
   projectInvoices: (id: string) => [...qk.project(id), "invoices"] as const,
   projectTimeline: (id: string) => [...qk.project(id), "timeline"] as const,
   projectTime: (id: string) => [...qk.project(id), "time"] as const,
+  workspaceTime: (wsId?: string) => [...qk.all, "time", "workspace", wsId ?? "none"] as const,
+
+  organizations: (wsId?: string) => [...qk.all, "organizations", wsId ?? "none"] as const,
+  slaPolicies: (wsId?: string) => [...qk.all, "sla", wsId ?? "none"] as const,
+  labels: (wsId?: string) => [...qk.all, "labels", wsId ?? "none"] as const,
+  reports: (wsId?: string) => [...qk.all, "reports", wsId ?? "none"] as const,
 
   tickets: () => [...qk.all, "tickets"] as const,
   ticketList: (filters: TicketFilters) => [...qk.tickets(), "list", filters] as const,

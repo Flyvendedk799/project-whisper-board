@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataError } from "@/lib/errors";
 import { qk } from "./keys";
+import type { AppRole } from "./enums";
 import {
   PERSON_REF_COLUMNS,
   type MemberWithProfile,
@@ -99,6 +100,48 @@ export function projectUpdatesQuery(projectId: string) {
   });
 }
 
+export type WorkspaceMemberRow = {
+  user_id: string;
+  role: AppRole;
+  created_at: string;
+  profile: PersonRef | null;
+};
+
+export function workspaceMembersQuery(workspaceId: string | null | undefined) {
+  return queryOptions({
+    queryKey: [...qk.workspacePeople(workspaceId ?? undefined), "roles"] as const,
+    enabled: Boolean(workspaceId),
+    queryFn: async (): Promise<WorkspaceMemberRow[]> => {
+      const { data: members, error } = await supabase
+        .from("workspace_members")
+        .select("user_id, role, created_at")
+        .eq("workspace_id", workspaceId!)
+        .order("created_at");
+      if (error) throw new DataError("workspace_members.list", error);
+      const rows = members ?? [];
+      if (rows.length === 0) return [];
+
+      const { data: profiles, error: profileError } = await supabase
+        .from("profiles")
+        .select(PERSON_REF_COLUMNS)
+        .in(
+          "id",
+          rows.map((row) => row.user_id),
+        )
+        .returns<PersonRef[]>();
+      if (profileError) throw new DataError("profiles.list", profileError);
+
+      const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      return rows.map((row) => ({
+        user_id: row.user_id,
+        role: row.role,
+        created_at: row.created_at,
+        profile: byId.get(row.user_id) ?? null,
+      }));
+    },
+  });
+}
+
 /** Everyone in the active workspace, for assignee pickers and @mentions. */
 export function workspacePeopleQuery(workspaceId: string | null | undefined) {
   return queryOptions({
@@ -149,7 +192,7 @@ export function projectSearchQuery(term: string, workspaceId: string | null | un
 
 export function organizationsQuery(workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: [...qk.all, "organizations", workspaceId ?? "none"] as const,
+    queryKey: qk.organizations(workspaceId ?? undefined),
     enabled: Boolean(workspaceId),
     staleTime: 5 * 60_000,
     queryFn: async () => {

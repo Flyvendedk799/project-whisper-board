@@ -20,7 +20,7 @@ export const inviteClient = createServerFn({ method: "POST" })
         workspaceId: z.string().uuid(),
         projectId: z.string().uuid().optional(),
         fullName: z.string().min(1).max(120).optional(),
-        role: z.enum(["client", "client_admin"]).default("client"),
+        role: z.enum(["admin", "client", "client_admin"]).default("client"),
       })
       .parse(input),
   )
@@ -28,9 +28,8 @@ export const inviteClient = createServerFn({ method: "POST" })
     const a = admin();
     const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
 
-    // Only workspace admins may invite another client_admin.
-    if (data.role === "client_admin" && inviterRole !== "admin") {
-      throw new Error("Forbidden: only admins can invite client leads");
+    if (data.role !== "client" && inviterRole !== "admin") {
+      throw new Error("Forbidden: only admins can invite that role");
     }
 
     const origin = process.env.SITE_URL || "";
@@ -153,6 +152,65 @@ export const setProjectMemberRole = createServerFn({ method: "POST" })
         .eq("user_id", data.userId);
     }
 
+    return { ok: true };
+  });
+
+export const setWorkspaceMemberRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+        role: z.enum(["admin", "client", "client_admin"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("set_workspace_member_role", {
+      _workspace_id: data.workspaceId,
+      _user_id: data.userId,
+      _role: data.role,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const removeWorkspaceMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("remove_workspace_member", {
+      _workspace_id: data.workspaceId,
+      _user_id: data.userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const mergeOrganizations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        fromId: z.string().uuid(),
+        toId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("merge_organizations", {
+      _from_id: data.fromId,
+      _to_id: data.toId,
+    });
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

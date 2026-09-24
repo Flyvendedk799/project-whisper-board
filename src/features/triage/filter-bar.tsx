@@ -26,6 +26,7 @@ interface Props {
   onChange: (next: Partial<TicketFilters>) => void;
   projects: ProjectWithOrg[];
   people: PersonRef[];
+  labelOptions?: Array<{ name: string; color: string }>;
 }
 
 function MultiSelect<T extends string>({
@@ -140,7 +141,7 @@ function SingleSelect<T extends string>({
   );
 }
 
-export function FilterBar({ filters, onChange, projects, people }: Props) {
+export function FilterBar({ filters, onChange, projects, people, labelOptions = [] }: Props) {
   const [term, setTerm] = useState(filters.q ?? "");
 
   const submitSearch = (event: React.FormEvent) => {
@@ -217,6 +218,16 @@ export function FilterBar({ filters, onChange, projects, people }: Props) {
         ]}
         onChange={(assignee) => onChange({ assignee })}
       />
+
+      {labelOptions.length > 0 && (
+        <MultiSelect
+          label="Label"
+          values={labelOptions.map((label) => label.name)}
+          selected={filters.labels}
+          labels={Object.fromEntries(labelOptions.map((label) => [label.name, label.name]))}
+          onChange={(labels) => onChange({ labels })}
+        />
+      )}
 
       <SingleSelect
         label="SLA"

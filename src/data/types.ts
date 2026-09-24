@@ -44,6 +44,7 @@ export type Workspace = Row<"workspaces">;
 export type OutboundMessage = Row<"outbound_messages">;
 export type AppErrorRow = Row<"app_errors">;
 export type SlaPolicy = Row<"sla_policies">;
+export type WorkspaceLabel = Row<"workspace_labels">;
 
 // AI Planner
 export type Plan = Row<"plans">;
@@ -108,6 +109,9 @@ export type ProjectWithOrg = Project & { organization: Pick<Organization, "id" |
 export type TimeEntryWithRefs = TimeEntry & {
   ticket: Pick<Ticket, "id" | "ticket_number" | "title"> | null;
   user: PersonRef | null;
+};
+export type TimeSheetEntry = TimeEntryWithRefs & {
+  project: Pick<Project, "id" | "title"> | null;
 };
 export type RelationWithTicket = TicketRelation & {
   to_ticket: Pick<Ticket, "id" | "ticket_number" | "title" | "status"> | null;
