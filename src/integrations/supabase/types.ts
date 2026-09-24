@@ -2227,6 +2227,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      merge_organizations: {
+        Args: { _from_id: string; _to_id: string }
+        Returns: undefined
+      }
+      remove_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: undefined
+      }
+      set_workspace_member_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+          _workspace_id: string
+        }
+        Returns: undefined
+      }
       create_workspace: {
         Args: { _name: string; _slug?: string | null }
         Returns: Database["public"]["Tables"]["workspaces"]["Row"]

@@ -33,6 +33,7 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
   const [rate, setRate] = useState(dollars(project.hourly_rate_cents));
   const [start, setStart] = useState(project.start_date ?? "");
   const [end, setEnd] = useState(project.end_date ?? "");
+  const [amountError, setAmountError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -51,11 +52,13 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
     onSuccess: () => setOpen(false),
   });
 
-  const cents = (value: string) => {
-    if (!value.trim()) return null;
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed < 0) return null;
-    return Math.round(parsed * 100);
+  const cents = (value: string): number | null => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+      throw new Error("invalid");
+    }
+    return Math.round(Number(trimmed) * 100);
   };
 
   return (
@@ -74,14 +77,24 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            let budgetCents: number | null;
+            let rateCents: number | null;
+            try {
+              budgetCents = cents(budget);
+              rateCents = cents(rate);
+            } catch {
+              setAmountError("Enter a plain amount like 1500 or 150.50, or leave the field empty.");
+              return;
+            }
+            setAmountError(null);
             save.fire({
               id: project.id,
               patch: {
                 title: title.trim(),
                 description: description.trim() || null,
                 currency: currency.trim().toUpperCase().slice(0, 3) || "USD",
-                budget_cents: cents(budget),
-                hourly_rate_cents: cents(rate),
+                budget_cents: budgetCents,
+                hourly_rate_cents: rateCents,
                 start_date: start || null,
                 end_date: end || null,
               },
@@ -157,6 +170,7 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
               />
             </div>
           </div>
+          {amountError && <p className="text-sm text-destructive">{amountError}</p>}
           <p className="text-xs text-muted-foreground">
             The hourly rate is copied onto new time entries and used when you bill unbilled time.
           </p>

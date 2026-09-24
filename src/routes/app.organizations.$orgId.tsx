@@ -16,13 +16,11 @@ import {
 import { PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
-import { useDataMutation } from "@/lib/use-server-action";
+import { useDataMutation, useServerAction } from "@/lib/use-server-action";
+import { useServerFn } from "@tanstack/react-start";
 import { organizationsQuery, projectListQuery } from "@/data/projects";
-import {
-  deleteOrganization,
-  reassignOrganizationProjects,
-  updateOrganization,
-} from "@/data/mutations";
+import { deleteOrganization, updateOrganization } from "@/data/mutations";
+import { mergeOrganizations } from "@/lib/admin.functions";
 import { qk } from "@/data/keys";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
 
@@ -56,8 +54,12 @@ function OrganizationPage() {
     success: "Saved",
     invalidate: [qk.organizations(workspaceId ?? undefined), qk.projects()],
   });
-  const reassign = useDataMutation("organizations.merge", reassignOrganizationProjects, {
+  const merge = useServerAction(useServerFn(mergeOrganizations), {
+    success: "Client merged",
     invalidate: [qk.projects(), qk.organizations(workspaceId ?? undefined)],
+    onSuccess: () => {
+      void navigate({ to: "/app/organizations" });
+    },
   });
   const remove = useDataMutation("organizations.delete", deleteOrganization, {
     success: "Client removed",
@@ -200,13 +202,8 @@ function OrganizationPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={!mergeInto || reassign.busy}
-                      onClick={() => {
-                        void (async () => {
-                          await reassign.run({ fromId: org.id, toId: mergeInto });
-                          await remove.run({ id: org.id });
-                        })();
-                      }}
+                      disabled={!mergeInto || merge.busy}
+                      onClick={() => merge.fire({ fromId: org.id, toId: mergeInto })}
                     >
                       Merge and delete
                     </Button>

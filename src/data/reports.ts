@@ -77,7 +77,9 @@ export function reportsQuery(workspaceId: string | null | undefined) {
             "id, status, created_at, resolved_at, first_response_at, sla_due_at, assignee_id, project_id",
           )
           .eq("workspace_id", workspaceId!)
-          .gte("created_at", sinceIso),
+          .or(
+            `created_at.gte."${sinceIso}",resolved_at.gte."${sinceIso}",status.not.in.(done,wont_fix)`,
+          ),
         supabase
           .from("time_entries")
           .select("project_id, user_id, duration_minutes, billable, started_at")
@@ -133,16 +135,16 @@ export function reportsQuery(workspaceId: string | null | undefined) {
       const openByUser = new Map<string, number>();
 
       for (const ticket of ticketsRes.data ?? []) {
-        const opened = weekKey(ticket.created_at);
-        const openedBucket = weekMap.get(opened);
-        if (openedBucket) openedBucket.opened += 1;
-        if (ticket.resolved_at) {
-          const closed = weekKey(ticket.resolved_at);
-          const closedBucket = weekMap.get(closed);
+        if (ticket.created_at >= sinceIso) {
+          const openedBucket = weekMap.get(weekKey(ticket.created_at));
+          if (openedBucket) openedBucket.opened += 1;
+        }
+        if (ticket.resolved_at && ticket.resolved_at >= sinceIso) {
+          const closedBucket = weekMap.get(weekKey(ticket.resolved_at));
           if (closedBucket) closedBucket.closed += 1;
           resolutionSamples.push(hoursBetween(ticket.created_at, ticket.resolved_at));
         }
-        if (ticket.first_response_at) {
+        if (ticket.first_response_at && ticket.created_at >= sinceIso) {
           responseSamples.push(hoursBetween(ticket.created_at, ticket.first_response_at));
         }
 

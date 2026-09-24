@@ -167,44 +167,12 @@ export const setWorkspaceMemberRole = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const a = admin();
-    await assertWorkspaceAdmin(context.userId, data.workspaceId);
-
-    const { count } = await a
-      .from("workspace_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("workspace_id", data.workspaceId)
-      .eq("role", "admin");
-
-    const { data: current } = await a
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId)
-      .maybeSingle();
-    if (!current) throw new Error("That person is not in this workspace");
-
-    if (current.role === "admin" && data.role !== "admin" && (count ?? 0) <= 1) {
-      throw new Error("This workspace needs at least one admin");
-    }
-
-    await a
-      .from("workspace_members")
-      .update({ role: data.role })
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId);
-
-    await a
-      .from("user_roles")
-      .delete()
-      .eq("user_id", data.userId)
-      .eq("workspace_id", data.workspaceId);
-    await a.from("user_roles").insert({
-      user_id: data.userId,
-      workspace_id: data.workspaceId,
-      role: data.role,
+    const { error } = await context.supabase.rpc("set_workspace_member_role", {
+      _workspace_id: data.workspaceId,
+      _user_id: data.userId,
+      _role: data.role,
     });
-
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -219,45 +187,30 @@ export const removeWorkspaceMember = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const a = admin();
-    await assertWorkspaceAdmin(context.userId, data.workspaceId);
-    if (data.userId === context.userId) {
-      throw new Error("You can't remove yourself");
-    }
+    const { error } = await context.supabase.rpc("remove_workspace_member", {
+      _workspace_id: data.workspaceId,
+      _user_id: data.userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
 
-    const { data: current } = await a
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId)
-      .maybeSingle();
-    if (!current) throw new Error("That person is not in this workspace");
-
-    if (current.role === "admin") {
-      const { count } = await a
-        .from("workspace_members")
-        .select("user_id", { count: "exact", head: true })
-        .eq("workspace_id", data.workspaceId)
-        .eq("role", "admin");
-      if ((count ?? 0) <= 1) throw new Error("This workspace needs at least one admin");
-    }
-
-    await a
-      .from("project_members")
-      .delete()
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId);
-    await a
-      .from("user_roles")
-      .delete()
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId);
-    await a
-      .from("workspace_members")
-      .delete()
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.userId);
-
+export const mergeOrganizations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        fromId: z.string().uuid(),
+        toId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("merge_organizations", {
+      _from_id: data.fromId,
+      _to_id: data.toId,
+    });
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

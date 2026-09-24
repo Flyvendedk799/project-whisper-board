@@ -102,17 +102,24 @@ export function workspaceTimeQuery(
     queryKey: [...qk.workspaceTime(workspaceId ?? undefined), fromIso, toIso] as const,
     enabled: Boolean(workspaceId),
     queryFn: async (): Promise<TimeSheetEntry[]> => {
-      const { data, error } = await supabase
-        .from("time_entries")
-        .select(WITH_PROJECT)
-        .eq("workspace_id", workspaceId!)
-        .gte("started_at", fromIso)
-        .lt("started_at", toIso)
-        .order("started_at", { ascending: false })
-        .limit(500)
-        .returns<TimeSheetEntry[]>();
-      if (error) throw new DataError("time_entries.workspace", error);
-      return data ?? [];
+      const pageSize = 1000;
+      const rows: TimeSheetEntry[] = [];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("time_entries")
+          .select(WITH_PROJECT)
+          .eq("workspace_id", workspaceId!)
+          .gte("started_at", fromIso)
+          .lt("started_at", toIso)
+          .order("started_at", { ascending: false })
+          .range(from, from + pageSize - 1)
+          .returns<TimeSheetEntry[]>();
+        if (error) throw new DataError("time_entries.workspace", error);
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
+      return rows;
     },
   });
 }

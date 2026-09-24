@@ -24,7 +24,8 @@ function downloadCsv(filename: string, rows: object[]) {
     ...rows.map((row) =>
       headers
         .map((header) => {
-          const value = String((row as Record<string, unknown>)[header] ?? "");
+          let value = String((row as Record<string, unknown>)[header] ?? "");
+          if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`;
           return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
         })
         .join(","),
