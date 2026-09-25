@@ -13,6 +13,10 @@ import { PageHeader, StatusPill } from "@/components/app-shell";
 import type { PlanWithSections } from "@/data";
 import { ApiKeyManager } from "@/features/planner/api-key-manager";
 import { ImportTicketsButton } from "@/features/planner/import-tickets-button";
+import {
+  ExportMarkdownButton,
+  ImportMarkdownButton,
+} from "@/features/planner/plan-markdown-controls";
 import { PlanSettingsForm } from "@/features/planner/plan-settings-form";
 import { repoWebUrl } from "@/lib/github-url";
 
@@ -50,6 +54,8 @@ export function PlanHeader({ plan }: { plan: PlanWithSections }) {
         action={
           <div className="flex items-center gap-2">
             <ImportTicketsButton planId={plan.id} projectId={plan.project_id} />
+            <ImportMarkdownButton planId={plan.id} />
+            <ExportMarkdownButton plan={plan} />
             {plan.github_repo && repoWebUrl(plan.github_repo) && (
               <a
                 href={repoWebUrl(plan.github_repo)!}

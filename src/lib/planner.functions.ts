@@ -12,6 +12,7 @@ import {
 } from "@/lib/ticket-task";
 import { normalizeScopes } from "@/lib/api-scopes";
 import { isOrphanPullRequestRef, isOrphanTicketRef, scrubCommentIfUnlinked } from "@/lib/plan-refs";
+import { parsePlanMarkdown, planMarkdownStats } from "@/lib/plan-markdown";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
 const workspaceIdField = z.string().uuid().optional();
@@ -1228,6 +1229,101 @@ export const suggestTasksFromTickets = createServerFn({ method: "POST" })
         suggestedTasks,
         count: suggestedTasks.length,
         basedOnTicketsCount: tickets?.length ?? 0,
+      };
+    }),
+  );
+
+export const importPlanMarkdown = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        planId: z.string().uuid(),
+        markdown: z.string().min(1).max(500_000),
+        mode: z.enum(["replace", "merge"]),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("plans.importMarkdown", async () => {
+      const { supabase, userId } = context;
+
+      const { data: planRow } = await supabase
+        .from("plans")
+        .select("id")
+        .eq("id", data.planId)
+        .maybeSingle();
+      const plan = requireFound(planRow, "plan");
+
+      const doc = parsePlanMarkdown(data.markdown);
+      const stats = planMarkdownStats(doc);
+      if (stats.sections === 0) {
+        throw new AppError(
+          "validation",
+          "No sections found in that markdown. Use numbered outlines, headings, or nested lists.",
+          { status: 400 },
+        );
+      }
+
+      if (data.mode === "replace") {
+        const { error: deleteError } = await supabase
+          .from("plan_sections")
+          .delete()
+          .eq("plan_id", plan.id);
+        if (deleteError) throw deleteError;
+      }
+
+      const { data: maxPosSection } = await supabase
+        .from("plan_sections")
+        .select("position")
+        .eq("plan_id", plan.id)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let sectionPosition = maxPosSection ? (maxPosSection.position || 0) + 1 : 1;
+
+      let createdSections = 0;
+      let createdTasks = 0;
+
+      for (const section of doc.sections) {
+        const { data: createdSection, error: sectionError } = await supabase
+          .from("plan_sections")
+          .insert({
+            plan_id: plan.id,
+            title: section.title,
+            position: sectionPosition,
+          })
+          .select("id")
+          .single();
+        if (sectionError) throw sectionError;
+        sectionPosition += 1;
+        createdSections += 1;
+
+        let taskPosition = 1;
+        for (const task of section.tasks) {
+          const { error: taskError } = await supabase.from("plan_tasks").insert({
+            plan_id: plan.id,
+            section_id: createdSection.id,
+            title: task.title,
+            description: task.description || null,
+            position: taskPosition,
+          });
+          if (taskError) throw taskError;
+          taskPosition += 1;
+          createdTasks += 1;
+        }
+      }
+
+      await supabase.from("plan_events").insert({
+        plan_id: plan.id,
+        actor_id: userId,
+        kind: "section_created",
+      });
+
+      return {
+        mode: data.mode,
+        sections: createdSections,
+        tasks: createdTasks,
       };
     }),
   );
