@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Consflow — Notion-style: warm cream, ink black, soft accent. */
+/* Boared — Notion-style: warm cream, ink black, soft accent. */
 
 @theme inline {
   --font-display: "Instrument Serif", ui-serif, Georgia, serif;

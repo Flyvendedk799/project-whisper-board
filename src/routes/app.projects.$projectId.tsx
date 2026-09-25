@@ -50,9 +50,14 @@ import { ProjectPlanProgress } from "@/features/projects/project-plan-progress";
 import { TimeSheet } from "@/features/time/time-sheet";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
-import { inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
+import { addProjectMember, inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
 import { setMilestoneStatus, setProjectStatus } from "@/lib/tickets.functions";
-import { projectMembersQuery, projectMilestonesQuery, projectQuery } from "@/data/projects";
+import {
+  projectMembersQuery,
+  projectMilestonesQuery,
+  projectQuery,
+  workspaceMembersQuery,
+} from "@/data/projects";
 import { projectInvoicesQuery } from "@/data/billing";
 import { projectMeetingsQuery } from "@/data/meetings";
 import { ticketListQuery } from "@/data/tickets";
@@ -503,12 +508,26 @@ function PeoplePanel({
 }) {
   const { workspaceId } = useAuth();
   const members = useQuery(projectMembersQuery(projectId));
+  const workspaceMembers = useQuery(workspaceMembersQuery(workspaceId));
 
   const setRole = useServerAction(useServerFn(setProjectMemberRole), {
     label: "admin.setProjectMemberRole",
     success: "Role updated",
     invalidate: [qk.projectMembers(projectId), qk.workspacePeople(workspaceId ?? undefined)],
   });
+
+  const addMember = useServerAction(useServerFn(addProjectMember), {
+    label: "admin.addProjectMember",
+    success: "Added to this project",
+    invalidate: [qk.projectMembers(projectId)],
+  });
+
+  const onProject = new Set((members.data ?? []).map((member) => member.user_id));
+  const workspaceClients = (workspaceMembers.data ?? []).filter(
+    (member) =>
+      (member.role === "client" || member.role === "client_admin") &&
+      !onProject.has(member.user_id),
+  );
 
   return (
     <div className="space-y-3">
@@ -527,6 +546,36 @@ function PeoplePanel({
           >
             Dismiss
           </Button>
+        </Card>
+      )}
+
+      {canInvite && workspaceClients.length > 0 && (
+        <Card className="space-y-3 p-4">
+          <p className="text-sm font-medium">Clients in this workspace, not on this project</p>
+          <ul className="space-y-2">
+            {workspaceClients.map((member) => (
+              <li key={member.user_id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">
+                  {member.profile?.full_name || member.profile?.email || "Client"}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={addMember.busy || !workspaceId}
+                  onClick={() =>
+                    workspaceId &&
+                    addMember.fire({
+                      workspaceId,
+                      projectId,
+                      userId: member.user_id,
+                    })
+                  }
+                >
+                  Add
+                </Button>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

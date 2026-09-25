@@ -18,12 +18,13 @@ import { EmptyState, PageHeader } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useDataMutation } from "@/lib/use-server-action";
-import { organizationsQuery, projectListQuery } from "@/data/projects";
+import { organizationsQuery, projectListQuery, workspaceMembersQuery } from "@/data/projects";
+import { ROLE_LABEL } from "@/data/enums";
 import { createOrganization } from "@/data/mutations";
 import { qk } from "@/data/keys";
 
 export const Route = createFileRoute("/app/organizations/")({
-  head: () => ({ meta: [{ title: "Clients · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Clients · Boared" }] }),
   component: OrganizationsPage,
 });
 
@@ -31,6 +32,10 @@ function OrganizationsPage() {
   const { isAdmin, workspaceId } = useAuth();
   const orgs = useQuery(organizationsQuery(workspaceId));
   const projects = useQuery(projectListQuery(workspaceId));
+  const members = useQuery(workspaceMembersQuery(workspaceId));
+  const clientPeople = (members.data ?? []).filter(
+    (member) => member.role === "client" || member.role === "client_admin",
+  );
 
   if (!isAdmin) {
     return (
@@ -59,22 +64,52 @@ function OrganizationsPage() {
     <>
       <PageHeader
         title="Clients"
-        description="Organizations you work with, and the projects under each."
+        description="The same client logins as Team, grouped here with their company when you have one."
         action={<NewOrganizationButton />}
       />
       <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
+        {clientPeople.length > 0 && (
+          <Card className="mb-4 p-5">
+            <h2 className="font-display text-xl">People</h2>
+            <ul className="mt-3 divide-y">
+              {clientPeople.map((member) => (
+                <li
+                  key={member.user_id}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate">
+                    {member.profile?.full_name || member.profile?.email || "Client"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{ROLE_LABEL[member.role]}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
         <QueryState
           query={orgs}
           errorTitle="Couldn't load clients"
           empty={
-            <Card>
-              <EmptyState
-                icon={Building2}
-                title="No clients yet"
-                description="Create one here, or while you're starting a project."
-                action={<NewOrganizationButton />}
-              />
-            </Card>
+            clientPeople.length > 0 ? (
+              <Card>
+                <EmptyState
+                  icon={Building2}
+                  title="No company record yet"
+                  description="Those people can already sign in. Add a company if you want projects grouped under it."
+                  action={<NewOrganizationButton />}
+                />
+              </Card>
+            ) : (
+              <Card>
+                <EmptyState
+                  icon={Building2}
+                  title="No clients yet"
+                  description="Invite someone from a project, or add the company they belong to."
+                  action={<NewOrganizationButton />}
+                />
+              </Card>
+            )
           }
         >
           {(rows) => (

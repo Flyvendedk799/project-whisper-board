@@ -11,7 +11,7 @@ import { createWorkspace } from "@/lib/workspace.functions";
 import { useAuth } from "@/components/auth-provider";
 
 export const Route = createFileRoute("/signup")({
-  head: () => ({ meta: [{ title: "Create your workspace · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Create your workspace · Boared" }] }),
   component: SignupPage,
 });
 

@@ -46,6 +46,7 @@ import { emptyDoc, redactsContent, type AnnotationDoc } from "@/features/capture
 import { useServerAction } from "@/lib/use-server-action";
 import { createTicket } from "@/lib/tickets.functions";
 import { composeTicketFromCapture } from "@/lib/ai/compose.functions";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { describeOutcome, newDraftId, uploadDrafts, type DraftAttachment } from "@/lib/upload";
 import { projectListQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
@@ -104,6 +105,7 @@ function ReportPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { user, isAdmin, workspaceId } = useAuth();
+  const aiEnabled = useAiEnabled();
   const saved = useMemo(() => readReportDraft(), []);
 
   const [step, setStep] = useState<Step>(saved.step ?? "capture");
@@ -484,7 +486,6 @@ function ReportPage() {
               onClick={() => {
                 if (!title.trim() && note.trim()) setTitle(note.trim());
                 setStep("describe");
-                void askAi();
               }}
             >
               Next
@@ -518,9 +519,21 @@ function ReportPage() {
 
             {!aiDraft && !compose.busy && (
               <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                <Sparkles className="mb-1.5 h-4 w-4" aria-hidden="true" />
-                Write a title and whatever detail you have. Anything you missed, we&rsquo;ll ask.
+                Write a title and whatever detail you have, then send it.
+                {aiEnabled && " Or draft it with AI — that only runs when you ask."}
               </div>
+            )}
+
+            {aiEnabled && !aiDraft && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={compose.busy || !chosenProject}
+                onClick={() => void askAi()}
+              >
+                <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Draft with AI
+              </Button>
             )}
 
             <div className="space-y-1.5">

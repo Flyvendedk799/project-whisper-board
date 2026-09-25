@@ -153,7 +153,7 @@ describe("with keys configured", () => {
   it("email switches to the host's SMTP relay and reports enabled", async () => {
     process.env.SMTP_HOST = "smtp.relay.test";
     process.env.SMTP_FROM = "hi@consflow.test";
-    process.env.SMTP_FROM_NAME = "Consflow";
+    process.env.SMTP_FROM_NAME = "Boared";
     resetEmailProvider();
 
     const email = getEmailProvider();
@@ -165,7 +165,7 @@ describe("with keys configured", () => {
     expect(sendMail).toHaveBeenCalledOnce();
     // The display name is folded into the envelope sender, not sent separately.
     expect(sendMail.mock.calls[0][0]).toMatchObject({
-      from: "Consflow <hi@consflow.test>",
+      from: "Boared <hi@consflow.test>",
       to: "a@b.test",
       subject: "Hi",
     });

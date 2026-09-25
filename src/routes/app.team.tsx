@@ -32,7 +32,7 @@ import { qk } from "@/data/keys";
 import { ROLE_LABEL, type AppRole } from "@/data/enums";
 
 export const Route = createFileRoute("/app/team")({
-  head: () => ({ meta: [{ title: "Team · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Team · Boared" }] }),
   component: TeamPage,
 });
 
@@ -63,7 +63,7 @@ function TeamPage() {
     <>
       <PageHeader
         title="Team"
-        description="Everyone who can sign in to this workspace."
+        description="Agency and clients who can sign in. Clients here are the same people as on Clients."
         action={<InviteTeammateButton />}
       />
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">

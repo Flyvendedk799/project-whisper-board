@@ -131,13 +131,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NotificationBell />
       </div>
 
-      <main id="main" className="min-w-0 flex-1 pt-14 md:pt-0">
+      <main id="main" className="min-w-0 flex-1 pt-14 pb-24 md:pt-0 md:pb-0">
         {children}
       </main>
 
       <CommandPalette />
       <RunningTimerBar />
-      {isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />}
+      {!location.pathname.startsWith("/app/projects/") &&
+        location.pathname !== "/app/report" &&
+        (isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />)}
     </div>
   );
 }

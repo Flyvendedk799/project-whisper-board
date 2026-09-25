@@ -76,10 +76,10 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   );
 }
 
-const TITLE = "Consflow — Client portal & ticket platform";
+const TITLE = "Boared — Clients report it. You ship it. They can see it.";
 const DESCRIPTION =
-  "Consflow is where your clients report bugs with a screenshot and a screen recording, " +
-  "follow their project from quote to invoice, and where you run every engagement from one queue.";
+  "Boared is where a client reports a problem, the agency fixes it, the client watches the " +
+  "milestone move, and the invoice follows. AI stays off until you turn it on.";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -88,9 +88,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { name: "application-name", content: "Consflow" },
+      { name: "application-name", content: "Boared" },
       { name: "theme-color", content: "#faf6f0" },
-      { property: "og:site_name", content: "Consflow" },
+      { property: "og:site_name", content: "Boared" },
       { property: "og:title", content: TITLE },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },

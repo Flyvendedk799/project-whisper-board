@@ -13,7 +13,7 @@ export const Route = createFileRoute("/login")({
     redirect: z.string().optional(),
     continue: z.enum(["workspace"]).optional(),
   }),
-  head: () => ({ meta: [{ title: "Sign in · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Sign in · Boared" }] }),
   component: LoginPage,
 });
 
@@ -82,7 +82,7 @@ function LoginPage() {
     <div className="min-h-screen grid place-items-center px-4">
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-display">Consflow</h1>
+          <h1 className="text-3xl font-display">Boared</h1>
           {finishingSignup ? (
             <>
               <p className="text-sm text-muted-foreground">

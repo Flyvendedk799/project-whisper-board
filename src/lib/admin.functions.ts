@@ -214,6 +214,43 @@ export const mergeOrganizations = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const addProjectMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        projectId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    const { data: member, error } = await a
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!member) throw new Error("That person is not in this workspace");
+
+    const { error: insertError } = await a.from("project_members").upsert(
+      {
+        project_id: data.projectId,
+        user_id: data.userId,
+        role: member.role,
+        workspace_id: data.workspaceId,
+      },
+      { onConflict: "project_id,user_id" },
+    );
+    if (insertError) throw new Error(insertError.message);
+    return { ok: true };
+  });
+
 export const signedAttachmentUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>

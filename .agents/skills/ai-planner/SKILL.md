@@ -1,14 +1,14 @@
 ---
 name: ai-planner
 description: >-
-  Interact with the Boared / Consflow AI Planner. Use this skill to view active
+  Interact with the Boared AI Planner. Use this skill to view active
   product plans, check available tasks, claim tasks, track progress, add comments,
   and complete tasks on the planning board via MCP or direct REST API.
 ---
 
 # Boared AI Planner
 
-This skill enables AI agents to coordinate and execute tasks tracked on the Boared / Consflow AI Planner board (https://boared.online/planner).
+This skill enables AI agents to coordinate and execute tasks tracked on the Boared AI Planner board (https://boared.online/planner).
 
 ## Authentication
 

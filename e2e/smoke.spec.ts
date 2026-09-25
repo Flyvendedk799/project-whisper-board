@@ -15,7 +15,7 @@ test("the app boots and the landing page renders", async ({ page }) => {
 
   await page.goto("/");
 
-  await expect(page).toHaveTitle(/Consflow/);
+  await expect(page).toHaveTitle(/Boared/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: /sign in/i }).first()).toBeVisible();
   expect(errors).toEqual([]);

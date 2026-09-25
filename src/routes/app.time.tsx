@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { TimeSheet } from "@/features/time/time-sheet";
 
 export const Route = createFileRoute("/app/time")({
-  head: () => ({ meta: [{ title: "Time · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Time · Boared" }] }),
   component: TimePage,
 });
 

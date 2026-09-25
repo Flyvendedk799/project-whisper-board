@@ -2,31 +2,25 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import {
-  ArrowRight,
-  Bug,
-  MessageSquare,
-  Sparkles,
-  Video,
-  FileText,
-  CheckCircle2,
-  Receipt,
-} from "lucide-react";
+import { ArrowRight, Bug, CheckCircle2, Receipt, Video } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Consflow — Client portal & ticket platform" },
+      { title: "Boared — Clients report it. You ship it. They can see it." },
       {
         name: "description",
         content:
-          "Run every client engagement in one place: tickets, screen recordings, meetings, progress, invoices, and AI.",
+          "The client points at a problem. The agency fixes it. The client watches it happen, and the milestone gets paid.",
       },
-      { property: "og:title", content: "Consflow — Client portal & ticket platform" },
+      {
+        property: "og:title",
+        content: "Boared — Clients report it. You ship it. They can see it.",
+      },
       {
         property: "og:description",
         content:
-          "Tickets, screen recordings, meeting notes, milestones, invoices. One calm place for every client.",
+          "Report with a screenshot, triage it, do the work, and invoice the milestone. One place for the agency and the client.",
       },
     ],
   }),
@@ -44,7 +38,7 @@ function Landing() {
   return (
     <div className="min-h-screen">
       <nav className="px-4 md:px-6 py-5 flex items-center justify-between max-w-6xl mx-auto">
-        <span className="font-display text-2xl">Consflow</span>
+        <span className="font-display text-2xl">Boared</span>
         <div className="flex items-center gap-1 md:gap-2">
           <Button variant="ghost" asChild>
             <Link to="/login">Sign in</Link>
@@ -55,18 +49,17 @@ function Landing() {
         </div>
       </nav>
 
-      {/* Hero */}
       <header className="max-w-4xl mx-auto px-4 md:px-6 pt-12 md:pt-20 pb-16 md:pb-24 text-center">
         <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-widest mb-5 md:mb-6">
-          Client portal · Ticket platform
+          Agency workspace · Client portal
         </p>
         <h1 className="font-display text-4xl md:text-7xl leading-[1.05] tracking-tight">
-          Run every client engagement
-          <br className="hidden md:block" /> in one calm place.
+          They point at the problem.
+          <br className="hidden md:block" /> You ship the fix.
         </h1>
         <p className="mt-5 md:mt-6 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto px-2">
-          Tickets with screen recordings. Meeting notes that turn into action items. Progress your
-          clients can actually see. Invoices when milestones land. AI to keep the noise down.
+          A client reports it with a screenshot or a screen recording. You triage it, do the work,
+          and they watch the milestone move. When it&rsquo;s done, the invoice is already there.
         </p>
         <div className="mt-8 md:mt-10 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:mx-auto sm:max-w-none sm:flex-row sm:items-center">
           <Button size="lg" asChild className="w-full sm:w-auto sm:min-w-[12rem]">
@@ -79,74 +72,56 @@ function Landing() {
           </Button>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Free to start. First admin account is yours.
+          Works without AI. Turn AI on later if you want drafts and triage suggestions.
         </p>
       </header>
 
-      {/* Features */}
-      <section className="max-w-5xl mx-auto px-4 md:px-6 pb-20 md:pb-28">
-        <div className="grid md:grid-cols-3 gap-8 md:gap-10 text-left">
-          <Feature icon={<Bug />} title="Tickets that explain themselves">
-            Drag-drop screenshots, paste from clipboard, or hit record — clients send proper bug
-            reports without thinking about it.
-          </Feature>
-          <Feature icon={<MessageSquare />} title="One thread per thing">
-            Conversations, decisions, and status changes live on the ticket. No more lost Slack
-            messages.
-          </Feature>
-          <Feature icon={<Sparkles />} title="AI that does the boring parts">
-            Summarize long threads, auto-triage new tickets, turn meeting notes into action items,
-            draft replies.
-          </Feature>
-        </div>
-      </section>
-
-      {/* How it works */}
       <section className="border-y bg-surface">
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-16 md:py-24">
-          <h2 className="font-display text-3xl md:text-5xl text-center">How it works</h2>
+          <h2 className="font-display text-3xl md:text-5xl text-center">The loop</h2>
           <p className="text-center text-muted-foreground mt-3 max-w-xl mx-auto">
-            From inbox chaos to a clean ticket trail in under a minute.
+            Every screen is a step in this, or a view of where something sits in it.
           </p>
           <div className="mt-12 grid md:grid-cols-3 gap-8">
-            <Step n="01" icon={<Video />} title="Capture">
-              Client records a quick screen video or pastes a screenshot — no install, no Loom
-              account.
+            <Step n="01" icon={<Video />} title="Report">
+              The client records the screen or pastes a screenshot and says what went wrong. No AI
+              required to send it.
             </Step>
-            <Step n="02" icon={<FileText />} title="Triage">
-              AI suggests type and priority. You assign, edit, or split into smaller tickets.
+            <Step n="02" icon={<Bug />} title="Work">
+              Triage the ticket, track time, and plan the work. People and agents share the same
+              queue. A merged pull request moves the ticket forward.
             </Step>
-            <Step n="03" icon={<CheckCircle2 />} title="Ship">
-              Move it to done. Milestones tick up. Invoice when the work lands.
+            <Step n="03" icon={<Receipt />} title="Get paid">
+              The client sees updates and milestone progress. A finished milestone leads to the
+              invoice they can approve and pay.
             </Step>
           </div>
         </div>
       </section>
 
-      {/* What's inside */}
       <section className="max-w-5xl mx-auto px-4 md:px-6 py-16 md:py-24">
-        <h2 className="font-display text-3xl md:text-5xl text-center">
-          Everything you'd otherwise duct-tape together
-        </h2>
+        <h2 className="font-display text-3xl md:text-5xl text-center">What you can do today</h2>
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Tile icon={<Bug />} label="Tickets" />
-          <Tile icon={<Video />} label="Screen recordings" />
-          <Tile icon={<MessageSquare />} label="Meeting notes" />
-          <Tile icon={<CheckCircle2 />} label="Milestones" />
-          <Tile icon={<Receipt />} label="Quotes & invoices" />
-          <Tile icon={<FileText />} label="Project updates" />
-          <Tile icon={<Sparkles />} label="AI assistant" />
-          <Tile icon={<MessageSquare />} label="Client portal" />
+          <Tile label="Tickets with capture" />
+          <Tile label="Triage and SLAs" />
+          <Tile label="Projects and milestones" />
+          <Tile label="Quotes and invoices" />
+          <Tile label="Time tracking" />
+          <Tile label="Client portal" />
+          <Tile label="Planner for agents" />
+          <Tile label="Reports" />
         </div>
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          AI drafting, summaries, and triage suggestions appear only after you configure a provider
+          in Settings.
+        </p>
       </section>
 
-      {/* CTA */}
       <section className="border-t">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-20 md:py-28 text-center">
-          <h2 className="font-display text-4xl md:text-6xl">Get your evenings back.</h2>
+          <h2 className="font-display text-4xl md:text-6xl">Invite a client. Get a ticket.</h2>
           <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
-            Spin up a workspace, invite your first client, and stop pasting screenshots into email
-            threads.
+            Create a workspace, add a project, and send an invite. They can report from their phone.
           </p>
           <div className="mt-8">
             <Button size="lg" asChild>
@@ -160,30 +135,10 @@ function Landing() {
 
       <footer className="border-t">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 flex items-center justify-between text-sm text-muted-foreground">
-          <span className="font-display text-lg text-foreground">Consflow</span>
+          <span className="font-display text-lg text-foreground">Boared</span>
           <span>© {new Date().getFullYear()}</span>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function Feature({
-  icon,
-  title,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="h-9 w-9 rounded-md bg-accent text-primary grid place-items-center [&>svg]:h-4 [&>svg]:w-4">
-        {icon}
-      </div>
-      <h3 className="font-display text-xl">{title}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed">{children}</p>
     </div>
   );
 }
@@ -213,13 +168,13 @@ function Step({
   );
 }
 
-function Tile({ icon, label }: { icon: React.ReactNode; label: string }) {
+function Tile({ label }: { label: string }) {
   return (
-    <div className="rounded-lg border bg-card p-5 hover:border-foreground/20 transition-colors">
-      <div className="h-9 w-9 rounded-md bg-accent text-primary grid place-items-center mb-3 [&>svg]:h-4 [&>svg]:w-4">
-        {icon}
+    <div className="rounded-lg border bg-card p-5">
+      <div className="flex items-start gap-2 font-medium">
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        {label}
       </div>
-      <div className="font-medium">{label}</div>
     </div>
   );
 }

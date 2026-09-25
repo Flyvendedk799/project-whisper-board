@@ -24,6 +24,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { createMeeting, saveMeetingNotes, commitActionItems } from "@/lib/meetings.functions";
 import { proposeActionItems, type ProposedActionItem } from "@/lib/ai.functions";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { projectMeetingsQuery } from "@/data/meetings";
 import { qk } from "@/data/keys";
 import { ACTION_ITEM_STATUS_LABEL, MEETING_STATUS_LABEL, MEETING_STATUS_TONE } from "@/data/enums";
@@ -151,6 +152,7 @@ function MeetingCard({
   canEdit: boolean;
 }) {
   const navigate = useNavigate();
+  const aiEnabled = useAiEnabled();
   const [notes, setNotes] = useState(meeting.notes ?? "");
   const [proposal, setProposal] = useState<ProposedActionItem[] | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
@@ -295,15 +297,17 @@ function MeetingCard({
                 Mark completed
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={propose.busy || !notes.trim()}
-              onClick={() => propose.fire({ meetingId: meeting.id })}
-            >
-              <Sparkles className="mr-1 h-4 w-4" aria-hidden="true" />
-              {propose.busy ? "Reading…" : "Find action items"}
-            </Button>
+            {aiEnabled && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={propose.busy || !notes.trim()}
+                onClick={() => propose.fire({ meetingId: meeting.id })}
+              >
+                <Sparkles className="mr-1 h-4 w-4" aria-hidden="true" />
+                {propose.busy ? "Reading…" : "Find action items"}
+              </Button>
+            )}
           </div>
 
           {/*

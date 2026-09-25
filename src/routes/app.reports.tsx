@@ -12,7 +12,7 @@ import { formatMinutes } from "@/data/time";
 import { formatCents } from "@/lib/utils-format";
 
 export const Route = createFileRoute("/app/reports")({
-  head: () => ({ meta: [{ title: "Reports · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Reports · Boared" }] }),
   component: ReportsPage,
 });
 
