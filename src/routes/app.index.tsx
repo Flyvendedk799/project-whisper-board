@@ -22,10 +22,11 @@ import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
 import { OnboardingWizard, isOnboardingIncomplete } from "@/components/onboarding-wizard";
+import { GettingStartedGuide } from "@/components/getting-started";
 import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
-import { projectListQuery, projectMilestonesQuery } from "@/data/projects";
+import { projectListQuery, projectMilestonesQuery, workspaceMembersQuery } from "@/data/projects";
 import { projectInvoicesQuery, outstandingCents } from "@/data/billing";
 import { projectMeetingsQuery, upcomingMeetingsQuery } from "@/data/meetings";
 import { projectTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
@@ -75,6 +76,7 @@ function AdminHome() {
 
   const counts = useQuery(ticketCountsQuery(viewerId, workspaceId));
   const projects = useQuery(projectListQuery(workspaceId));
+  const members = useQuery(workspaceMembersQuery(workspaceId));
   const meetings = useQuery(upcomingMeetingsQuery());
 
   const recent = useInfiniteQuery({
@@ -87,8 +89,21 @@ function AdminHome() {
   const resumeOnboarding = isOnboardingIncomplete(workspaceId);
   if (noProjects || resumeOnboarding) return <OnboardingWizard />;
 
+  const hasClient = (members.data ?? []).some(
+    (member) => member.role === "client" || member.role === "client_admin",
+  );
+  const hasTickets = recentRows.length > 0 || (counts.data?.needsTriage ?? 0) > 0;
+
   return (
     <div className="space-y-8">
+      <GettingStartedGuide
+        hasClient={hasClient}
+        hasProject={(projects.data ?? []).length > 0}
+        hasTickets={hasTickets}
+        firstProjectId={projects.data?.[0]?.id}
+        loading={members.isPending || projects.isPending || recent.isPending}
+      />
+
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="mb-3 font-display text-xl">
           Needs you

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Check, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Bug, Check, FolderKanban, Sparkles, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,8 @@ import { qk } from "@/data/keys";
 import { createProject, createTicketRow } from "@/data/mutations";
 
 /**
- * First run. Three steps, because a project with no client and no tickets does
- * not show you what the app is for.
+ * First run. Invite → project → first ticket. A project with no client and no
+ * tickets does not show you what the app is for.
  */
 type Step = 1 | 2 | 3;
 
@@ -58,19 +58,27 @@ function clearOnboardingStorage(workspaceId: string | null) {
   }
 }
 
-/** True when the first-run wizard still has invite/share steps left. */
+/** True when the first-run wizard still has project/ticket steps left. */
 export function isOnboardingIncomplete(workspaceId: string | null): boolean {
   if (!workspaceId || typeof sessionStorage === "undefined") return false;
   try {
     const step = Number(sessionStorage.getItem(stepStorageKey(workspaceId)));
     const projectId = sessionStorage.getItem(projectStorageKey(workspaceId));
-    // Step 2/3 means we created a project and must finish invite/share.
+    // Mid-flow: invite done (2) or project created (3), or project saved early.
     if (step === 2 || step === 3) return true;
-    // Project saved but step not advanced yet (race after create).
     if (projectId && step === 1) return true;
     return false;
   } catch {
     return false;
+  }
+}
+
+/** Call after create-workspace so Home opens the wizard intentionally. */
+export function markOnboardingStart(workspaceId: string) {
+  try {
+    sessionStorage.setItem(stepStorageKey(workspaceId), "1");
+  } catch {
+    /* ignore */
   }
 }
 
@@ -79,7 +87,6 @@ export function OnboardingWizard() {
   const { workspaceId } = useAuth();
   const [step, setStep] = useState<Step>(() => readStoredStep(workspaceId));
   const [projectId, setProjectId] = useState<string | null>(() => readStoredProjectId(workspaceId));
-  const [showTicketForm, setShowTicketForm] = useState(false);
 
   useEffect(() => {
     setStep(readStoredStep(workspaceId));
@@ -96,30 +103,28 @@ export function OnboardingWizard() {
     }
   }, [workspaceId, step, projectId]);
 
+  const invite = useServerAction(useServerFn(inviteClient), {
+    label: "admin.inviteClient",
+    success: "Invitation sent",
+    invalidate: [qk.projects(), qk.workspacePeople(workspaceId ?? undefined)],
+    onSuccess: () => setStep(2),
+  });
+
   const project = useDataMutation("projects.insert", createProject, {
     success: "Project created",
     invalidate: [qk.projects()],
     onSuccess: (created) => {
-      // Persist before parent re-renders from invalidation, otherwise Home
-      // unmounts this wizard the moment projects.length > 0.
       if (workspaceId) {
         try {
-          sessionStorage.setItem(stepStorageKey(workspaceId), "2");
+          sessionStorage.setItem(stepStorageKey(workspaceId), "3");
           sessionStorage.setItem(projectStorageKey(workspaceId), created.id);
         } catch {
           /* ignore */
         }
       }
       setProjectId(created.id);
-      setStep(2);
+      setStep(3);
     },
-  });
-
-  const invite = useServerAction(useServerFn(inviteClient), {
-    label: "admin.inviteClient",
-    success: "Invitation sent",
-    invalidate: [qk.projects(), qk.workspacePeople(workspaceId ?? undefined)],
-    onSuccess: () => setStep(3),
   });
 
   const createTicket = useDataMutation(
@@ -142,35 +147,61 @@ export function OnboardingWizard() {
     },
   );
 
-  const finishToPeople = () => {
-    clearOnboardingStorage(workspaceId);
-    if (projectId) {
-      void navigate({
-        to: "/app/projects/$projectId",
-        params: { projectId },
-        search: { tab: "people", paid: undefined },
-      });
-      return;
-    }
-    void navigate({ to: "/app" });
-  };
-
   return (
     <Card className="mx-auto max-w-xl p-6 sm:p-8">
       <div className="mb-6 flex items-center gap-2">
         <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-2xl">Let&rsquo;s get you started</h2>
+        <h2 className="font-display text-2xl">Let&rsquo;s get your first ticket</h2>
       </div>
 
       <ol className="mb-6 flex items-center gap-2 text-sm" aria-label="Setup progress">
-        <StepDot n={1} label="Project" current={step} />
+        <StepDot n={1} label="Invite" current={step} />
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
-        <StepDot n={2} label="Client" current={step} />
+        <StepDot n={2} label="Project" current={step} />
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
-        <StepDot n={3} label="Share" current={step} />
+        <StepDot n={3} label="Ticket" current={step} />
       </ol>
 
       {step === 1 && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!workspaceId) return;
+            const form = new FormData(event.currentTarget);
+            void invite.run({
+              workspaceId,
+              role: "client_admin",
+              email: String(form.get("email")),
+              fullName: String(form.get("name")) || undefined,
+            });
+          }}
+          className="space-y-4"
+        >
+          <p className="text-sm text-muted-foreground">
+            Invite your client lead — they&rsquo;ll get a sign-in link. You can put them on a
+            project in the next step.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="ob-email">Their email</Label>
+            <Input id="ob-email" name="email" type="email" required autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ob-name">Their name (optional)</Label>
+            <Input id="ob-name" name="name" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setStep(2)}>
+              Skip for now
+            </Button>
+            <Button type="submit" className="flex-1" disabled={invite.busy || !workspaceId}>
+              <UserPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {invite.busy ? "Inviting…" : "Send the invite"}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {step === 2 && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -197,85 +228,14 @@ export function OnboardingWizard() {
             <Textarea id="ob-description" name="description" rows={2} />
           </div>
           <Button type="submit" className="w-full" disabled={project.busy || !workspaceId}>
-            {project.busy ? "Creating…" : "Create it"}
+            <FolderKanban className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {project.busy ? "Creating…" : "Create project"}
             <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
           </Button>
         </form>
       )}
 
-      {step === 2 && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!workspaceId) return;
-            const form = new FormData(event.currentTarget);
-            void invite.run({
-              projectId: projectId ?? undefined,
-              workspaceId,
-              role: "client_admin",
-              email: String(form.get("email")),
-              fullName: String(form.get("name")) || undefined,
-            });
-          }}
-          className="space-y-4"
-        >
-          <p className="text-sm text-muted-foreground">
-            Invite your client lead — they&rsquo;ll get a sign-in link and can report things
-            straight away, and can invite their own team later.
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="ob-email">Their email</Label>
-            <Input id="ob-email" name="email" type="email" required autoFocus />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ob-name">Their name (optional)</Label>
-            <Input id="ob-name" name="name" />
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(3)}>
-              Skip
-            </Button>
-            <Button type="submit" className="flex-1" disabled={invite.busy || !workspaceId}>
-              {invite.busy ? "Inviting…" : "Send the invite"}
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {step === 3 && !showTicketForm && (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            You&rsquo;re ready. Share the project with your client from People, or optionally seed
-            the queue with a first ticket.
-          </p>
-          <Button className="w-full" onClick={finishToPeople} disabled={!projectId}>
-            <Users className="mr-1.5 h-4 w-4" aria-hidden="true" />
-            Share with client
-          </Button>
-          {projectId && (
-            <Button variant="outline" className="w-full" asChild>
-              <Link
-                to="/app/projects/$projectId"
-                params={{ projectId }}
-                search={{ tab: "people", paid: undefined }}
-                onClick={() => clearOnboardingStorage(workspaceId)}
-              >
-                Open project People
-              </Link>
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            onClick={() => setShowTicketForm(true)}
-          >
-            Or create a first ticket
-          </Button>
-        </div>
-      )}
-
-      {step === 3 && showTicketForm && (
+      {step === 3 && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -288,7 +248,8 @@ export function OnboardingWizard() {
           className="space-y-4"
         >
           <p className="text-sm text-muted-foreground">
-            Something you already know needs doing. It&rsquo;ll show up in your queue.
+            Seed the queue with something you already know needs doing — or skip and let your client
+            report from their phone.
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="ob-ticket">What needs doing?</Label>
@@ -298,14 +259,40 @@ export function OnboardingWizard() {
             <Label htmlFor="ob-ticket-detail">Details (optional)</Label>
             <Textarea id="ob-ticket-detail" name="description" rows={2} />
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setShowTicketForm(false)}>
-              Back
-            </Button>
-            <Button type="submit" className="flex-1" disabled={createTicket.busy || !projectId}>
-              {createTicket.busy ? "Creating…" : "Finish"}
+          <div className="flex flex-col gap-2">
+            <Button type="submit" className="w-full" disabled={createTicket.busy || !projectId}>
+              <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {createTicket.busy ? "Creating…" : "Create first ticket"}
               <Check className="ml-1.5 h-4 w-4" aria-hidden="true" />
             </Button>
+            {projectId && (
+              <Button variant="outline" className="w-full" asChild>
+                <Link
+                  to="/app/report"
+                  search={{ project: projectId, url: undefined }}
+                  onClick={() => clearOnboardingStorage(workspaceId)}
+                >
+                  Or open Report something
+                </Link>
+              </Button>
+            )}
+            {projectId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  clearOnboardingStorage(workspaceId);
+                  void navigate({
+                    to: "/app/projects/$projectId",
+                    params: { projectId },
+                    search: { tab: "people", paid: undefined },
+                  });
+                }}
+              >
+                Skip — open project People
+              </Button>
+            )}
           </div>
         </form>
       )}

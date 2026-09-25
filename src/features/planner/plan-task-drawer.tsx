@@ -19,6 +19,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { addTaskComment, updateTask } from "@/lib/planner.functions";
 import { refreshTaskPullRequest } from "@/lib/github.functions";
+import { hasLivePullRequest, isOrphanTicketRef } from "@/lib/plan-refs";
 import { planDetailQuery, taskCommentsQuery } from "@/data/planner";
 import { ticketSearchQuery } from "@/data/tickets";
 import { workspacePeopleQuery } from "@/data/projects";
@@ -223,6 +224,22 @@ export function PlanTaskDrawer({
                     busy={update.busy}
                   />
                 </div>
+              ) : isOrphanTicketRef(task) ? (
+                <div className="space-y-2 text-sm">
+                  <p className="text-muted-foreground">
+                    This task pointed at a ticket that is gone. Clear the link so it stops looking
+                    resolved.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={update.busy}
+                    onClick={() => handleUpdate({ ticketId: null })}
+                  >
+                    Clear broken link
+                  </Button>
+                </div>
               ) : (
                 <>
                   <Input
@@ -270,10 +287,10 @@ export function PlanTaskDrawer({
                   placeholder="feature/…"
                 />
               </div>
-              {task.pr_url ? (
+              {hasLivePullRequest(task) ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <a
-                    href={task.pr_url}
+                    href={task.pr_url!}
                     target="_blank"
                     rel="noreferrer"
                     className="underline underline-offset-2"

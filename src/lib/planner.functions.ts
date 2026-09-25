@@ -11,6 +11,7 @@ import {
   ticketPriorityToTask,
 } from "@/lib/ticket-task";
 import { normalizeScopes } from "@/lib/api-scopes";
+import { isOrphanPullRequestRef, isOrphanTicketRef, scrubCommentIfUnlinked } from "@/lib/plan-refs";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
 const workspaceIdField = z.string().uuid().optional();
@@ -23,6 +24,54 @@ type PlanUpdate = Database["public"]["Tables"]["plans"]["Update"];
 type PlanSectionUpdate = Database["public"]["Tables"]["plan_sections"]["Update"];
 type PlanTaskUpdate = Database["public"]["Tables"]["plan_tasks"]["Update"];
 type TicketPriority = Database["public"]["Enums"]["ticket_priority"];
+
+type PlanTaskRefRow = {
+  id: string;
+  ticket_id?: string | null;
+  ticket?: { id: string } | null;
+  pr_number?: number | null;
+  pr_url?: string | null;
+  pr_status?: string | null;
+};
+
+/** Clear structured refs that would show as live links to missing tickets/PRs. */
+async function healOrphanPlanTaskRefs(
+  supabase: SupabaseClient<Database>,
+  plan: { sections?: Array<{ tasks?: PlanTaskRefRow[] | null } | null> | null },
+) {
+  const orphanTickets: string[] = [];
+  const orphanPrs: string[] = [];
+
+  for (const section of plan.sections ?? []) {
+    for (const task of section?.tasks ?? []) {
+      if (!task) continue;
+      if (isOrphanTicketRef(task)) {
+        orphanTickets.push(task.id);
+        task.ticket_id = null;
+      }
+      if (isOrphanPullRequestRef(task)) {
+        orphanPrs.push(task.id);
+        task.pr_number = null;
+        task.pr_status = null;
+      }
+    }
+  }
+
+  if (orphanTickets.length > 0) {
+    const { error } = await supabase
+      .from("plan_tasks")
+      .update({ ticket_id: null })
+      .in("id", orphanTickets);
+    if (error) console.error("[planner] clear orphan ticket refs", error.message);
+  }
+  if (orphanPrs.length > 0) {
+    const { error } = await supabase
+      .from("plan_tasks")
+      .update({ pr_number: null, pr_status: null })
+      .in("id", orphanPrs);
+    if (error) console.error("[planner] clear orphan PR refs", error.message);
+  }
+}
 
 async function noteTicketPlannerEvent(
   supabase: SupabaseClient<Database>,
@@ -305,7 +354,9 @@ export const getPlan = createServerFn({ method: "GET" })
         .order("position", { referencedTable: "plan_sections.plan_tasks", ascending: true })
         .single();
       if (error) throw error;
-      return { plan: requireFound(plan, "plan") };
+      const found = requireFound(plan, "plan");
+      await healOrphanPlanTaskRefs(supabase, found);
+      return { plan: found };
     }),
   );
 
@@ -815,6 +866,13 @@ export const listTaskComments = createServerFn({ method: "GET" })
     guard("comments.list", async () => {
       const { supabase } = context;
 
+      const { data: task, error: taskError } = await supabase
+        .from("plan_tasks")
+        .select("id, ticket_id, pr_url, pr_number, ticket:tickets(id)")
+        .eq("id", data.taskId)
+        .maybeSingle();
+      if (taskError) throw taskError;
+
       const { data: comments, error } = await supabase
         .from("plan_task_comments")
         .select(
@@ -824,7 +882,21 @@ export const listTaskComments = createServerFn({ method: "GET" })
         .order("created_at", { ascending: true });
       if (error) throw error;
 
-      return { comments };
+      const ref = {
+        ticket_id: task?.ticket_id ?? null,
+        ticket: (task?.ticket as { id: string } | null | undefined) ?? null,
+        pr_url: task?.pr_url ?? null,
+        pr_number: task?.pr_number ?? null,
+      };
+
+      return {
+        comments: (comments ?? [])
+          .map((entry) => ({
+            ...entry,
+            body: scrubCommentIfUnlinked(entry.body ?? "", ref),
+          }))
+          .filter((entry) => entry.body.trim().length > 0),
+      };
     }),
   );
 

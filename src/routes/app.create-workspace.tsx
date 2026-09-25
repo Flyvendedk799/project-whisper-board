@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
 import { createWorkspace } from "@/lib/workspace.functions";
+import { markOnboardingStart } from "@/components/onboarding-wizard";
 import { toast } from "sonner";
 
 const PENDING_WS_NAME_KEY = "cf.pendingWorkspaceName";
@@ -52,6 +53,7 @@ function CreateWorkspacePage() {
       } catch {
         /* ignore */
       }
+      markOnboardingStart(result.workspace.id);
       setActiveWorkspace(result.workspace.id);
       await refetchWorkspaces();
       toast.success("Workspace created");
