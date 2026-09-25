@@ -538,7 +538,10 @@ const enumsInsert = `
         | "blocked"
 `;
 
-content = content.replace(/ {6}\}\r?\n {4}\}\r?\n {4}Views: \{/, '      }\n' + tablesInsert + '    }\n    Views: {');
+content = content.replace(
+  / {6}\}\r?\n {4}\}\r?\n {4}Views: \{/,
+  "      }\n" + tablesInsert + "    }\n    Views: {",
+);
 content = content.replace("    Enums: {", "    Enums: {" + enumsInsert);
 
 fs.writeFileSync(typesPath, content, "utf8");

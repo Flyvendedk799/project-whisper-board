@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import dotenv from "dotenv";
 import path from "node:path";
 import os from "node:os";
@@ -30,7 +29,7 @@ function getApiKey(): string {
   }
   if (!key) {
     throw new Error(
-      "Missing PLANNER_API_KEY. Please generate an API key in the Boared Planner UI (https://boared.online/planner) and set PLANNER_API_KEY in your .env or ~/.boared.env"
+      "Missing PLANNER_API_KEY. Please generate an API key in the Boared Planner UI (https://boared.online/planner) and set PLANNER_API_KEY in your .env or ~/.boared.env",
     );
   }
   return key;
@@ -67,7 +66,10 @@ server.tool("list_plans", "List all active plans", {}, async () => {
     const plans = await fetchApi("plans");
     return { content: [{ type: "text", text: JSON.stringify(plans, null, 2) }] };
   } catch (error: unknown) {
-    return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+      isError: true,
+    };
   }
 });
 
@@ -82,7 +84,10 @@ server.tool(
       const plan = await fetchApi(`plans/${plan_id}`);
       return { content: [{ type: "text", text: JSON.stringify(plan, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -98,7 +103,10 @@ server.tool(
       const availableTasks = await fetchApi(`plans/${plan_id}/available-tasks`);
       return { content: [{ type: "text", text: JSON.stringify(availableTasks, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -114,7 +122,10 @@ server.tool(
       const task = await fetchApi(`tasks/${task_id}`);
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -165,7 +176,10 @@ server.tool(
       const task = await fetchApi(`tasks/${task_id}/start`, { method: "POST" });
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -193,7 +207,10 @@ server.tool(
       });
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -215,7 +232,10 @@ server.tool(
       const task = await fetchApi(`tasks/${task_id}/block`, { method: "POST" });
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -231,7 +251,10 @@ server.tool(
       const task = await fetchApi(`tasks/${task_id}/unclaim`, { method: "POST" });
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -251,7 +274,10 @@ server.tool(
       });
       return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -313,7 +339,10 @@ server.tool(
         ],
       };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );
@@ -343,7 +372,10 @@ server.tool(
         ],
       };
     } catch (error: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(error as Error).message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
     }
   },
 );

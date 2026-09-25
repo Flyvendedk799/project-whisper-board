@@ -40,25 +40,47 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('33333333-3333-3333-3333-333333333333', 'rival@rival.test',
    '{"workspace_id": "00000000-0000-0000-0000-000000000002"}'::jsonb);
 
+-- Signup no longer auto-joins the seeded workspace. A missing role compared
+-- with `=` is null, and `assert` treats null as success, so these checks
+-- must look for a row.
 select assert(
-  (select role from public.workspace_members
-   where user_id = '11111111-1111-1111-1111-111111111111') = 'admin',
-  'the first person in a workspace becomes its admin'
+  (select count(*) from public.workspace_members
+   where user_id = '11111111-1111-1111-1111-111111111111') = 0,
+  'a signup with no workspace does not become an admin of the default one'
+);
+select assert(
+  (select count(*) from public.workspace_members
+   where user_id = '22222222-2222-2222-2222-222222222222') = 0,
+  'a second signup with no workspace does not either'
 );
 select assert(
   (select role from public.workspace_members
-   where user_id = '22222222-2222-2222-2222-222222222222') = 'client',
-  'the second person does not'
+   where user_id = '33333333-3333-3333-3333-333333333333') = 'client',
+  'naming a workspace without an invite role joins as a client'
 );
 select assert(
-  (select role from public.workspace_members
-   where user_id = '33333333-3333-3333-3333-333333333333') = 'admin',
-  'but the first person in a different workspace does'
+  (select count(*) from public.notification_preferences) = 0,
+  'signup does not invent notification preferences'
 );
-select assert(
-  (select count(*) from public.notification_preferences) = 3,
-  'everyone gets notification preferences on signup'
-);
+
+-- The rest of the suite needs an admin, a client, and prefs. That membership
+-- now comes from create_workspace / invite, which this fixture stands in for.
+insert into public.workspace_members (workspace_id, user_id, role) values
+  ('00000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'admin'),
+  ('00000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'client');
+insert into public.user_roles (user_id, workspace_id, role) values
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'admin'),
+  ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000001', 'client');
+update public.workspace_members
+set role = 'admin'
+where user_id = '33333333-3333-3333-3333-333333333333';
+update public.user_roles
+set role = 'admin'
+where user_id = '33333333-3333-3333-3333-333333333333';
+insert into public.notification_preferences (user_id) values
+  ('11111111-1111-1111-1111-111111111111'),
+  ('22222222-2222-2222-2222-222222222222'),
+  ('33333333-3333-3333-3333-333333333333');
 
 -- `is_admin` is workspace-agnostic today, so scope the rival to their own.
 delete from public.user_roles
