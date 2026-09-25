@@ -171,14 +171,27 @@ function ProjectPage() {
 
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
             <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-              {isAdmin ? (
-                <ProjectStatusSelect projectId={projectId} status={p.status} />
-              ) : (
-                <StatusPill tone={PROJECT_STATUS_TONE[p.status]}>
-                  {PROJECT_STATUS_LABEL[p.status]}
-                </StatusPill>
-              )}
-              <span className="text-muted-foreground">{p.progress}% complete</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {isAdmin ? (
+                  <ProjectStatusSelect projectId={projectId} status={p.status} />
+                ) : (
+                  <StatusPill tone={PROJECT_STATUS_TONE[p.status]}>
+                    {PROJECT_STATUS_LABEL[p.status]}
+                  </StatusPill>
+                )}
+                <span
+                  className="text-xs text-muted-foreground"
+                  title="Project stage — discovery, proposal, delivery, and so on. Separate from how much plan or milestone work is finished."
+                >
+                  stage
+                </span>
+              </div>
+              <span
+                className="text-muted-foreground"
+                title="Share of plan tasks or milestones finished. Not the same as project stage, and not whether a repository is connected."
+              >
+                Work {p.progress}%
+              </span>
               <ProjectPlanProgress projectId={projectId} linked={isAdmin} />
               {isAdmin && p.budget_cents != null && (
                 <span className="text-muted-foreground">
@@ -194,9 +207,18 @@ function ProjectPage() {
               )}
               <ProgressBar
                 value={p.progress}
-                label={`${p.title} progress`}
+                label={`${p.title} work finished`}
                 className="max-w-xs flex-1"
               />
+              {isAdmin &&
+                p.progress >= 100 &&
+                (p.status === "discovery" || p.status === "proposal") && (
+                  <span className="w-full text-xs text-muted-foreground">
+                    Plan work is finished — update the stage when the engagement moves past{" "}
+                    {PROJECT_STATUS_LABEL[p.status].toLowerCase()}.
+                    {!p.github_repo ? " Repository is optional and separate." : ""}
+                  </span>
+                )}
             </div>
 
             <Tabs
@@ -550,8 +572,18 @@ function PeoplePanel({
       )}
 
       {canInvite && workspaceClients.length > 0 && (
-        <Card className="space-y-3 p-4">
-          <p className="text-sm font-medium">Clients in this workspace, not on this project</p>
+        <Card className="space-y-3 border-primary/20 bg-primary/5 p-4">
+          <div>
+            <p className="text-sm font-medium">
+              {members.data && members.data.length === 0
+                ? "Add a client to this project"
+                : "Clients in this workspace, not on this project"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              They&rsquo;re already on Team / Clients. Add them here so they can report and follow
+              this project.
+            </p>
+          </div>
           <ul className="space-y-2">
             {workspaceClients.map((member) => (
               <li key={member.user_id} className="flex items-center justify-between gap-3 text-sm">
@@ -560,7 +592,6 @@ function PeoplePanel({
                 </span>
                 <Button
                   size="sm"
-                  variant="outline"
                   disabled={addMember.busy || !workspaceId}
                   onClick={() =>
                     workspaceId &&
@@ -571,7 +602,7 @@ function PeoplePanel({
                     })
                   }
                 >
-                  Add
+                  Add to project
                 </Button>
               </li>
             ))}
@@ -583,26 +614,44 @@ function PeoplePanel({
         query={members}
         errorTitle="Couldn't load people"
         empty={
-          <Card>
-            <EmptyState
-              icon={UserPlus}
-              title="Nobody here yet"
-              description={
-                canInvite
-                  ? "Invite your client so they can report issues and follow progress."
-                  : "You're the first."
-              }
-              action={
-                canInvite ? (
+          workspaceClients.length > 0 ? (
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">
+                Nobody is on this project yet. Use Add to project above for a workspace client, or
+                invite someone new.
+              </p>
+              {canInvite && (
+                <div className="mt-3">
                   <InviteClientButton
                     projectId={projectId}
                     canChooseRole={canManageRoles}
                     onInvited={(email) => onPendingInviteChange(email)}
                   />
-                ) : undefined
-              }
-            />
-          </Card>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <Card>
+              <EmptyState
+                icon={UserPlus}
+                title="Nobody here yet"
+                description={
+                  canInvite
+                    ? "Invite your client so they can report issues and follow progress."
+                    : "You're the first."
+                }
+                action={
+                  canInvite ? (
+                    <InviteClientButton
+                      projectId={projectId}
+                      canChooseRole={canManageRoles}
+                      onInvited={(email) => onPendingInviteChange(email)}
+                    />
+                  ) : undefined
+                }
+              />
+            </Card>
+          )
         }
       >
         {(data) => {

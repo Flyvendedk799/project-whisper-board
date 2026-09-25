@@ -1,9 +1,15 @@
 import { Bot, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
+import { hasLivePullRequest } from "@/lib/plan-refs";
 import type { TaskWithAgent } from "@/data";
 
 export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?: () => void }) {
+  const livePr = hasLivePullRequest(task);
+  const liveTicket = Boolean(task.ticket?.id);
+  const showFooter = Boolean(
+    task.assigned_agent_id || task.assigned_user_id || livePr || liveTicket,
+  );
   const isMerged = task.pr_status === "merged";
   const isClosed = task.pr_status === "closed";
 
@@ -40,7 +46,7 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
         )}
       </div>
 
-      {(task.assigned_agent_id || task.assigned_user_id || task.pr_number || task.ticket_id) && (
+      {showFooter && (
         <div className="mt-1 flex flex-col gap-1.5 border-t pt-2 text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -60,7 +66,7 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
               )}
             </div>
 
-            {task.pr_number && (
+            {livePr && task.pr_number && (
               <a
                 href={task.pr_url || "#"}
                 target="_blank"
@@ -82,7 +88,7 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
             )}
           </div>
 
-          {task.ticket_id && task.ticket && (
+          {liveTicket && task.ticket && (
             <Link
               to="/app/tickets/$ticketId"
               params={{ ticketId: task.ticket.id }}
@@ -93,11 +99,6 @@ export function PlanTaskCard({ task, onClick }: { task: TaskWithAgent; onClick?:
               #{task.ticket.ticket_number}
               {task.ticket.status ? ` · ${task.ticket.status.replace(/_/g, " ")}` : ""}
             </Link>
-          )}
-          {task.ticket_id && !task.ticket && (
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
-              <span>Resolves ticket</span>
-            </div>
           )}
         </div>
       )}
