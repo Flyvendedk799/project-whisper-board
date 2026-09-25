@@ -22,6 +22,7 @@ import { CaptureDropzone } from "@/features/capture/capture-dropzone";
 import { useServerAction } from "@/lib/use-server-action";
 import { addComment } from "@/lib/tickets.functions";
 import { draftReply } from "@/lib/ai.functions";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { notifyTicketComment } from "@/lib/notifications.functions";
 import { describeOutcome, newDraftId, uploadDrafts, type DraftAttachment } from "@/lib/upload";
 import { supabase } from "@/integrations/supabase/client";
@@ -283,6 +284,7 @@ function CommentBox({
   isAdmin: boolean;
 }) {
   const { workspaceId } = useAuth();
+  const aiEnabled = useAiEnabled();
   const [body, setBody] = useState(() => {
     try {
       return sessionStorage.getItem(replyDraftKey(ticketId)) ?? "";
@@ -458,7 +460,7 @@ function CommentBox({
                 <span>Internal note</span>
               </label>
             )}
-            {isAdmin && (
+            {isAdmin && aiEnabled && (
               <Button
                 type="button"
                 variant="ghost"

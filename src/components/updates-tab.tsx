@@ -74,7 +74,7 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                 id="update-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Shipped the new checkout"
+                placeholder="Title"
               />
             </div>
             {title && (
@@ -135,7 +135,7 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                           : "•"}
                       </span>
                       <span className="font-medium text-foreground">
-                        {update.author?.full_name ?? update.author?.email ?? "Consflow"}
+                        {update.author?.full_name ?? update.author?.email ?? "Boared"}
                       </span>
                       <span>{UPDATE_KIND_LABEL[update.kind]}</span>
                       <span aria-hidden="true">·</span>

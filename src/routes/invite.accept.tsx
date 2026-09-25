@@ -17,7 +17,7 @@ export const Route = createFileRoute("/invite/accept")({
   validateSearch: z.object({
     project: z.string().uuid().optional(),
   }),
-  head: () => ({ meta: [{ title: "Welcome · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Welcome · Boared" }] }),
   component: InviteAcceptPage,
 });
 

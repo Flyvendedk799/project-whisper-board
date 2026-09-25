@@ -65,20 +65,30 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
       ) : (
         <ul className="space-y-2">
           {tasks.map((task) => (
-            <li key={task.id}>
+            <li key={task.id} className="rounded-md border p-2">
               <Link
                 to="/app/planner/$planId"
                 params={{ planId: task.plan_id }}
-                className="block rounded-md border p-2 transition-colors hover:bg-muted/50"
+                className="block transition-colors hover:text-primary"
               >
                 <div className="text-sm font-medium">{task.title}</div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <StatusPill>{task.status}</StatusPill>
                   <span className="truncate">
                     {task.plan && "title" in task.plan ? String(task.plan.title) : "Plan"}
                   </span>
                 </div>
               </Link>
+              {task.pr_url && (
+                <a
+                  href={task.pr_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-xs underline underline-offset-2"
+                >
+                  {task.pr_status === "merged" ? "Merged pull request" : "Pull request"}
+                </a>
+              )}
             </li>
           ))}
         </ul>

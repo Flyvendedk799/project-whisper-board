@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { useServerAction } from "@/lib/use-server-action";
 import { linkTickets, unlinkTickets, updateTicket } from "@/lib/tickets.functions";
 import { notifyTicketChanged } from "@/lib/notifications.functions";
@@ -45,6 +46,7 @@ import type { RelationWithTicket, TicketDetail } from "@/data/types";
 /** Everything an admin does to a ticket, in the order they usually do it. */
 export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
   const { workspaceId } = useAuth();
+  const aiEnabled = useAiEnabled();
   const invalidate = [qk.ticket(ticket.id), qk.tickets()];
 
   const notify = useServerFn(notifyTicketChanged);
@@ -271,43 +273,45 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
         )}
       </Card>
 
-      <Card className="space-y-3 p-4">
-        <h2 className="text-sm font-medium">AI</h2>
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={summarize.busy}
-          onClick={() => summarize.fire({ ticketId: ticket.id })}
-        >
-          <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {summarize.busy ? "Summarising…" : "Summarise the thread"}
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={triage.busy}
-          onClick={() => triage.fire({ ticketId: ticket.id })}
-        >
-          <Wand2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {triage.busy ? "Thinking…" : "Suggest type and priority"}
-        </Button>
+      {aiEnabled && (
+        <Card className="space-y-3 p-4">
+          <h2 className="text-sm font-medium">AI</h2>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={summarize.busy}
+            onClick={() => summarize.fire({ ticketId: ticket.id })}
+          >
+            <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {summarize.busy ? "Summarising…" : "Summarise the thread"}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={triage.busy}
+            onClick={() => triage.fire({ ticketId: ticket.id })}
+          >
+            <Wand2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {triage.busy ? "Thinking…" : "Suggest type and priority"}
+          </Button>
 
-        {ticket.ai_suggested_type && (
-          <p className="text-xs text-muted-foreground">
-            Suggested: <strong>{TICKET_TYPE_LABEL[ticket.ai_suggested_type]}</strong> ·{" "}
-            <strong>
-              {ticket.ai_suggested_priority
-                ? TICKET_PRIORITY_LABEL[ticket.ai_suggested_priority]
-                : "—"}
-            </strong>
-          </p>
-        )}
-        {ticket.ai_screenshot_analysis && (
-          <p className="border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
-            {ticket.ai_screenshot_analysis}
-          </p>
-        )}
-      </Card>
+          {ticket.ai_suggested_type && (
+            <p className="text-xs text-muted-foreground">
+              Suggested: <strong>{TICKET_TYPE_LABEL[ticket.ai_suggested_type]}</strong> ·{" "}
+              <strong>
+                {ticket.ai_suggested_priority
+                  ? TICKET_PRIORITY_LABEL[ticket.ai_suggested_priority]
+                  : "—"}
+              </strong>
+            </p>
+          )}
+          {ticket.ai_screenshot_analysis && (
+            <p className="border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
+              {ticket.ai_screenshot_analysis}
+            </p>
+          )}
+        </Card>
+      )}
 
       <ProjectRepoCard repo={ticket.project?.github_repo ?? null} projectId={ticket.project_id} />
       <RelationsCard ticketId={ticket.id} relations={relations.data ?? []} />

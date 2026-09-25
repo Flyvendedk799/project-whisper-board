@@ -280,6 +280,24 @@ select assert(
   'removing every milestone divides by zero safely'
 );
 
+-- Untouched milestones must not hide a finished plan.
+insert into public.projects (id, organization_id, title, created_by) values
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'Plan only', '11111111-1111-1111-1111-111111111111');
+insert into public.milestones (project_id, title, position) values
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'Later', 0);
+insert into public.plans (id, workspace_id, project_id, title) values
+  ('eeeeeeee-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000003', 'Delivery');
+insert into public.plan_sections (id, plan_id, title) values
+  ('eeeeeeee-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Now');
+insert into public.plan_tasks (section_id, plan_id, title, status) values
+  ('eeeeeeee-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-000000000001', 'Ship it', 'done');
+select assert(
+  (select progress from public.projects where id = 'bbbbbbbb-0000-0000-0000-000000000003') = 100,
+  'a finished plan counts while every milestone is still pending'
+);
+
 -- ---------------------------------------------------------------------------
 \echo 'time tracking'
 -- ---------------------------------------------------------------------------

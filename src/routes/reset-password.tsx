@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Reset password · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Reset password · Boared" }] }),
   component: ResetPage,
 });
 

@@ -1,12 +1,13 @@
-# Consflow
+# Boared
 
 A client portal and ticket platform for a software agency. Two sides, one app:
 
 - **Admin workspace** — every ticket across every client in one triage queue, with search,
   saved views, keyboard navigation, SLA tracking and time logging.
 - **Client portal** — clients report a bug by pointing at it (annotated screenshot, screen
-  recording with narration, auto-captured browser context; AI drafts the ticket), follow their
-  project from quote to milestones to invoice, and read a real activity timeline.
+  recording with narration, auto-captured browser context), follow their project from quote to
+  milestones to invoice, and read a real activity timeline. AI drafts are optional and hidden
+  until a provider is configured.
 
 ## Stack
 
@@ -60,7 +61,7 @@ the adapter with no code change.
 
 | Variable                                     | Enables                                                 | Without it                                                                 |
 | -------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`      | Ticket drafting, triage, summaries, screenshot analysis | AI affordances are hidden                                                  |
+| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`      | Ticket drafting, triage, summaries, screenshot analysis | AI controls are hidden; nothing calls AI unless you click                  |
 | `RESEND_API_KEY`, `EMAIL_FROM`               | Real transactional email                                | Messages are written to `outbound_messages` and shown in Settings → Outbox |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Card payment on invoices                                | Invoices are settled manually; the flow is otherwise identical             |
 | `SENTRY_DSN`                                 | Error reporting to Sentry                               | Errors are written to `app_errors` and surfaced in Settings                |

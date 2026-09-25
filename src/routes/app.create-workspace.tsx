@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const PENDING_WS_NAME_KEY = "cf.pendingWorkspaceName";
 
 export const Route = createFileRoute("/app/create-workspace")({
-  head: () => ({ meta: [{ title: "Create workspace · Consflow" }] }),
+  head: () => ({ meta: [{ title: "Create workspace · Boared" }] }),
   component: CreateWorkspacePage,
 });
 

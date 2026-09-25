@@ -352,7 +352,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Consflow Planner MCP server running on stdio");
+  console.error("Boared Planner MCP server running on stdio");
 }
 
 main().catch((err) => {
