@@ -419,6 +419,19 @@ function unfoldDescription(description: string): { body: string; nested: Outline
   };
 }
 
+export type TaskOutlineNode = {
+  title: string;
+  body: string;
+  children: TaskOutlineNode[];
+};
+
+export function readTaskOutline(description: string | null | undefined): {
+  body: string;
+  nested: TaskOutlineNode[];
+} {
+  return unfoldDescription(description ?? "");
+}
+
 function emitNumbered(nodes: OutlineNode[], prefix: string, lines: string[]) {
   nodes.forEach((node, index) => {
     const key = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;

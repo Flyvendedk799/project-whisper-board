@@ -4,6 +4,7 @@ import {
   planMarkdownFilename,
   planMarkdownPreview,
   planMarkdownStats,
+  readTaskOutline,
   serializePlanMarkdown,
   type PlanMdDocument,
 } from "./plan-markdown";
@@ -414,6 +415,33 @@ describe("helpers", () => {
         children: [{ title: "B", children: [{ title: "C", children: [] }] }],
       },
     ]);
+  });
+
+  it("reads nested outline back out of a task description", () => {
+    expect(
+      readTaskOutline("Wire the session middleware.\n\n- Cookie refresh\n- Logout path"),
+    ).toEqual({
+      body: "Wire the session middleware.",
+      nested: [
+        { title: "Cookie refresh", body: "", children: [] },
+        { title: "Logout path", body: "", children: [] },
+      ],
+    });
+    expect(readTaskOutline("- Parent\n  - Child\n    keeps the wire")).toEqual({
+      body: "",
+      nested: [
+        {
+          title: "Parent",
+          body: "",
+          children: [{ title: "Child", body: "keeps the wire", children: [] }],
+        },
+      ],
+    });
+    expect(readTaskOutline("Just a paragraph.")).toEqual({
+      body: "Just a paragraph.",
+      nested: [],
+    });
+    expect(readTaskOutline(null)).toEqual({ body: "", nested: [] });
   });
 
   it("builds a download filename from the plan title", () => {
