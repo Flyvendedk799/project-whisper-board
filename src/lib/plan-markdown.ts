@@ -8,6 +8,8 @@
  *   1.1.1 Nested (stored inside the task description as a markdown list)
  *
  * Import also accepts ATX headings (# / ## / ###) and nested markdown lists.
+ * A single wrapping `#` document title whose children are `##` chapters is
+ * promoted away so chapters become sections (typical design-doc shape).
  * Outline keys are stripped from stored titles and regenerated on export.
  */
 
@@ -75,11 +77,16 @@ function listDepth(indent: string): number {
   return Math.floor(spaces / 2) + 1;
 }
 
-function classifyOutlineLine(line: string): { depth: number; title: string } | null {
-  const numbered = line.match(NUMBERED_KEY);
-  if (numbered?.groups) {
-    const depth = numbered.groups.key.split(".").length;
-    return { depth, title: numbered.groups.title.trim() };
+function classifyOutlineLine(
+  line: string,
+  opts?: { /** When true, ignore numbered keys so ATX + ordered lists win. */ atxOnly?: boolean },
+): { depth: number; title: string } | null {
+  if (!opts?.atxOnly) {
+    const numbered = line.match(NUMBERED_KEY);
+    if (numbered?.groups) {
+      const depth = numbered.groups.key.split(".").length;
+      return { depth, title: numbered.groups.title.trim() };
+    }
   }
 
   const heading = line.match(ATX_HEADING);
@@ -91,6 +98,11 @@ function classifyOutlineLine(line: string): { depth: number; title: string } | n
   }
 
   return null;
+}
+
+/** True when the source uses ATX headings (# / ## / …). */
+function documentHasAtxHeadings(lines: string[]): boolean {
+  return lines.some((line) => ATX_HEADING.test(line));
 }
 
 /**
@@ -117,6 +129,11 @@ function parseFlatItems(source: string): FlatItem[] {
   let current: FlatItem | null = null;
   /** Depth of the most recent numbered/heading outline item (not a list). */
   let lastStructuralDepth = 0;
+  /**
+   * Design docs with `#` / `##` headings often contain ordered lists (`1. …`).
+   * Those must not compete with the numbered-outline grammar (`1 Section`).
+   */
+  const atxOnly = documentHasAtxHeadings(lines);
 
   const pushBody = (text: string) => {
     if (!current) return;
@@ -142,7 +159,7 @@ function parseFlatItems(source: string): FlatItem[] {
   }
 
   for (const line of lines) {
-    const outline = classifyOutlineLine(line);
+    const outline = classifyOutlineLine(line, { atxOnly });
     if (outline) {
       current = { depth: outline.depth, title: outline.title, bodyLines: [] };
       items.push(current);
@@ -235,6 +252,37 @@ function treeToDocument(roots: OutlineNode[]): PlanMdDocument {
   };
 }
 
+/**
+ * True when the source is a typical design-doc shape: exactly one ATX `#`
+ * title wrapping `##` chapters. Numbered outlines (`1` / `1.1`) and multi-H1
+ * boards keep the older section/task mapping.
+ */
+function shouldPromoteDocumentTitle(source: string, roots: OutlineNode[]): boolean {
+  if (roots.length !== 1) return false;
+  if (roots[0].children.length === 0) return false;
+
+  let h1Count = 0;
+  let h2Count = 0;
+  for (const line of source.replace(/\r\n/g, "\n").split("\n")) {
+    const heading = line.match(ATX_HEADING);
+    if (!heading?.groups) continue;
+    const depth = heading.groups.hashes.length;
+    if (depth === 1) h1Count += 1;
+    else if (depth === 2) h2Count += 1;
+  }
+
+  return h1Count === 1 && h2Count > 0;
+}
+
+/**
+ * Drop a wrapping document-title root and promote its children to sections.
+ * Title-level body is discarded (not turned into a fake section/task).
+ */
+function promoteDocumentTitle(roots: OutlineNode[]): OutlineNode[] {
+  if (roots.length !== 1) return roots;
+  return roots[0].children;
+}
+
 /** Parse markdown into sections / tasks (nested outline folded into descriptions). */
 export function parsePlanMarkdown(source: string): PlanMdDocument {
   const trimmed = source.trim();
@@ -249,7 +297,12 @@ export function parsePlanMarkdown(source: string): PlanMdDocument {
     depth: item.depth - minDepth + 1,
   }));
 
-  return treeToDocument(buildTree(normalized));
+  let roots = buildTree(normalized);
+  if (shouldPromoteDocumentTitle(trimmed, roots)) {
+    roots = promoteDocumentTitle(roots);
+  }
+
+  return treeToDocument(roots);
 }
 
 /** Parse a task description back into body + nested outline nodes. */
