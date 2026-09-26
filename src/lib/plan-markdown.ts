@@ -8,6 +8,10 @@
  *   1.1.1 Nested (stored inside the task description as a markdown list)
  *
  * Import also accepts ATX headings (# / ## / ###) and nested markdown lists.
+ * Outline keys are only bare `1 Title` or multi-segment `1.1 Title` —
+ * markdown ordered lists (`1. Title`) are never outline keys.
+ * A single wrapping `#` document title whose children are `##` chapters is
+ * promoted away so chapters become sections (typical design-doc shape).
  * Outline keys are stripped from stored titles and regenerated on export.
  */
 
@@ -47,15 +51,56 @@ type FlatItem = {
 const SECTION_TITLE_MAX = 100;
 const TASK_TITLE_MAX = 200;
 
-const NUMBERED_KEY = /^(?<key>\d+(?:\.\d+)*)(?:\.(?=\s)|(?=\s))[.\s]+(?<title>\S.*)$/;
+/**
+ * Multi-segment outline key: `1.1 Title` / `3.1.1 Title`.
+ * Optional trailing `.` before the title (`1.1. Title`) is allowed.
+ */
+const NUMBERED_MULTI_KEY = /^(?<key>\d+(?:\.\d+)+)\.?\s+(?<title>\S.*)$/;
+/**
+ * Bare section key: `1 Foundations`.
+ * Deliberately does **not** match `1. Title` (markdown ordered list).
+ */
+const NUMBERED_BARE_KEY = /^(?<key>\d+)\s+(?<title>\S.*)$/;
 const ATX_HEADING = /^(?<hashes>#{1,6})\s+(?<title>\S.*)$/;
 const LIST_ITEM = /^(?<indent>[ \t]*)(?:[-*+]|\d+\.)\s+(?<title>\S.*)$/;
 const NESTED_HEADING = /^(?<hashes>#{3,6})\s+(?<title>\S.*)$/;
 
+/** Strip inline markdown from stored section/task titles (descriptions keep it). */
+function stripInlineMarkdown(title: string): string {
+  return title
+    .trim()
+    .replace(/^#+\s*/, "")
+    .replace(/\s*#+$/, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function clampTitle(title: string, max: number): string {
-  const trimmed = title.trim().replace(/\s+/g, " ");
+  const trimmed = stripInlineMarkdown(title);
   if (trimmed.length <= max) return trimmed;
   return trimmed.slice(0, max - 1).trimEnd() + "…";
+}
+
+function matchNumberedOutline(line: string): { depth: number; title: string } | null {
+  const multi = line.match(NUMBERED_MULTI_KEY);
+  if (multi?.groups) {
+    return {
+      depth: multi.groups.key.split(".").length,
+      title: multi.groups.title.trim(),
+    };
+  }
+  const bare = line.match(NUMBERED_BARE_KEY);
+  if (bare?.groups) {
+    const title = bare.groups.title.trim();
+    // Reject number-leading prose (`2400 is four…`, `25 ms is half…`).
+    // Real outline titles start with a capital, digit, or inline marker.
+    if (!/^[\p{Lu}`*_\d]/u.test(title)) return null;
+    return { depth: 1, title };
+  }
+  return null;
 }
 
 function blankLine(line: string): boolean {
@@ -75,11 +120,15 @@ function listDepth(indent: string): number {
   return Math.floor(spaces / 2) + 1;
 }
 
-function classifyOutlineLine(line: string): { depth: number; title: string } | null {
-  const numbered = line.match(NUMBERED_KEY);
-  if (numbered?.groups) {
-    const depth = numbered.groups.key.split(".").length;
-    return { depth, title: numbered.groups.title.trim() };
+function classifyOutlineLine(
+  line: string,
+  opts?: {
+    /** When true, only ATX headings count as outline (skip numbered keys). */ atxOnly?: boolean;
+  },
+): { depth: number; title: string } | null {
+  if (!opts?.atxOnly) {
+    const numbered = matchNumberedOutline(line);
+    if (numbered) return numbered;
   }
 
   const heading = line.match(ATX_HEADING);
@@ -91,6 +140,11 @@ function classifyOutlineLine(line: string): { depth: number; title: string } | n
   }
 
   return null;
+}
+
+/** True when the source uses ATX headings (# / ## / …). */
+function documentHasAtxHeadings(lines: string[]): boolean {
+  return lines.some((line) => ATX_HEADING.test(line));
 }
 
 /**
@@ -117,6 +171,13 @@ function parseFlatItems(source: string): FlatItem[] {
   let current: FlatItem | null = null;
   /** Depth of the most recent numbered/heading outline item (not a list). */
   let lastStructuralDepth = 0;
+  /**
+   * Design docs with `#` / `##` often contain prose that starts with a number
+   * (`2400 is four…`) and ordered lists (`1. …`). Skip numbered-outline keys
+   * there so only ATX headings structure the tree; pure `1` / `1.1` outlines
+   * still use the tightened numbered grammar.
+   */
+  const atxOnly = documentHasAtxHeadings(lines);
 
   const pushBody = (text: string) => {
     if (!current) return;
@@ -142,7 +203,7 @@ function parseFlatItems(source: string): FlatItem[] {
   }
 
   for (const line of lines) {
-    const outline = classifyOutlineLine(line);
+    const outline = classifyOutlineLine(line, { atxOnly });
     if (outline) {
       current = { depth: outline.depth, title: outline.title, bodyLines: [] };
       items.push(current);
@@ -235,6 +296,37 @@ function treeToDocument(roots: OutlineNode[]): PlanMdDocument {
   };
 }
 
+/**
+ * True when the source is a typical design-doc shape: exactly one ATX `#`
+ * title wrapping `##` chapters. Numbered outlines (`1` / `1.1`) and multi-H1
+ * boards keep the older section/task mapping.
+ */
+function shouldPromoteDocumentTitle(source: string, roots: OutlineNode[]): boolean {
+  if (roots.length !== 1) return false;
+  if (roots[0].children.length === 0) return false;
+
+  let h1Count = 0;
+  let h2Count = 0;
+  for (const line of source.replace(/\r\n/g, "\n").split("\n")) {
+    const heading = line.match(ATX_HEADING);
+    if (!heading?.groups) continue;
+    const depth = heading.groups.hashes.length;
+    if (depth === 1) h1Count += 1;
+    else if (depth === 2) h2Count += 1;
+  }
+
+  return h1Count === 1 && h2Count > 0;
+}
+
+/**
+ * Drop a wrapping document-title root and promote its children to sections.
+ * Title-level body is discarded (not turned into a fake section/task).
+ */
+function promoteDocumentTitle(roots: OutlineNode[]): OutlineNode[] {
+  if (roots.length !== 1) return roots;
+  return roots[0].children;
+}
+
 /** Parse markdown into sections / tasks (nested outline folded into descriptions). */
 export function parsePlanMarkdown(source: string): PlanMdDocument {
   const trimmed = source.trim();
@@ -249,7 +341,12 @@ export function parsePlanMarkdown(source: string): PlanMdDocument {
     depth: item.depth - minDepth + 1,
   }));
 
-  return treeToDocument(buildTree(normalized));
+  let roots = buildTree(normalized);
+  if (shouldPromoteDocumentTitle(trimmed, roots)) {
+    roots = promoteDocumentTitle(roots);
+  }
+
+  return treeToDocument(roots);
 }
 
 /** Parse a task description back into body + nested outline nodes. */
