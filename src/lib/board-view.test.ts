@@ -3,6 +3,7 @@ import {
   cardFace,
   collapseEmptySections,
   defaultBoardLayout,
+  nestedOutlineCount,
   OUTLINE_SECTION_THRESHOLD,
   plainTitle,
 } from "./board-view";
@@ -66,6 +67,14 @@ describe("defaultBoardLayout", () => {
     expect(defaultBoardLayout(OUTLINE_SECTION_THRESHOLD - 1)).toBe("columns");
     expect(defaultBoardLayout(OUTLINE_SECTION_THRESHOLD)).toBe("outline");
     expect(defaultBoardLayout(12)).toBe("outline");
+  });
+});
+
+describe("nestedOutlineCount", () => {
+  it("counts every nested line, including children", () => {
+    expect(nestedOutlineCount([])).toBe(0);
+    expect(nestedOutlineCount([{ children: [] }, { children: [] }])).toBe(2);
+    expect(nestedOutlineCount([{ children: [{ children: [] }] }])).toBe(2);
   });
 });
 

@@ -101,7 +101,7 @@ describe("PlanBoard", () => {
             id: "t1",
             section_id: "s1",
             title: PROSE,
-            description: "Wire the session.\n\n- Cookie refresh\n- Logout path",
+            description: "Wire the session.\n\n- Cookie refresh\n  - Silent renew\n- Logout path",
           }),
         ],
       },
@@ -126,7 +126,7 @@ describe("PlanBoard", () => {
     expect(screen.queryByText("Cookie refresh")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Show detail for The battle step/ }),
-    ).toHaveTextContent("2 nested");
+    ).toHaveTextContent("3 nested");
     expect(screen.getByText("1 task")).toBeInTheDocument();
 
     await user.click(
@@ -137,6 +137,7 @@ describe("PlanBoard", () => {
     expect(onTaskClick).not.toHaveBeenCalled();
     expect(screen.getByText(/A fight nobody is standing in/)).toBeInTheDocument();
     expect(screen.getByText("Cookie refresh")).toBeInTheDocument();
+    expect(screen.getByText("Silent renew")).toBeInTheDocument();
     expect(screen.getByText("Logout path")).toBeInTheDocument();
     expect(screen.getByText("Wire the session.")).toBeInTheDocument();
 

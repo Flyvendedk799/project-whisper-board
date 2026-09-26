@@ -49,6 +49,16 @@ export function defaultBoardLayout(sectionCount: number): BoardLayout {
   return sectionCount >= OUTLINE_SECTION_THRESHOLD ? "outline" : "columns";
 }
 
+type OutlineCountNode = { children: readonly OutlineCountNode[] };
+
+export function nestedOutlineCount(nodes: readonly OutlineCountNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    count += 1 + nestedOutlineCount(node.children);
+  }
+  return count;
+}
+
 export function collapseEmptySections(taskCounts: number[]): boolean {
   let filled = false;
   let empty = false;

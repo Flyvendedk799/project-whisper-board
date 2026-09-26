@@ -2,7 +2,7 @@ import { Bot, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "
 import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { hasLivePullRequest } from "@/lib/plan-refs";
-import { cardFace, plainTitle } from "@/lib/board-view";
+import { cardFace, nestedOutlineCount, plainTitle } from "@/lib/board-view";
 import { readTaskOutline, type TaskOutlineNode } from "@/lib/plan-markdown";
 import type { TaskWithAgent } from "@/data";
 
@@ -24,7 +24,7 @@ export function PlanTaskCard({
   const isClosed = task.pr_status === "closed";
   const face = cardFace(task.title);
   const outline = readTaskOutline(task.description);
-  const nestedCount = outline.nested.length;
+  const nestedCount = nestedOutlineCount(outline.nested);
   const canExpand = Boolean(face.detail || outline.body || nestedCount > 0);
   const fullTitle = plainTitle(task.title);
 
