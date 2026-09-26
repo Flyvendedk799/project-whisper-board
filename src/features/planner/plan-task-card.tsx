@@ -28,12 +28,36 @@ export function PlanTaskCard({
   const canExpand = Boolean(face.detail || outline.body || nestedCount > 0);
   const fullTitle = plainTitle(task.title);
 
+  const getStatusColor = (status: string | undefined | null) => {
+    switch (status) {
+      case "done":
+        return "bg-green-500";
+      case "blocked":
+      case "cancelled":
+        return "bg-red-500";
+      case "in_progress":
+      case "in_review":
+      case "claimed":
+        return "bg-yellow-500";
+      case "available":
+      case "backlog":
+      default:
+        return "bg-slate-400 dark:bg-slate-600";
+    }
+  };
+
   return (
     <div className="group relative flex cursor-pointer flex-col gap-3 rounded-lg border bg-card p-3 text-left shadow-sm transition-all hover:border-primary/50 hover:shadow-md">
       <div className="flex flex-col gap-1.5">
-        <h4 className="font-medium leading-snug" title={face.detail ? fullTitle : undefined}>
-          {face.headline}
-        </h4>
+        <div className="flex items-start gap-2">
+          <div
+            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${getStatusColor(task.status)}`}
+            title={task.status ? task.status.replace(/_/g, " ") : "unknown"}
+          />
+          <h4 className="font-medium leading-snug" title={face.detail ? fullTitle : undefined}>
+            {face.headline}
+          </h4>
+        </div>
         {canExpand && onToggleExpand && (
           <button
             type="button"

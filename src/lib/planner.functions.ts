@@ -546,6 +546,7 @@ export const createTask = createServerFn({ method: "POST" })
             ? data.acceptanceCriteria.join("\n")
             : null,
           estimated_minutes: data.estimatedMinutes ?? null,
+          status: "available",
           position,
           ...(data.ticketId ? { ticket_id: data.ticketId } : {}),
         })
@@ -1063,6 +1064,7 @@ export const createTaskFromTicket = createServerFn({ method: "POST" })
           description: taskDescriptionFromTicket(found),
           priority: ticketPriorityToTask(found.priority),
           labels: [found.type],
+          status: "available",
           ticket_id: found.id,
           position,
         })
@@ -1149,6 +1151,7 @@ export const importOpenTickets = createServerFn({ method: "POST" })
             description: taskDescriptionFromTicket(ticket),
             priority: ticketPriorityToTask(ticket.priority as TicketPriority),
             labels: [ticket.type],
+            status: "available",
             ticket_id: ticket.id,
             position,
           })
@@ -1306,6 +1309,7 @@ export const importPlanMarkdown = createServerFn({ method: "POST" })
             section_id: createdSection.id,
             title: task.title,
             description: task.description || null,
+            status: "available",
             position: taskPosition,
           });
           if (taskError) throw taskError;
