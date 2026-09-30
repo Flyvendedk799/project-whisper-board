@@ -63,3 +63,12 @@ anywhere — it should push normally once the tracker agrees.
 
 If `migration list` shows something else, stop and look rather than running the repair:
 the commands above assume the state described here.
+
+## Automatic migrations on merge
+
+`.github/workflows/migrate.yml` runs `supabase db push` against production whenever a
+change under `supabase/migrations/` lands on `main`. Add `SUPABASE_ACCESS_TOKEN` and
+`SUPABASE_DB_PASSWORD` as Actions secrets, and optionally required reviewers on the
+`production` environment for an approval step. Do the tracker repair above first; until
+the tracker agrees, the job fails without applying anything. Run it by hand from the
+Actions tab (workflow_dispatch) if needed.
