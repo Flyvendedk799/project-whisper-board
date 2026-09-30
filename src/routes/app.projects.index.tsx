@@ -1,9 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FolderKanban, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState, ProgressBar, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useDataMutation } from "@/lib/use-server-action";
@@ -46,27 +46,25 @@ function ProjectsPage() {
       <PageHeader
         title="Projects"
         description={isAdmin ? "Every engagement you're running." : "What we're building for you."}
-        action={isAdmin ? <NewProjectButton /> : undefined}
+        action={
+          isAdmin ? (
+            <>
+              <Button variant="outline" onClick={() => setShowArchived((value) => !value)}>
+                {showArchived ? "Hide archived" : "Show archived"}
+              </Button>
+              <NewProjectButton />
+            </>
+          ) : undefined
+        }
       />
 
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-        {isAdmin && (
-          <label className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(event) => setShowArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
-        )}
         <QueryState
           query={projects}
           errorTitle="Couldn't load projects"
           empty={
-            <Card>
+            <div className="rounded-[14px] border bg-card">
               <EmptyState
-                icon={FolderKanban}
                 title="No projects yet"
                 description={
                   isAdmin
@@ -83,7 +81,7 @@ function ProjectsPage() {
                   )
                 }
               />
-            </Card>
+            </div>
           }
         >
           {(data) => {
@@ -92,13 +90,19 @@ function ProjectsPage() {
               : data.filter((project) => project.status !== "archived");
             if (visible.length === 0) {
               return (
-                <Card>
+                <div className="rounded-[14px] border bg-card">
                   <EmptyState
-                    icon={FolderKanban}
                     title="No active projects"
-                    description="Archived projects are hidden. Turn on “Show archived” to find them."
+                    description="Archived projects are hidden. Choose “Show archived” to find them."
+                    action={
+                      isAdmin ? (
+                        <Button variant="outline" onClick={() => setShowArchived(true)}>
+                          Show archived
+                        </Button>
+                      ) : undefined
+                    }
                   />
-                </Card>
+                </div>
               );
             }
             return (
@@ -108,9 +112,11 @@ function ProjectsPage() {
                     key={project.id}
                     to="/app/projects/$projectId"
                     params={{ projectId: project.id }}
+                    search={{ tab: undefined, paid: undefined }}
+                    className="rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <Card className="flex h-full flex-col p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                    <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
+                      <div className="flex items-center justify-between gap-2">
                         <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
                           {PROJECT_STATUS_LABEL[project.status]}
                         </StatusPill>
@@ -119,14 +125,12 @@ function ProjectsPage() {
                         </span>
                       </div>
 
-                      <h2 className="font-display text-xl">{project.title}</h2>
-                      {project.organization && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {project.organization.name}
-                        </p>
-                      )}
+                      <h2 className="font-display text-2xl leading-tight">{project.title}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {project.organization?.name ?? "Internal"}
+                      </p>
                       {project.description && (
-                        <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">
+                        <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
                           {project.description}
                         </p>
                       )}
@@ -134,14 +138,14 @@ function ProjectsPage() {
                       <ProgressBar
                         value={project.progress}
                         label={`${project.title} progress`}
-                        className="mt-4"
+                        className="mt-1.5"
                       />
                       {project.end_date && (
-                        <p className="mt-2 text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           Target {formatDate(project.end_date)}
                         </p>
                       )}
-                    </Card>
+                    </article>
                   </Link>
                 ))}
               </div>
@@ -195,7 +199,7 @@ function NewProjectButton() {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New project</DialogTitle>
+          <DialogTitle className="font-display text-2xl font-normal">New project</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(event) => {
@@ -234,7 +238,7 @@ function NewProjectButton() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="org-mode">Organisation (optional)</Label>
+            <Label htmlFor="org-mode">Client (optional)</Label>
             <Select
               value={orgMode}
               onValueChange={(value) => {
@@ -248,19 +252,19 @@ function NewProjectButton() {
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
                 {(orgs.data?.length ?? 0) > 0 && (
-                  <SelectItem value="existing">Existing organisation</SelectItem>
+                  <SelectItem value="existing">Existing client</SelectItem>
                 )}
-                <SelectItem value="new">Create new organisation</SelectItem>
+                <SelectItem value="new">Create new client</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {orgMode === "existing" && (
             <div className="space-y-1.5">
-              <Label htmlFor="organization">Organisation</Label>
+              <Label htmlFor="organization">Client</Label>
               <Select value={organizationId} onValueChange={setOrganizationId}>
                 <SelectTrigger id="organization">
-                  <SelectValue placeholder="Pick an organisation" />
+                  <SelectValue placeholder="Pick a client" />
                 </SelectTrigger>
                 <SelectContent>
                   {(orgs.data ?? []).map((org) => (
@@ -275,12 +279,15 @@ function NewProjectButton() {
 
           {orgMode === "new" && (
             <div className="space-y-1.5">
-              <Label htmlFor="org-name">Organisation name</Label>
+              <Label htmlFor="org-name">Client name</Label>
               <Input id="org-name" name="orgName" required placeholder="Acme Inc." />
             </div>
           )}
 
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button
               type="submit"
               disabled={

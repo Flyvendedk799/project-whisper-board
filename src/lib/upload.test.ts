@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachmentKindOf,
   attachmentPath,
+  canMarkUpMime,
   describeOutcome,
+  fileExtensionLabel,
   formatBytes,
+  isPlanAttachmentPath,
+  markedUpFileName,
   MAX_FILE_BYTES,
   MAX_RECORDING_BYTES,
+  partitionUploadable,
+  planAttachmentPath,
   slugifyFileName,
   validateFile,
+  validateFileMeta,
 } from "./upload";
 import type { TicketAttachment } from "@/data/types";
 
@@ -134,5 +142,63 @@ describe("formatBytes", () => {
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(2048)).toBe("2 KB");
     expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
+  });
+});
+
+describe("plan attachments", () => {
+  it("classifies files by type", () => {
+    expect(attachmentKindOf("image/png")).toBe("image");
+    expect(attachmentKindOf("video/mp4")).toBe("video");
+    expect(attachmentKindOf("audio/mpeg")).toBe("audio");
+    expect(attachmentKindOf("application/pdf")).toBe("doc");
+    expect(attachmentKindOf(null)).toBe("doc");
+  });
+
+  it("validates a name, size and type without needing a File", () => {
+    expect(validateFileMeta({ name: "a.png", size: 1024, type: "image/png" })).toBeNull();
+    expect(validateFileMeta({ name: "a.png", size: 0, type: "image/png" })).toBe("a.png is empty.");
+    expect(
+      validateFileMeta({ name: "big.mp4", size: MAX_FILE_BYTES + 1, type: "video/mp4" }),
+    ).toMatch(/The limit is 25\.0 MB/);
+    expect(validateFileMeta({ name: "x.exe", size: 10, type: "application/x-msdownload" })).toMatch(
+      /can't be attached/,
+    );
+    // Drag-and-drop sometimes reports no type; that is allowed, as for tickets.
+    expect(validateFileMeta({ name: "notes", size: 10, type: "" })).toBeNull();
+    expect(validateFileMeta({ name: "edge", size: MAX_FILE_BYTES, type: "text/plain" })).toBeNull();
+  });
+
+  it("splits a dropped batch into uploadable files and reasons", () => {
+    const { ok, problems } = partitionUploadable([
+      { name: "ok.png", size: 10, type: "image/png" },
+      { name: "empty.txt", size: 0, type: "text/plain" },
+      { name: "bad.exe", size: 10, type: "application/x-msdownload" },
+    ]);
+    expect(ok.map((f) => f.name)).toEqual(["ok.png"]);
+    expect(problems).toHaveLength(2);
+  });
+
+  it("builds a path that starts with the uploader and is checkable later", () => {
+    const path = planAttachmentPath("u1", "p1", "t1", "My Screenshot (1).PNG");
+    const [user, plan, task, leaf] = path.split("/");
+    expect([user, plan, task]).toEqual(["u1", "p1", "t1"]);
+    expect(leaf).toMatch(/^[0-9a-f-]{36}-my-screenshot-1-.png$/);
+    expect(isPlanAttachmentPath(path, { userId: "u1", planId: "p1", taskId: "t1" })).toBe(true);
+    expect(isPlanAttachmentPath(path, { userId: "u2", planId: "p1", taskId: "t1" })).toBe(false);
+    expect(isPlanAttachmentPath(path, { userId: "u1", planId: "p1", taskId: "t2" })).toBe(false);
+    expect(
+      isPlanAttachmentPath("u1/p1/t1/../../etc", { userId: "u1", planId: "p1", taskId: "t1" }),
+    ).toBe(false);
+  });
+
+  it("labels files and names marked-up copies", () => {
+    expect(fileExtensionLabel("report.final.pdf")).toBe("PDF");
+    expect(fileExtensionLabel("README")).toBe("FILE");
+    expect(fileExtensionLabel("data.json")).toBe("JSON");
+    expect(markedUpFileName("shot.jpeg")).toBe("shot-marked.png");
+    expect(markedUpFileName("shot-marked.png")).toBe("shot-marked.png");
+    expect(canMarkUpMime("image/png")).toBe(true);
+    expect(canMarkUpMime("image/svg+xml")).toBe(false);
+    expect(canMarkUpMime("video/mp4")).toBe(false);
   });
 });

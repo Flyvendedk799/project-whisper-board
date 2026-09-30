@@ -78,6 +78,9 @@ export const qk = {
   planTasks: (id: string) => [...qk.plan(id), "tasks"] as const,
   planEvents: (id: string) => [...qk.plan(id), "events"] as const,
   planAgents: () => [...qk.all, "plan-agents"] as const,
+  // Not nested under the plan: every task edit invalidates the plan, and that must not
+  // re-sign every file on it.
+  planAttachments: (id: string) => [...qk.plans(), "attachments", id] as const,
   taskComments: (id: string) => [...qk.all, "task-comments", id] as const,
   apiKeys: () => [...qk.all, "api-keys"] as const,
 } as const;

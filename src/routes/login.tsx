@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
+import { Segmented } from "@/components/status-pill";
+import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -79,98 +80,90 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center px-4">
-      <Card className="w-full max-w-md p-8 space-y-6">
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-display">Boared</h1>
-          {finishingSignup ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Email confirmed? Sign in to finish creating{" "}
-                {pendingWorkspace ? <strong>{pendingWorkspace}</strong> : "your workspace"}.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Next step: name your agency and you&rsquo;re in.
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
-          )}
+    <AuthCard
+      title="Boared"
+      subtitle={
+        finishingSignup ? (
+          <>
+            <p>
+              Email confirmed? Sign in to finish creating{" "}
+              {pendingWorkspace ? <strong>{pendingWorkspace}</strong> : "your workspace"}.
+            </p>
+            <p className="mt-1 text-xs">Next step: name your agency and you&rsquo;re in.</p>
+          </>
+        ) : (
+          "Sign in to your workspace"
+        )
+      }
+      width="max-w-[420px]"
+    >
+      <Segmented
+        label="Sign-in method"
+        value={mode}
+        onChange={setMode}
+        className="flex w-full [&>button]:h-8 [&>button]:flex-1"
+        options={[
+          { value: "password", label: "Password" },
+          { value: "magic", label: "Magic link" },
+        ]}
+      />
+      <form onSubmit={mode === "password" ? handlePassword : handleMagic} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
-        <div className="flex gap-1 p-1 bg-muted rounded-md text-sm">
-          <button
-            type="button"
-            onClick={() => setMode("password")}
-            className={`flex-1 py-1.5 rounded ${mode === "password" ? "bg-background shadow-sm" : ""}`}
-          >
-            Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("magic")}
-            className={`flex-1 py-1.5 rounded ${mode === "magic" ? "bg-background shadow-sm" : ""}`}
-          >
-            Magic link
-          </button>
-        </div>
-        <form onSubmit={mode === "password" ? handlePassword : handleMagic} className="space-y-4">
+        {mode === "password" && (
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="password">Password</Label>
             <Input
-              id="email"
-              type="email"
+              id="password"
+              type="password"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {mode === "password" && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          )}
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy
-              ? "..."
-              : mode === "password"
-                ? finishingSignup
-                  ? "Continue to create workspace"
-                  : "Sign in"
-                : "Send magic link"}
-          </Button>
-        </form>
-        <div className="text-center text-sm text-muted-foreground space-y-1">
-          <p>
-            New here?{" "}
-            <Link to="/signup" className="text-primary underline">
-              Create an account
-            </Link>
-          </p>
-          <p>
-            <button
-              type="button"
-              className="text-primary underline"
-              onClick={async () => {
-                if (!email) return toast.error("Enter your email first");
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                  redirectTo: `${window.location.origin}/reset-password`,
-                });
-                if (error) return toast.error(error.message);
-                toast.success("Password reset email sent");
-              }}
-            >
-              Forgot password?
-            </button>
-          </p>
-        </div>
-      </Card>
-    </div>
+        )}
+        <Button type="submit" className="h-11 w-full" disabled={busy}>
+          {busy
+            ? "..."
+            : mode === "password"
+              ? finishingSignup
+                ? "Continue to create workspace"
+                : "Sign in"
+              : "Send magic link"}
+        </Button>
+      </form>
+      <div className="text-center text-sm text-muted-foreground space-y-1">
+        <p>
+          New here?{" "}
+          <Link to="/signup" className="text-primary underline">
+            Create an account
+          </Link>
+        </p>
+        <p>
+          <button
+            type="button"
+            className="text-primary underline"
+            onClick={async () => {
+              if (!email) return toast.error("Enter your email first");
+              const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+              });
+              if (error) return toast.error(error.message);
+              toast.success("Password reset email sent");
+            }}
+          >
+            Forgot password?
+          </button>
+        </p>
+      </div>
+    </AuthCard>
   );
 }

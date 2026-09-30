@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { BrainCircuit, CheckSquare, FolderKanban, LayoutList, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -23,15 +22,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState, PageHeader, StatusPill } from "@/components/app-shell";
+import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
+import { PLAN_STATUS_LABEL } from "@/data/enums";
 import { planListQuery } from "@/data/planner";
 import { projectListQuery } from "@/data/projects";
 import { createPlan } from "@/lib/planner.functions";
-import type { PlanListItem } from "@/data";
+import { pluralize } from "@/features/planner/plan-model";
+import { cn } from "@/lib/utils";
+import type { PlanListItem, PlanStatus } from "@/data";
 
 const plannerSearchSchema = z.object({
   project: z.string().uuid().optional(),
@@ -44,6 +46,15 @@ export const Route = createFileRoute("/app/planner/")({
   validateSearch: plannerSearchSchema,
   component: PlannerIndexPage,
 });
+
+/** Same tones the status pill uses everywhere: active is the live one. */
+const PLAN_TONE = {
+  draft: "default",
+  active: "info",
+  paused: "warning",
+  completed: "success",
+  archived: "default",
+} as const satisfies Record<PlanStatus, "default" | "info" | "warning" | "success">;
 
 function PlannerIndexPage() {
   const navigate = useNavigate({ from: Route.fullPath });
@@ -82,6 +93,7 @@ function PlannerIndexPage() {
 
   const create = useServerAction(useServerFn(createPlan), {
     label: "plans.create",
+    success: "Plan created",
     invalidate: [qk.plans()],
     onSuccess: (result) => {
       setIsCreating(false);
@@ -100,7 +112,7 @@ function PlannerIndexPage() {
     e.preventDefault();
     if (!title.trim() || !workspaceId) return;
     create.fire({
-      title,
+      title: title.trim(),
       description,
       projectId: projectId || undefined,
       workspaceId,
@@ -118,154 +130,110 @@ function PlannerIndexPage() {
   };
 
   const rows = plans.data?.plans ?? [];
+  const setProjectFilter = (project: string | undefined) =>
+    void navigate({ search: (prev: PlannerSearch) => ({ ...prev, project }) });
 
   return (
-    <div className="flex h-screen flex-col">
+    <>
       <PageHeader
         title="AI Planner"
         description={
           filterProjectName
-            ? `Plans for ${filterProjectName}`
-            : `${rows.length} plan${rows.length === 1 ? "" : "s"}`
+            ? `${pluralize(rows.length, "plan")} for ${filterProjectName} · tasks your team and agents work through together`
+            : `${pluralize(rows.length, "plan")} · tasks your team and agents work through together`
         }
-        action={
-          <div className="flex items-center gap-2">
-            {filterProjectId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  void navigate({
-                    search: (prev: PlannerSearch) => ({ ...prev, project: undefined }),
-                  })
-                }
-              >
-                <X className="mr-1.5 h-3.5 w-3.5" />
-                Clear project filter
-              </Button>
-            )}
-            <Button onClick={() => setIsCreating(true)}>
-              <BrainCircuit className="mr-2 h-4 w-4" />
-              New plan
-            </Button>
-          </div>
-        }
+        action={<Button onClick={() => setIsCreating(true)}>New plan</Button>}
       />
 
-      {(projects.data?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 md:px-6 lg:px-8">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Project
-          </span>
-          <Button
-            size="sm"
-            variant={!filterProjectId ? "secondary" : "ghost"}
-            onClick={() =>
-              void navigate({
-                search: (prev: PlannerSearch) => ({ ...prev, project: undefined }),
-              })
-            }
+      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+        {(projects.data?.length ?? 0) > 0 ? (
+          <div
+            role="group"
+            aria-label="Filter by project"
+            className="-mt-1 mb-5 flex flex-wrap gap-1.5"
           >
-            All
-          </Button>
-          {(projects.data ?? []).map((project) => (
-            <Button
-              key={project.id}
-              size="sm"
-              variant={filterProjectId === project.id ? "secondary" : "ghost"}
-              onClick={() =>
-                void navigate({
-                  search: (prev: PlannerSearch) => ({ ...prev, project: project.id }),
-                })
-              }
-            >
-              <FolderKanban className="mr-1.5 h-3.5 w-3.5" />
-              {project.title}
-            </Button>
-          ))}
-        </div>
-      )}
+            <FilterChip active={!filterProjectId} onClick={() => setProjectFilter(undefined)}>
+              All
+            </FilterChip>
+            {(projects.data ?? [])
+              .filter((project) => project.status !== "archived" || project.id === filterProjectId)
+              .map((project) => (
+                <FilterChip
+                  key={project.id}
+                  active={filterProjectId === project.id}
+                  onClick={() => setProjectFilter(project.id)}
+                >
+                  {project.title}
+                </FilterChip>
+              ))}
+          </div>
+        ) : null}
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <QueryState
           query={plans}
           errorTitle="Couldn't load plans"
           empty={
-            <div className="mt-16">
+            <div className="rounded-[14px] border bg-card">
               <EmptyState
-                icon={BrainCircuit}
                 title={filterProjectName ? `No plans for ${filterProjectName}` : "No AI plans yet"}
                 description={
                   filterProjectName
                     ? "Create a plan linked to this project to organize agent work."
                     : "Create a plan to organize tasks and assign them to AI agents."
                 }
-                action={
-                  <Button onClick={() => setIsCreating(true)}>
-                    <BrainCircuit className="mr-2 h-4 w-4" />
-                    Create a plan
-                  </Button>
-                }
+                action={<Button onClick={() => setIsCreating(true)}>Create a plan</Button>}
               />
             </div>
           }
         >
           {() => (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {rows.map((plan: PlanListItem) => {
+                const total = plan.task_count ?? 0;
+                const done = plan.done_task_count ?? 0;
+                const percent = total ? (done / total) * 100 : 0;
                 const projectTitle =
                   plan.project?.title ??
                   (plan.project_id ? projectById.get(plan.project_id) : null);
+                const status = (plan.status ?? "draft") as PlanStatus;
 
                 return (
                   <Link
                     key={plan.id}
                     to="/app/planner/$planId"
                     params={{ planId: plan.id }}
-                    className="group flex flex-col justify-between rounded-lg border bg-card p-5 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    search={{}}
+                    className="group rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <h3 className="font-semibold leading-none tracking-tight group-hover:text-primary">
-                          {plan.title}
-                        </h3>
-                        <StatusPill
-                          tone={
-                            plan.status === "completed"
-                              ? "success"
-                              : plan.status === "active"
-                                ? "info"
-                                : "default"
-                          }
-                        >
-                          {plan.status || "draft"}
+                    <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md">
+                      <div className="flex items-center justify-between gap-2">
+                        <StatusPill tone={PLAN_TONE[status]}>
+                          {PLAN_STATUS_LABEL[status]}
                         </StatusPill>
-                      </div>
-                      {plan.description && (
-                        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                          {plan.description}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <LayoutList className="h-3.5 w-3.5" />
-                        <span>{plan.section_count ?? 0} sections</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <CheckSquare className="h-4 w-4" />
-                        <span>
-                          {plan.done_task_count ?? 0}/{plan.task_count ?? 0} tasks
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {Math.round(percent)}%
                         </span>
                       </div>
-                      {projectTitle && (
-                        <div className="ml-auto flex max-w-[50%] items-center gap-1 truncate">
-                          <FolderKanban className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{projectTitle}</span>
-                        </div>
+                      <h2 className="font-display text-2xl leading-tight">{plan.title}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {projectTitle ?? "No project"}
+                      </p>
+                      {plan.description ? (
+                        <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
+                          {plan.description}
+                        </p>
+                      ) : (
+                        <span className="flex-1" />
                       )}
-                    </div>
+                      <ProgressBar
+                        value={percent}
+                        label={`${plan.title} progress`}
+                        className="mt-1.5"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {pluralize(plan.section_count ?? 0, "section")} · {done}/{total} tasks
+                      </p>
+                    </article>
                   </Link>
                 );
               })}
@@ -275,18 +243,21 @@ function PlannerIndexPage() {
       </div>
 
       <Dialog open={isCreating} onOpenChange={closeCreate}>
-        <DialogContent>
+        <DialogContent className="sm:rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Create new plan</DialogTitle>
+            <DialogTitle className="font-display text-[26px] font-normal leading-tight tracking-normal">
+              Create new plan
+            </DialogTitle>
             <DialogDescription>
-              Link a project so the plan shows up on that project's AI Plans tab and stays in
-              context while you work.
+              Link a project so the plan shows up on that project&rsquo;s AI Plans tab.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={onSubmit} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="project">Project</Label>
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="project" className="text-xs text-muted-foreground">
+                Project
+              </Label>
               <Select
                 value={projectId || "none"}
                 onValueChange={(value) => setProjectId(value === "none" ? "" : value)}
@@ -304,8 +275,10 @@ function PlannerIndexPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="title" className="text-xs text-muted-foreground">
+                Title
+              </Label>
               <Input
                 id="title"
                 value={title}
@@ -313,10 +286,13 @@ function PlannerIndexPage() {
                 placeholder="e.g. Implement authentication"
                 required
                 autoFocus
+                maxLength={200}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="description" className="text-xs text-muted-foreground">
+                Description
+              </Label>
               <Textarea
                 id="description"
                 value={description}
@@ -326,17 +302,41 @@ function PlannerIndexPage() {
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:space-x-0">
               <Button type="button" variant="outline" onClick={() => closeCreate(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={create.busy || !title.trim()}>
-                Create
+                {create.busy ? "Creating…" : "Create plan"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "h-[30px] rounded-full border px-3.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
+      )}
+    >
+      {children}
+    </button>
   );
 }

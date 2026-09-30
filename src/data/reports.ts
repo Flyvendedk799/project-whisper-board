@@ -241,3 +241,45 @@ export function reportsQuery(workspaceId: string | null | undefined) {
     },
   });
 }
+
+/** ISO-8601 week number for a yyyy-mm-dd (or full ISO) date, as shown on the velocity axis. */
+export function isoWeekNumber(iso: string): number {
+  const date = new Date(iso);
+  const utc = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const d = new Date(utc);
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - yearStart) / 86_400_000 + 1) / 7);
+}
+
+/**
+ * Rows to CSV text. Cells that start with a formula character are prefixed
+ * with an apostrophe so a spreadsheet never executes client-controlled text.
+ */
+export function rowsToCsv(rows: object[]): string {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const cell = (raw: unknown) => {
+    let value = raw == null ? "" : String(raw);
+    if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`;
+    return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  };
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((h) => cell((row as Record<string, unknown>)[h])).join(",")),
+  ].join("\n");
+}
+
+/** Flattens the billing snapshot (one row per currency) for CSV export. */
+export function billingCsvRows(billing: ReportSnapshot["billing"]) {
+  return billing.map((row) => ({
+    currency: row.currency,
+    outstanding: (row.outstandingCents / 100).toFixed(2),
+    paid_this_month: (row.paidThisMonthCents / 100).toFixed(2),
+    current: (row.aging.current / 100).toFixed(2),
+    days_1_30: (row.aging.d30 / 100).toFixed(2),
+    days_31_60: (row.aging.d60 / 100).toFixed(2),
+    older: (row.aging.older / 100).toFixed(2),
+  }));
+}

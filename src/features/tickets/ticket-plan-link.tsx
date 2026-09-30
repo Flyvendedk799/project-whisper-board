@@ -49,7 +49,7 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
   const tasks = tasksQuery.data ?? [];
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="space-y-3 rounded-xl bg-surface p-[18px] shadow-none">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">Planner tasks</h2>
         <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setOpen(true)}>

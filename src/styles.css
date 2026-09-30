@@ -36,6 +36,9 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-status-backlog: var(--status-backlog);
+  --color-status-claimed: var(--status-claimed);
+  --color-priority-high: var(--priority-high);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -87,6 +90,11 @@
   --warning: oklch(0.75 0.14 75);
   --info: oklch(0.6 0.1 230);
 
+  /* Plan task statuses without a semantic colour of their own */
+  --status-backlog: oklch(0.75 0.012 70);
+  --status-claimed: oklch(0.66 0.11 195);
+  --priority-high: oklch(0.7 0.15 55);
+
   --border: oklch(0.9 0.01 75);
   --input: oklch(0.9 0.01 75);
   --ring: oklch(0.55 0.13 40);
@@ -130,6 +138,9 @@
   --success: oklch(0.7 0.13 150);
   --warning: oklch(0.8 0.14 75);
   --info: oklch(0.7 0.1 230);
+  --status-backlog: oklch(0.6 0.012 70);
+  --status-claimed: oklch(0.72 0.11 195);
+  --priority-high: oklch(0.75 0.15 55);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.7 0.13 45);

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { AuthCard } from "@/features/auth/auth-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
@@ -69,40 +69,35 @@ function CreateWorkspacePage() {
   if (loading || !user) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md space-y-6 p-8">
-        <div className="space-y-1 text-center">
-          <h1 className="font-display text-3xl">
-            {needsWorkspace ? "Name your workspace" : "New workspace"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {needsWorkspace
-              ? "This is your agency. Clients you invite will see this name."
-              : "Create another agency workspace. You can switch between them anytime."}
-          </p>
+    <AuthCard
+      title={needsWorkspace ? "Name your workspace" : "New workspace"}
+      subtitle={
+        needsWorkspace
+          ? "This is your agency. Clients you invite will see this name."
+          : "Create another agency workspace. You can switch between them anytime."
+      }
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="ws">Agency name</Label>
+          <Input
+            id="ws"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Northwind Studio"
+            autoFocus
+          />
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ws">Agency name</Label>
-            <Input
-              id="ws"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Northwind Studio"
-              autoFocus
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy || !name.trim()}>
-            {busy ? "Creating…" : "Continue"}
+        <Button type="submit" className="h-11 w-full" disabled={busy || !name.trim()}>
+          {busy ? "Creating…" : "Continue"}
+        </Button>
+        {!needsWorkspace && (
+          <Button type="button" variant="ghost" className="w-full" asChild>
+            <Link to="/app">Cancel</Link>
           </Button>
-          {!needsWorkspace && (
-            <Button type="button" variant="ghost" className="w-full" asChild>
-              <Link to="/app">Cancel</Link>
-            </Button>
-          )}
-        </form>
-      </Card>
-    </div>
+        )}
+      </form>
+    </AuthCard>
   );
 }

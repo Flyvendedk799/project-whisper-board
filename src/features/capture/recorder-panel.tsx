@@ -25,9 +25,12 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
 
   if (!isScreenRecordingSupported()) {
     return (
-      <div className="rounded-lg border border-dashed p-4 text-center">
-        <Video className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
-        <p className="mt-1.5 text-sm">Screen recording isn&rsquo;t available in this browser.</p>
+      <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px]">
+        <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <p className="mt-1.5 text-sm font-medium">Record your screen</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          Screen recording isn&rsquo;t available in this browser.
+        </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Safari on iPhone and iPad can&rsquo;t record a tab. Attach a screenshot or a photo instead
           &mdash; that works everywhere.
@@ -39,10 +42,16 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
   const isLive = state.status === "recording" || state.status === "paused";
 
   return (
-    <div className="rounded-lg border p-4">
+    <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px]">
       {!isLive ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => void recorder.start(micEnabled)}>
+          <div className="w-full">
+            <p className="font-medium">Record your screen</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Show it happening. Add your voice if you like.
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void recorder.start(micEnabled)}>
             <Circle className="mr-1.5 h-4 w-4 fill-current text-destructive" aria-hidden="true" />
             Record my screen
           </Button>

@@ -3,16 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  ArrowLeft,
-  Camera,
-  Check,
-  FolderKanban,
-  Loader2,
-  Plus,
-  Send,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, Camera, Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,7 +43,7 @@ import { projectListQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
 import {
   TICKET_TYPES,
-  TICKET_TYPE_PROMPT,
+  TICKET_TYPE_LABEL,
   type TicketPriority,
   type TicketType,
 } from "@/data/enums";
@@ -62,10 +53,10 @@ import { toast } from "sonner";
 /**
  * Reporting something, for a person who is not a developer.
  *
- * The form this replaces asked for a title, a description, a type and a
- * priority — the four things a non-technical client is least equipped to
- * supply, and the reason so many reports arrive as "it's broken". Here they
- * show the problem, say one line about it, and the draft is written for them.
+ * The screenshot and the recording come first, because showing the problem is
+ * the easy part for a non-technical client and describing it is the hard part.
+ * Kind, project, title and details follow, and "Write it up with AI" drafts the
+ * words from what they showed — offered, never applied without being asked.
  *
  * `?url=` carries the page they were on when they pressed Report.
  */
@@ -77,14 +68,10 @@ export const Route = createFileRoute("/app/report")({
   component: ReportPage,
 });
 
-type Step = "capture" | "describe";
-
-const REPORT_DRAFT_KEY = "cf.report.wizard";
+const REPORT_DRAFT_KEY = "cf.report.form";
 
 type ReportDraft = {
-  step: Step;
   projectId?: string;
-  note: string;
   title: string;
   description: string;
   type: TicketType;
@@ -108,14 +95,12 @@ function ReportPage() {
   const aiEnabled = useAiEnabled();
   const saved = useMemo(() => readReportDraft(), []);
 
-  const [step, setStep] = useState<Step>(saved.step ?? "capture");
   const [projectId, setProjectId] = useState<string | undefined>(search.project ?? saved.projectId);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [annotating, setAnnotating] = useState<{
     draft: DraftAttachment;
     image: HTMLImageElement;
   } | null>(null);
-  const [note, setNote] = useState(saved.note ?? "");
   const [title, setTitle] = useState(saved.title ?? "");
   const [description, setDescription] = useState(saved.description ?? "");
   const [type, setType] = useState<TicketType>(saved.type ?? "bug");
@@ -138,29 +123,17 @@ function ReportPage() {
 
   useEffect(() => {
     if (projectId) return;
-    if (search.project) {
-      setProjectId(search.project);
-      return;
-    }
     if (projects.data?.length === 1) setProjectId(projects.data[0].id);
-  }, [projectId, projects.data, search.project]);
+  }, [projectId, projects.data]);
 
   useEffect(() => {
     try {
-      const payload: ReportDraft = {
-        step,
-        projectId,
-        note,
-        title,
-        description,
-        type,
-        priority,
-      };
+      const payload: ReportDraft = { projectId, title, description, type, priority };
       sessionStorage.setItem(REPORT_DRAFT_KEY, JSON.stringify(payload));
     } catch {
       /* ignore */
     }
-  }, [step, projectId, note, title, description, type, priority]);
+  }, [projectId, title, description, type, priority]);
 
   // Object URLs outlive the component unless they are revoked.
   useEffect(
@@ -267,9 +240,10 @@ function ReportPage() {
         .slice(0, 3)
         .map(toDataUrl),
     );
+    const note = [title.trim(), description.trim()].filter(Boolean).join("\n");
     await compose.run({
       projectId: chosenProject.id,
-      note: note.trim() || undefined,
+      note: note || undefined,
       inlineImages: images.filter((url): url is string => Boolean(url)),
       context: contextRef.current as Record<string, unknown>,
     });
@@ -311,20 +285,16 @@ function ReportPage() {
         <PageHeader title="Report an issue" />
         <div className="mx-auto max-w-2xl px-4 py-16">
           <EmptyState
-            icon={FolderKanban}
             title="No projects yet"
             description={
               isAdmin
-                ? "Create a project first — tickets hang off projects, so there's nowhere to file this yet."
+                ? "Create a project first. Tickets hang off projects, so there's nowhere to file this yet."
                 : "Once you've been added to a project you can report things against it."
             }
             action={
               isAdmin ? (
                 <Button asChild>
-                  <Link to="/app/projects">
-                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    Create a project
-                  </Link>
+                  <Link to="/app/projects">Create a project</Link>
                 </Button>
               ) : (
                 <Button variant="outline" asChild>
@@ -368,251 +338,228 @@ function ReportPage() {
     );
   }
 
+  const images = drafts.filter((d) => d.file.type.startsWith("image/"));
+
   return (
-    <>
-      <PageHeader
-        title="Report an issue"
-        description={step === "capture" ? "Show us what happened." : "Nearly there."}
-      />
-
-      <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 md:px-8 md:py-8">
-        <ol className="flex items-center gap-2 text-sm" aria-label="Progress">
-          <StepPill n={1} label="Show us" active={step === "capture"} done={step === "describe"} />
-          <span className="h-px flex-1 bg-border" aria-hidden="true" />
-          <StepPill n={2} label="Describe" active={step === "describe"} done={false} />
-        </ol>
-
-        {step === "capture" ? (
-          <div className="space-y-5">
-            {(projects.data?.length ?? 0) > 1 && (
-              <div className="space-y-1.5">
-                <Label htmlFor="project">Which project?</Label>
-                <Select value={projectId} onValueChange={setProjectId}>
-                  <SelectTrigger id="project">
-                    <SelectValue placeholder="Pick a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(projects.data ?? []).map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <SectionBoundary label="recorder">
-              <RecorderPanel
-                onRecorded={({ file, durationMs, hasAudio }) =>
-                  setDrafts((prev) => [
-                    ...prev,
-                    {
-                      id: newDraftId(),
-                      file,
-                      bucket: "recordings",
-                      kind: "recording",
-                      durationMs,
-                      hasAudio,
-                    },
-                  ])
-                }
-              />
-            </SectionBoundary>
-
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => void takeScreenshot()}>
-                <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Take a screenshot
-              </Button>
-            </div>
-
-            <CaptureDropzone
-              drafts={drafts}
-              onAdd={(files) => addFiles(files)}
-              onRemove={(id) => setDrafts((prev) => prev.filter((d) => d.id !== id))}
-              label="Or attach something"
-            />
-
-            {drafts.some((d) => d.file.type.startsWith("image/")) && (
-              <div className="flex flex-wrap gap-2">
-                {drafts
-                  .filter((d) => d.file.type.startsWith("image/"))
-                  .map((draft) => (
-                    <button
-                      key={draft.id}
-                      type="button"
-                      onClick={() => void openAnnotator(draft)}
-                      className="group relative h-20 w-28 overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <img
-                        src={draft.previewUrl}
-                        alt={`Mark up ${draft.file.name}`}
-                        className="h-full w-full object-cover"
-                      />
-                      <span className="absolute inset-0 grid place-items-center bg-foreground/60 text-xs font-medium text-background opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                        Mark it up
-                      </span>
-                      {draft.kind === "annotated" && (
-                        <span className="absolute right-1 top-1">
-                          <StatusPill tone="success">Marked</StatusPill>
-                        </span>
-                      )}
-                    </button>
-                  ))}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="note">What went wrong?</Label>
-              <Textarea
-                id="note"
-                rows={3}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="One line is plenty — the checkout button doesn't do anything on my phone."
-              />
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              We&rsquo;ll also send your browser details automatically
-              {contextSummary ? `: ${contextSummary}` : ""}.
-            </p>
-
-            <Button
-              type="button"
-              className="w-full"
-              disabled={!chosenProject || (!note.trim() && drafts.length === 0)}
-              onClick={() => {
-                if (!title.trim() && note.trim()) setTitle(note.trim());
-                setStep("describe");
-              }}
-            >
-              Next
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={submit} className="space-y-5">
-            {compose.busy && (
-              <div className="flex items-center gap-2 rounded-lg border bg-accent/30 p-4 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-                Reading what you sent and writing a draft…
-              </div>
-            )}
-
-            {aiDraft && !compose.busy && (
-              <AiComposePanel
-                draft={aiDraft}
-                busy={compose.busy}
-                onRegenerate={() => void askAi()}
-                onUseTitle={() => setTitle(aiDraft.title)}
-                onUseDescription={() => setDescription(composeDescription(aiDraft))}
-                onUseAll={() => {
-                  setTitle(aiDraft.title);
-                  setDescription(composeDescription(aiDraft));
-                  setType(aiDraft.type);
-                  setPriority(aiDraft.priority);
-                  toast.success("Filled in — edit anything that isn't right.");
-                }}
-              />
-            )}
-
-            {!aiDraft && !compose.busy && (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Write a title and whatever detail you have, then send it.
-                {aiEnabled && " Or draft it with AI — that only runs when you ask."}
-              </div>
-            )}
-
-            {aiEnabled && !aiDraft && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={compose.busy || !chosenProject}
-                onClick={() => void askAi()}
-              >
-                <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Draft with AI
-              </Button>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Checkout button does nothing on mobile"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="description">Details</Label>
-              <Textarea
-                id="description"
-                rows={8}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="type">What is this?</Label>
-                <Select value={type} onValueChange={(v) => setType(v as TicketType)}>
-                  <SelectTrigger id="type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TICKET_TYPES.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {TICKET_TYPE_PROMPT[value]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="priority">How urgent?</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as TicketPriority)}>
-                  <SelectTrigger id="priority">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Whenever you get to it</SelectItem>
-                    <SelectItem value="medium">Soon would be good</SelectItem>
-                    <SelectItem value="high">It&rsquo;s holding me up</SelectItem>
-                    <SelectItem value="urgent">It&rsquo;s costing me money</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                <ArrowLeft className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Back
-              </Button>
-              <Button type="submit" className="flex-1" disabled={create.busy || !title.trim()}>
-                {create.busy ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
-                    Sending
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    Send it
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        )}
+    <form
+      onSubmit={submit}
+      className="mx-auto flex max-w-[720px] flex-col gap-[22px] px-4 pb-16 pt-9 md:px-8"
+    >
+      <div>
+        <h1 className="font-display text-[38px] font-normal leading-tight">Point at the problem</h1>
+        <p className="mt-1.5 leading-normal text-muted-foreground">
+          A screenshot or a short recording is usually enough. Add a sentence on what you expected.
+        </p>
       </div>
-    </>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CaptureDropzone
+          drafts={drafts}
+          onAdd={(files) => addFiles(files)}
+          onRemove={(id) => setDrafts((prev) => prev.filter((d) => d.id !== id))}
+          label="Screenshot"
+          title="Screenshot"
+          description="Paste, drop, or choose an image. You can mark it up."
+          actions={
+            <Button type="button" variant="outline" size="sm" onClick={() => void takeScreenshot()}>
+              <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Capture this screen
+            </Button>
+          }
+        />
+        <SectionBoundary label="recorder">
+          <RecorderPanel
+            onRecorded={({ file, durationMs, hasAudio }) =>
+              setDrafts((prev) => [
+                ...prev,
+                {
+                  id: newDraftId(),
+                  file,
+                  bucket: "recordings",
+                  kind: "recording",
+                  durationMs,
+                  hasAudio,
+                },
+              ])
+            }
+          />
+        </SectionBoundary>
+      </div>
+
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {images.map((draft) => (
+            <button
+              key={draft.id}
+              type="button"
+              onClick={() => void openAnnotator(draft)}
+              className="group relative h-20 w-28 overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <img
+                src={draft.previewUrl}
+                alt={`Mark up ${draft.file.name}`}
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute inset-0 grid place-items-center bg-foreground/60 text-xs font-medium text-background opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                Mark it up
+              </span>
+              {draft.kind === "annotated" && (
+                <span className="absolute right-1 top-1">
+                  <StatusPill tone="success">Marked</StatusPill>
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <div id="kind-label" className="text-xs font-medium text-muted-foreground">
+          What kind of thing is it?
+        </div>
+        <div role="group" aria-labelledby="kind-label" className="flex flex-wrap gap-1.5">
+          {TICKET_TYPES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={type === value}
+              onClick={() => setType(value)}
+              className={`h-[34px] rounded-full border px-3.5 text-[13px] transition-colors ${
+                type === value ? "border-primary bg-accent font-medium" : "bg-card hover:bg-muted"
+              }`}
+            >
+              {TICKET_TYPE_LABEL[value]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {(projects.data?.length ?? 0) > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="project" className="text-xs text-muted-foreground">
+            Project
+          </Label>
+          <Select value={projectId} onValueChange={setProjectId}>
+            <SelectTrigger id="project" className="h-[42px]">
+              <SelectValue placeholder="Pick a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {(projects.data ?? []).map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="title" className="text-xs text-muted-foreground">
+          Short title
+        </Label>
+        <Input
+          id="title"
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. Pay now button does nothing on iPhone"
+          className="h-11 text-[15px]"
+        />
+      </div>
+
+      {compose.busy && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-xl border bg-accent/30 p-4 text-sm"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+          Reading what you sent and writing a draft…
+        </div>
+      )}
+
+      {aiDraft && !compose.busy && (
+        <AiComposePanel
+          draft={aiDraft}
+          busy={compose.busy}
+          onRegenerate={() => void askAi()}
+          onUseTitle={() => setTitle(aiDraft.title)}
+          onUseDescription={() => setDescription(composeDescription(aiDraft))}
+          onUseAll={() => {
+            setTitle(aiDraft.title);
+            setDescription(composeDescription(aiDraft));
+            setType(aiDraft.type);
+            setPriority(aiDraft.priority);
+            toast.success("Filled in. Edit anything that isn't right.");
+          }}
+        />
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center">
+          <Label htmlFor="description" className="flex-1 text-xs text-muted-foreground">
+            Details
+          </Label>
+          {aiEnabled && (
+            <button
+              type="button"
+              disabled={compose.busy || !chosenProject}
+              onClick={() => void askAi()}
+              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+            >
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              Write it up with AI
+            </button>
+          )}
+        </div>
+        <Textarea
+          id="description"
+          rows={6}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What happened, and what did you expect?"
+          className="px-3.5 py-3 leading-relaxed"
+        />
+        <p className="text-xs text-muted-foreground">
+          We&rsquo;ll also send your browser details automatically
+          {contextSummary ? `: ${contextSummary}` : ""}.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 sm:max-w-xs">
+        <Label htmlFor="priority" className="text-xs text-muted-foreground">
+          How urgent?
+        </Label>
+        <Select value={priority} onValueChange={(v) => setPriority(v as TicketPriority)}>
+          <SelectTrigger id="priority">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">Whenever you get to it</SelectItem>
+            <SelectItem value="medium">Soon would be good</SelectItem>
+            <SelectItem value="high">It&rsquo;s holding me up</SelectItem>
+            <SelectItem value="urgent">It&rsquo;s costing me money</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          className="h-11 px-6"
+          disabled={create.busy || !title.trim() || !chosenProject}
+        >
+          {create.busy ? (
+            <>
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+              Sending
+            </>
+          ) : (
+            "Send"
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -641,36 +588,6 @@ function AnnotatorStep({
         </Button>
       </div>
     </div>
-  );
-}
-
-function StepPill({
-  n,
-  label,
-  active,
-  done,
-}: {
-  n: number;
-  label: string;
-  active: boolean;
-  done: boolean;
-}) {
-  return (
-    <li className="flex items-center gap-2">
-      <span
-        aria-current={active ? "step" : undefined}
-        className={`grid h-6 w-6 place-items-center rounded-full text-xs font-medium ${
-          done
-            ? "bg-success/20 text-success"
-            : active
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground"
-        }`}
-      >
-        {done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : n}
-      </span>
-      <span className={active ? "font-medium" : "text-muted-foreground"}>{label}</span>
-    </li>
   );
 }
 

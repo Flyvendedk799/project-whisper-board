@@ -1,41 +1,40 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import type { PlanWithSections, TaskWithAgent } from "@/data";
+import type { PlanAttachmentWithUrl, PlanWithSections, TaskWithAgent } from "@/data";
 import { PlanBoard } from "./plan-board";
-
-vi.mock("@tanstack/react-start", () => ({
-  useServerFn: (fn: unknown) => fn,
-}));
-
-vi.mock("@/lib/planner.functions", () => ({
-  createSection: vi.fn(),
-  moveTask: vi.fn(),
-}));
-
-vi.mock("@/lib/use-server-action", () => ({
-  useServerAction: () => ({
-    fire: vi.fn(),
-    busy: false,
-    run: vi.fn(),
-    reset: vi.fn(),
-    error: null,
-  }),
-}));
+import { NO_FILTERS, type TaskFilters } from "./plan-model";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
 }));
 
-afterEach(cleanup);
+const media = vi.hoisted(() => ({
+  byTask: new Map<string, unknown[]>(),
+  upload: vi.fn(),
+}));
+
+vi.mock("./plan-media", () => ({
+  usePlanMedia: () => ({
+    byTask: media.byTask,
+    upload: media.upload,
+    visible: [],
+    uploads: [],
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  media.byTask.clear();
+});
 
 const PROSE =
   "The battle step is 20 Hz (BATTLE_TICK_MS is 50). A fight nobody is standing in, and that nobody is spectating and striking, accumulates time.";
 
 function task(
   partial: Pick<TaskWithAgent, "id" | "title" | "section_id"> &
-    Partial<Pick<TaskWithAgent, "description" | "position">>,
+    Partial<Pick<TaskWithAgent, "description" | "position" | "status" | "steps" | "comment_count">>,
 ): TaskWithAgent {
   return {
     acceptance_criteria: null,
@@ -45,7 +44,7 @@ function task(
     branch_name: null,
     claimed_at: null,
     completed_at: null,
-    complexity: "medium",
+    complexity: null,
     context_files: [],
     created_at: "",
     depends_on: [],
@@ -62,11 +61,13 @@ function task(
     pr_url: null,
     priority: "medium",
     section_id: partial.section_id,
-    status: "available",
+    status: partial.status ?? "available",
     ticket_id: null,
     title: partial.title,
     updated_at: "",
     assigned_agent: null,
+    steps: partial.steps,
+    comment_count: partial.comment_count,
   };
 }
 
@@ -88,10 +89,45 @@ function plan(
   } as PlanWithSections;
 }
 
+function actionsMock() {
+  return {
+    advance: vi.fn(),
+    moveTask: vi.fn(),
+    create: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
+    removeSection: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
+  };
+}
+
+function board(
+  p: PlanWithSections,
+  options: {
+    layout?: "columns" | "outline";
+    filters?: TaskFilters;
+    onOpenTask?: (id: string) => void;
+    actions?: ReturnType<typeof actionsMock>;
+  } = {},
+) {
+  const actions = options.actions ?? actionsMock();
+  return {
+    actions,
+    ...render(
+      <PlanBoard
+        plan={p}
+        layout={options.layout ?? "columns"}
+        filters={options.filters ?? NO_FILTERS}
+        meId="me"
+        onOpenTask={options.onOpenTask ?? vi.fn()}
+        onSelectSection={vi.fn()}
+        actions={actions}
+      />,
+    ),
+  };
+}
+
 describe("PlanBoard", () => {
   it("opens a long import as an outline and keeps prose titles scannable", async () => {
     const user = userEvent.setup();
-    const onTaskClick = vi.fn();
+    const onOpenTask = vi.fn();
     const sections = [
       {
         id: "s1",
@@ -113,10 +149,9 @@ describe("PlanBoard", () => {
       })),
     ];
 
-    render(<PlanBoard plan={plan(sections)} onTaskClick={onTaskClick} />);
+    board(plan(sections), { layout: "outline", onOpenTask });
 
-    expect(screen.getByRole("button", { name: "Outline", pressed: true })).toBeInTheDocument();
-    expect(screen.queryByText("Drag tasks here")).not.toBeInTheDocument();
+    expect(screen.queryByText("Drop a task or files here")).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
         name: "The battle step is 20 Hz (BATTLE_TICK_MS is 50).",
@@ -127,14 +162,13 @@ describe("PlanBoard", () => {
     expect(
       screen.getByRole("button", { name: /Show detail for The battle step/ }),
     ).toHaveTextContent("3 nested");
-    expect(screen.getByText("1 task")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
         name: "Show detail for The battle step is 20 Hz (BATTLE_TICK_MS is 50).",
       }),
     );
-    expect(onTaskClick).not.toHaveBeenCalled();
+    expect(onOpenTask).not.toHaveBeenCalled();
     expect(screen.getByText(/A fight nobody is standing in/)).toBeInTheDocument();
     expect(screen.getByText("Cookie refresh")).toBeInTheDocument();
     expect(screen.getByText("Silent renew")).toBeInTheDocument();
@@ -144,48 +178,173 @@ describe("PlanBoard", () => {
     await user.click(
       screen.getByRole("heading", { name: "The battle step is 20 Hz (BATTLE_TICK_MS is 50)." }),
     );
-    expect(onTaskClick).toHaveBeenCalledWith("t1");
+    expect(onOpenTask).toHaveBeenCalledWith("t1");
 
+    // The section rail names every section and counts its tasks.
     expect(screen.getByRole("button", { name: /Soldiers/ })).toHaveTextContent("0");
-    await user.click(screen.getByRole("button", { name: "Columns" }));
-    expect(screen.getByRole("button", { name: "Soldiers, empty" })).toBeInTheDocument();
-    expect(screen.queryByText("Drag tasks here")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Soldiers, empty" }));
-    expect(screen.getByText("Drag tasks here")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Collapse" }));
-    expect(screen.queryByText("Drag tasks here")).not.toBeInTheDocument();
   });
 
-  it("keeps a short board in columns and collapses only spare empty sections", () => {
-    render(
-      <PlanBoard
-        plan={plan([
-          {
-            id: "s1",
-            title: "Vehicles",
-            tasks: [task({ id: "t1", section_id: "s1", title: "**Driver** and `gunner`" })],
-          },
-          { id: "s2", title: "Review", tasks: [] },
-        ])}
-        onTaskClick={vi.fn()}
-      />,
+  it("keeps a short board in columns and collapses only spare empty sections", async () => {
+    const user = userEvent.setup();
+    board(
+      plan([
+        {
+          id: "s1",
+          title: "Vehicles",
+          tasks: [task({ id: "t1", section_id: "s1", title: "**Driver** and `gunner`" })],
+        },
+        { id: "s2", title: "Review", tasks: [] },
+      ]),
     );
 
-    expect(screen.getByRole("button", { name: "Columns", pressed: true })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Driver and gunner" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Show detail/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review, empty" })).toBeInTheDocument();
-    expect(screen.queryByText("Drag tasks here")).not.toBeInTheDocument();
+    expect(screen.queryByText("Drop a task or files here")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review, empty" }));
+    expect(screen.getByText("Drop a task or files here")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse" }));
+    expect(screen.queryByText("Drop a task or files here")).not.toBeInTheDocument();
   });
 
   it("shows a full empty column when the plan has no cards yet", () => {
-    render(
-      <PlanBoard plan={plan([{ id: "s1", title: "Backlog", tasks: [] }])} onTaskClick={vi.fn()} />,
+    board(plan([{ id: "s1", title: "Backlog", tasks: [] }]));
+
+    expect(screen.getByRole("heading", { name: "Backlog" })).toBeInTheDocument();
+    expect(screen.getByText("Drop a task or files here")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /empty/ })).not.toBeInTheDocument();
+  });
+
+  it("advances a task from the circle without opening it", async () => {
+    const user = userEvent.setup();
+    const onOpenTask = vi.fn();
+    const { actions } = board(
+      plan([
+        {
+          id: "s1",
+          title: "Build",
+          tasks: [task({ id: "t1", section_id: "s1", title: "Wire it" })],
+        },
+      ]),
+      { onOpenTask },
     );
 
-    expect(screen.getByRole("button", { name: "Columns", pressed: true })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Backlog" })).toBeInTheDocument();
-    expect(screen.getByText("Drag tasks here")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /empty/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Move to Claimed/ }));
+    expect(actions.advance).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }));
+    expect(onOpenTask).not.toHaveBeenCalled();
+  });
+
+  it("adds a task inline and keeps the field for the next one", async () => {
+    const user = userEvent.setup();
+    const { actions } = board(plan([{ id: "s1", title: "Build", tasks: [] }]));
+
+    await user.click(screen.getByRole("button", { name: "+ Add task" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "New task in Build" }),
+      "Write tests{Enter}",
+    );
+
+    expect(actions.create.fire).toHaveBeenCalledWith({
+      planId: "plan-1",
+      sectionId: "s1",
+      title: "Write tests",
+    });
+    expect(screen.getByRole("textbox", { name: "New task in Build" })).toHaveValue("");
+  });
+
+  it("moves a focused card with Shift + arrow keys, and stops at the ends", () => {
+    const { actions } = board(
+      plan([
+        {
+          id: "s1",
+          title: "Now",
+          tasks: [
+            task({ id: "t1", section_id: "s1", title: "First", position: 1 }),
+            task({ id: "t2", section_id: "s1", title: "Second", position: 2 }),
+          ],
+        },
+        { id: "s2", title: "Next", tasks: [task({ id: "t3", section_id: "s2", title: "Third" })] },
+      ]),
+    );
+
+    const first = screen.getByRole("group", { name: "First" });
+    fireEvent.keyDown(first, { key: "ArrowRight", shiftKey: true });
+    expect(actions.moveTask).toHaveBeenLastCalledWith("t1", "s2", null);
+
+    fireEvent.keyDown(first, { key: "ArrowLeft", shiftKey: true });
+    expect(actions.moveTask).toHaveBeenCalledTimes(1);
+
+    // Down past the second card swaps them: dropped before "nothing" = at the end.
+    fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
+    expect(actions.moveTask).toHaveBeenLastCalledWith("t1", "s1", null);
+    fireEvent.keyDown(screen.getByRole("group", { name: "Second" }), {
+      key: "ArrowDown",
+      shiftKey: true,
+    });
+    expect(actions.moveTask).toHaveBeenCalledTimes(2);
+  });
+
+  it("filters cards and says so when nothing matches", () => {
+    board(
+      plan([
+        {
+          id: "s1",
+          title: "Build",
+          tasks: [
+            task({ id: "t1", section_id: "s1", title: "Open one", status: "available" }),
+            task({ id: "t2", section_id: "s1", title: "Blocked one", status: "blocked" }),
+          ],
+        },
+        {
+          id: "s2",
+          title: "Review",
+          tasks: [task({ id: "t3", section_id: "s2", title: "Other" })],
+        },
+      ]),
+      { filters: { ...NO_FILTERS, status: "blocked" } },
+    );
+
+    expect(screen.getByRole("heading", { name: "Blocked one" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Open one" })).not.toBeInTheDocument();
+    expect(screen.getByText("No tasks match the filters")).toBeInTheDocument();
+  });
+
+  it("shows sub-step progress, file counts, notes and a cover on the card", () => {
+    const image = {
+      id: "a1",
+      task_id: "t1",
+      file_name: "mock.png",
+      mime_type: "image/png",
+      url: "https://files.test/mock.png",
+      source_attachment_id: null,
+    } as unknown as PlanAttachmentWithUrl;
+    media.byTask.set("t1", [image, { ...image, id: "a2", url: "https://files.test/two.png" }]);
+
+    board(
+      plan([
+        {
+          id: "s1",
+          title: "Build",
+          tasks: [
+            task({
+              id: "t1",
+              section_id: "s1",
+              title: "Checklist",
+              steps: [
+                { id: "p1", done: true },
+                { id: "p2", done: false },
+              ] as TaskWithAgent["steps"],
+              comment_count: [{ count: 3 }],
+            }),
+          ],
+        },
+      ]),
+    );
+
+    expect(screen.getByText("1/2 sub-steps")).toBeInTheDocument();
+    expect(screen.getByText("2 files")).toBeInTheDocument();
+    expect(screen.getByText("3 notes")).toBeInTheDocument();
+    expect(screen.getByText("+1")).toBeInTheDocument();
   });
 });

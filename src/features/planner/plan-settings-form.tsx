@@ -18,8 +18,13 @@ import { updatePlan } from "@/lib/planner.functions";
 import { projectListQuery } from "@/data/projects";
 import { useAuth } from "@/components/auth-provider";
 import { GitHubRepoField } from "@/features/github/repo-field";
-import { type PlanStatus, type PlanWithSections } from "@/data";
+import { PLAN_STATUS_LABEL } from "@/data/enums";
+import type { PlanStatus, PlanWithSections } from "@/data";
+import { cn } from "@/lib/utils";
 
+const STATUSES: PlanStatus[] = ["draft", "active", "paused", "completed", "archived"];
+
+/** Title, status, project and repository, in a dialog. */
 export function PlanSettingsForm({
   plan,
   onClose,
@@ -40,65 +45,81 @@ export function PlanSettingsForm({
 
   const save = useServerAction(useServerFn(updatePlan), {
     label: "plans.update",
-    invalidate: [qk.plan(plan.id), qk.planList()],
-    onSuccess: () => {
-      onClose();
-    },
+    success: "Plan settings saved",
+    invalidate: [qk.plan(plan.id), qk.planList(), qk.planEvents(plan.id)],
+    onSuccess: onClose,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) return;
     save.fire({
       planId: plan.id,
-      title,
-      description: description || undefined,
+      title: title.trim(),
+      description,
       status,
-      projectId: projectId || undefined,
+      projectId,
       githubRepo: githubRepo.trim() || null,
       githubBase: githubBase.trim() || null,
     });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label htmlFor="title">Title</Label>
-        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-title" className="text-xs text-muted-foreground">
+          Title
+        </Label>
+        <Input
+          id="plan-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          maxLength={200}
+        />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-description" className="text-xs text-muted-foreground">
+          Description
+        </Label>
         <Textarea
-          id="description"
+          id="plan-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="status">Status</Label>
-        <Select value={status} onValueChange={(value) => setStatus(value as PlanStatus)}>
-          <SelectTrigger id="status">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="paused">Paused</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-xs font-medium text-muted-foreground">Status</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUSES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={status === value}
+              onClick={() => setStatus(value)}
+              className={cn(
+                "h-[30px] rounded-full border px-3 text-xs",
+                status === value ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
+              )}
+            >
+              {PLAN_STATUS_LABEL[value]}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
-      <div className="space-y-2">
-        <Label htmlFor="project">Linked Project</Label>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-project" className="text-xs text-muted-foreground">
+          Linked project
+        </Label>
         <Select
           value={projectId ?? "none"}
           onValueChange={(val) => setProjectId(val === "none" ? null : val)}
         >
-          <SelectTrigger id="project">
+          <SelectTrigger id="plan-project">
             <SelectValue placeholder="No linked project" />
           </SelectTrigger>
           <SelectContent>
@@ -112,43 +133,46 @@ export function PlanSettingsForm({
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="githubRepo">GitHub Repository</Label>
-        <GitHubRepoField id="githubRepo" value={githubRepo} onChange={setGithubRepo} />
-        {selectedProject?.github_repo && selectedProject.github_repo !== githubRepo && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => {
-              setGithubRepo(selectedProject.github_repo ?? "");
-              if (!githubBase && selectedProject.github_default_branch) {
-                setGithubBase(selectedProject.github_default_branch);
-              }
-            }}
-          >
-            Use project repository ({selectedProject.github_repo})
-          </Button>
-        )}
+      <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="githubRepo" className="text-xs text-muted-foreground">
+            GitHub repository
+          </Label>
+          <GitHubRepoField id="githubRepo" value={githubRepo} onChange={setGithubRepo} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="githubBase" className="text-xs text-muted-foreground">
+            Base branch
+          </Label>
+          <Input
+            id="githubBase"
+            placeholder="main"
+            value={githubBase}
+            onChange={(e) => setGithubBase(e.target.value)}
+          />
+        </div>
       </div>
+      {selectedProject?.github_repo && selectedProject.github_repo !== githubRepo ? (
+        <button
+          type="button"
+          className="self-start text-[13px] text-primary hover:underline"
+          onClick={() => {
+            setGithubRepo(selectedProject.github_repo ?? "");
+            if (!githubBase && selectedProject.github_default_branch) {
+              setGithubBase(selectedProject.github_default_branch);
+            }
+          }}
+        >
+          Use project repository ({selectedProject.github_repo})
+        </button>
+      ) : null}
 
-      <div className="space-y-2">
-        <Label htmlFor="githubBase">GitHub Base Branch</Label>
-        <Input
-          id="githubBase"
-          placeholder="main"
-          value={githubBase}
-          onChange={(e) => setGithubBase(e.target.value)}
-        />
-      </div>
-
-      <div className="flex justify-end gap-2 pt-4">
+      <div className="flex justify-end gap-2 pt-1">
         <Button variant="outline" type="button" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={save.busy}>
-          {save.busy ? "Saving..." : "Save Changes"}
+        <Button type="submit" disabled={save.busy || !title.trim()}>
+          {save.busy ? "Saving…" : "Save changes"}
         </Button>
       </div>
     </form>

@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampStepDepth,
+  parseChecklist,
   parsePlanMarkdown,
   planMarkdownFilename,
   planMarkdownPreview,
   planMarkdownStats,
+  planMarkdownStepCount,
   readTaskOutline,
   serializePlanMarkdown,
+  splitDescriptionSteps,
+  stepsProgress,
+  stepsToMarkdown,
   type PlanMdDocument,
 } from "./plan-markdown";
 
@@ -447,5 +453,161 @@ describe("helpers", () => {
   it("builds a download filename from the plan title", () => {
     expect(planMarkdownFilename("My Cool Plan!")).toBe("my-cool-plan.md");
     expect(planMarkdownFilename("   ")).toBe("plan.md");
+  });
+});
+
+describe("sub-steps", () => {
+  it("turns checkbox list items under a task into steps, not description", () => {
+    const doc = parsePlanMarkdown(`
+1 Build
+1.1 Checklist component
+Swap the wizard for a checklist.
+- [x] Four items
+  - [ ] Name workspace
+  - [x] Invite teammates
+- [ ] Persist dismissal
+1.1.1 Plain nested
+1.2 Other task
+`);
+
+    const task = doc.sections[0].tasks[0];
+    expect(task.title).toBe("Checklist component");
+    expect(task.steps).toEqual([
+      { text: "Four items", done: true, depth: 0 },
+      { text: "Name workspace", done: false, depth: 1 },
+      { text: "Invite teammates", done: true, depth: 1 },
+      { text: "Persist dismissal", done: false, depth: 0 },
+    ]);
+    expect(task.description).toBe("Swap the wizard for a checklist.\n\n- Plain nested");
+    expect(doc.sections[0].tasks[1].steps).toEqual([]);
+  });
+
+  it("reads steps under ATX headings and under list outlines", () => {
+    const fromHeadings = parsePlanMarkdown(
+      "# Alpha\n## Task\n- [ ] one\n- [x] two\n# Beta\n## Other",
+    );
+    expect(fromHeadings.sections[0].tasks[0].steps).toEqual([
+      { text: "one", done: false, depth: 0 },
+      { text: "two", done: true, depth: 0 },
+    ]);
+
+    const fromLists = parsePlanMarkdown("- Delivery\n  - Ship export\n    - [x] Round-trip tests");
+    expect(fromLists.sections[0].tasks[0].steps).toEqual([
+      { text: "Round-trip tests", done: true, depth: 0 },
+    ]);
+    expect(fromLists.sections[0].tasks[0].description).toBe("");
+  });
+
+  it("treats anything indented under a step as a deeper step", () => {
+    const doc = parsePlanMarkdown("# A\n## T\n- [ ] parent\n  - child without a box\n# B\n## U");
+    expect(doc.sections[0].tasks[0].steps).toEqual([
+      { text: "parent", done: false, depth: 0 },
+      { text: "child without a box", done: false, depth: 1 },
+    ]);
+  });
+
+  it("round-trips steps through the numbered export", () => {
+    const original = parsePlanMarkdown(`
+# Alpha
+## Task one
+Body text.
+- [x] first
+  - [ ] nested
+- [ ] second
+### Nested title
+## Task two
+# Beta
+## Only
+`);
+    const exported = serializePlanMarkdown(original);
+    expect(exported).toContain("- [x] first\n  - [ ] nested\n- [ ] second");
+
+    const again = parsePlanMarkdown(exported);
+    expect(again.sections[0].tasks.map((t) => t.steps)).toEqual(
+      original.sections[0].tasks.map((t) => t.steps),
+    );
+    expect(titles(again)).toEqual(titles(original));
+    expect(planMarkdownStepCount(again)).toBe(3);
+  });
+
+  it("serializes steps handed over from the database", () => {
+    const md = serializePlanMarkdown({
+      sections: [
+        {
+          title: "Build",
+          tasks: [
+            {
+              title: "Wizard",
+              description: "",
+              steps: [
+                { text: "One", done: true, depth: 0 },
+                { text: "Two", done: false, depth: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(md).toBe("1 Build\n1.1 Wizard\n- [x] One\n  - [ ] Two\n");
+  });
+
+  it("shows steps in the import preview", () => {
+    const doc = parsePlanMarkdown("# A\n## T\n- [x] done one\n- [ ] open one\n# B\n## U");
+    expect(planMarkdownPreview(doc)[0].children[0].children).toEqual([
+      { title: "done one", children: [], step: { done: true } },
+      { title: "open one", children: [], step: { done: false } },
+    ]);
+  });
+});
+
+describe("checklist helpers", () => {
+  it("formats and re-reads a checklist", () => {
+    const steps = [
+      { text: "A", done: false, depth: 0 },
+      { text: "B", done: true, depth: 2 },
+    ];
+    expect(stepsToMarkdown(steps)).toBe("- [ ] A\n    - [x] B");
+    expect(parseChecklist(stepsToMarkdown(steps))).toEqual(steps);
+  });
+
+  it("splits checklist lines out of a description", () => {
+    expect(splitDescriptionSteps("Intro.\n\n- [ ] one\n  - [x] two\nOutro.")).toEqual({
+      description: "Intro.\n\nOutro.",
+      steps: [
+        { text: "one", done: false, depth: 0 },
+        { text: "two", done: true, depth: 1 },
+      ],
+    });
+    expect(splitDescriptionSteps(null)).toEqual({ description: "", steps: [] });
+  });
+
+  it("can promote plain nested bullets to steps when asked", () => {
+    const text = "Wire it.\n\n- Cookie refresh\n  - Silent renew\n- Logout";
+    expect(splitDescriptionSteps(text).steps).toEqual([]);
+    expect(splitDescriptionSteps(text, { plainLists: true })).toEqual({
+      description: "Wire it.",
+      steps: [
+        { text: "Cookie refresh", done: false, depth: 0 },
+        { text: "Silent renew", done: false, depth: 1 },
+        { text: "Logout", done: false, depth: 0 },
+      ],
+    });
+  });
+
+  it("limits how deep a step may sit", () => {
+    const steps = [{ depth: 0 }, { depth: 1 }];
+    expect(clampStepDepth(steps, 0, 2)).toBe(0);
+    expect(clampStepDepth(steps, 2, 3)).toBe(2);
+    expect(clampStepDepth([{ depth: 3 }], 1, 9)).toBe(3);
+    expect(clampStepDepth(steps, 2, -1)).toBe(0);
+  });
+
+  it("counts progress", () => {
+    expect(stepsProgress([])).toEqual({ done: 0, total: 0, percent: 0 });
+    expect(stepsProgress([{ done: true }, { done: false }, { done: true }])).toEqual({
+      done: 2,
+      total: 3,
+      percent: 67,
+    });
   });
 });

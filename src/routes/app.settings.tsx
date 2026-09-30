@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { AlertTriangle, Bell, Inbox, Palette, Plug, Tag, Timer, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,28 +15,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageHeader, StatusPill } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
 import { useTheme, type Theme } from "@/components/theme-provider";
 import { useDataMutation, useServerAction } from "@/lib/use-server-action";
 import { saveNotificationPreferences } from "@/lib/notifications.functions";
-import {
-  claudeConnection,
-  finishClaudeConnection,
-  removeClaudeConnection,
-  startClaudeConnection,
-} from "@/lib/claude-auth.functions";
-import type { ClaudeConnection } from "@/lib/ai-auth/claude";
-import {
-  antigravityConnection,
-  finishAntigravityConnection,
-  removeAntigravityConnection,
-  startAntigravityConnection,
-} from "@/lib/antigravity-auth.functions";
-import type { AntigravityConnection } from "@/lib/ai-auth/antigravity";
+import { AntigravityAccountCard, ClaudeAccountCard } from "@/features/settings/ai-accounts";
+import { getGitHubStatus } from "@/lib/github.functions";
 
 import { getIntegrationStatus, listAppErrors, listOutbox } from "@/lib/admin-views.functions";
 import { updateWorkspace } from "@/lib/workspace.functions";
@@ -66,133 +53,110 @@ export const Route = createFileRoute("/app/settings")({
   component: SettingsPage,
 });
 
+/** Presets from the design; any hex still works in the field. */
+const BRAND_SWATCHES = ["#b4583a", "#3d6db5", "#2f8a64", "#7b4fb8"];
+
 const KINDS = Constants.public.Enums.notification_kind;
+
+const TABS = ["you", "notifications", "sla", "labels", "integrations", "outbox", "errors"] as const;
+type SettingsTab = (typeof TABS)[number];
+
+const TAB_LABEL: Record<SettingsTab, string> = {
+  you: "You and workspace",
+  notifications: "Notifications",
+  sla: "SLA",
+  labels: "Labels",
+  integrations: "Integrations",
+  outbox: "Outbox",
+  errors: "Errors",
+};
 
 function SettingsPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = Route.useSearch();
-  const tab = search.tab ?? "you";
+  const adminOnly: SettingsTab[] = ["sla", "labels", "integrations", "outbox", "errors"];
+  const visible = TABS.filter((key) => isAdmin || !adminOnly.includes(key));
+  const tab: SettingsTab = visible.includes(search.tab ?? "you") ? (search.tab ?? "you") : "you";
 
   return (
     <>
-      <PageHeader title="Settings" />
-      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
-        <Tabs
-          value={tab}
-          onValueChange={(next) =>
+      <PageHeader
+        title="Settings"
+        maxWidth="max-w-3xl"
+        tabs={visible.map((key) => ({
+          id: key,
+          label: TAB_LABEL[key],
+          active: tab === key,
+          onSelect: () =>
             void navigate({
-              search: (prev: { tab?: string }) => ({
-                ...prev,
-                tab: next as
-                  | "you"
-                  | "notifications"
-                  | "sla"
-                  | "labels"
-                  | "integrations"
-                  | "outbox"
-                  | "errors",
-              }),
+              search: (prev: { tab?: SettingsTab }) => ({ ...prev, tab: key }),
               replace: true,
-            })
-          }
-        >
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="you">
-              <User className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              You
-            </TabsTrigger>
-            <TabsTrigger value="notifications">
-              <Bell className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Notifications
-            </TabsTrigger>
-            {isAdmin && (
-              <>
-                <TabsTrigger value="sla">
-                  <Timer className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  SLA
-                </TabsTrigger>
-                <TabsTrigger value="labels">
-                  <Tag className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Labels
-                </TabsTrigger>
-              </>
-            )}
-            {isAdmin && (
-              <>
-                <TabsTrigger value="integrations">
-                  <Plug className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Integrations
-                </TabsTrigger>
-                <TabsTrigger value="outbox">
-                  <Inbox className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Outbox
-                </TabsTrigger>
-                <TabsTrigger value="errors">
-                  <AlertTriangle className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Errors
-                </TabsTrigger>
-              </>
-            )}
-          </TabsList>
-
-          <TabsContent value="you" className="mt-6 space-y-6">
+            }),
+        }))}
+      />
+      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-7">
+        {tab === "you" && (
+          <div className="space-y-6">
             <ProfileCard />
             {isAdmin && (
               <SectionBoundary label="workspace">
                 <WorkspaceCard />
               </SectionBoundary>
             )}
+            {!isAdmin && (
+              <>
+                <SectionBoundary label="claude-account">
+                  <ClaudeAccountCard />
+                </SectionBoundary>
+                <SectionBoundary label="antigravity-account">
+                  <AntigravityAccountCard />
+                </SectionBoundary>
+              </>
+            )}
+            <AppearanceCard />
+          </div>
+        )}
+
+        {tab === "notifications" && (
+          <SectionBoundary label="notification-preferences">
+            <NotificationsCard />
+          </SectionBoundary>
+        )}
+
+        {isAdmin && tab === "sla" && (
+          <SectionBoundary label="sla-policies">
+            <SlaPoliciesCard />
+          </SectionBoundary>
+        )}
+        {isAdmin && tab === "labels" && (
+          <SectionBoundary label="labels">
+            <LabelsCard />
+          </SectionBoundary>
+        )}
+        {isAdmin && tab === "integrations" && (
+          <div className="space-y-6">
+            <SectionBoundary label="integrations">
+              <IntegrationsCard />
+            </SectionBoundary>
             <SectionBoundary label="claude-account">
               <ClaudeAccountCard />
             </SectionBoundary>
             <SectionBoundary label="antigravity-account">
               <AntigravityAccountCard />
             </SectionBoundary>
-            <AppearanceCard />
-          </TabsContent>
-
-          <TabsContent value="notifications" className="mt-6">
-            <SectionBoundary label="notification-preferences">
-              <NotificationsCard />
-            </SectionBoundary>
-          </TabsContent>
-
-          {isAdmin && (
-            <>
-              <TabsContent value="sla" className="mt-6">
-                <SectionBoundary label="sla-policies">
-                  <SlaPoliciesCard />
-                </SectionBoundary>
-              </TabsContent>
-              <TabsContent value="labels" className="mt-6">
-                <SectionBoundary label="labels">
-                  <LabelsCard />
-                </SectionBoundary>
-              </TabsContent>
-            </>
-          )}
-
-          {isAdmin && (
-            <>
-              <TabsContent value="integrations" className="mt-6">
-                <SectionBoundary label="integrations">
-                  <IntegrationsCard />
-                </SectionBoundary>
-              </TabsContent>
-              <TabsContent value="outbox" className="mt-6">
-                <SectionBoundary label="outbox">
-                  <OutboxCard />
-                </SectionBoundary>
-              </TabsContent>
-              <TabsContent value="errors" className="mt-6">
-                <SectionBoundary label="app-errors">
-                  <ErrorsCard />
-                </SectionBoundary>
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+          </div>
+        )}
+        {isAdmin && tab === "outbox" && (
+          <SectionBoundary label="outbox">
+            <OutboxCard />
+          </SectionBoundary>
+        )}
+        {isAdmin && tab === "errors" && (
+          <SectionBoundary label="app-errors">
+            <ErrorsCard />
+          </SectionBoundary>
+        )}
       </div>
     </>
   );
@@ -222,8 +186,8 @@ function ProfileCard() {
   };
 
   return (
-    <Card className="space-y-4 p-5">
-      <h2 className="font-display text-xl">Your details</h2>
+    <Card className="space-y-4 rounded-[14px] p-5">
+      <h2 className="font-display text-[22px] leading-tight">Your details</h2>
 
       <form
         onSubmit={(event) => {
@@ -270,11 +234,8 @@ function ProfileCard() {
 function AppearanceCard() {
   const { theme, setTheme } = useTheme();
   return (
-    <Card className="space-y-3 p-5">
-      <h2 className="flex items-center gap-2 font-display text-xl">
-        <Palette className="h-5 w-5" aria-hidden="true" />
-        Appearance
-      </h2>
+    <Card className="space-y-3 rounded-[14px] p-5">
+      <h2 className="font-display text-[22px] leading-tight">Appearance</h2>
       <div className="space-y-1.5">
         <Label htmlFor="theme">Theme</Label>
         <Select value={theme} onValueChange={(value) => setTheme(value as Theme)}>
@@ -322,9 +283,9 @@ function WorkspaceCard() {
   if (!workspace || !workspaceId) return null;
 
   return (
-    <Card className="space-y-4 p-5">
+    <Card className="space-y-4 rounded-[14px] p-5">
       <div>
-        <h2 className="font-display text-xl">Workspace</h2>
+        <h2 className="font-display text-[22px] leading-tight">Workspace</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           How this workspace appears to clients — name, contact details and invoice numbering.
         </p>
@@ -399,6 +360,23 @@ function WorkspaceCard() {
                 onChange={(e) => setBrandColor(e.target.value)}
               />
             </div>
+            <div className="flex gap-2.5 pt-1" role="group" aria-label="Brand colour presets">
+              {BRAND_SWATCHES.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  aria-label={`Use ${hex}`}
+                  aria-pressed={brandColor.toLowerCase() === hex}
+                  onClick={() => setBrandColor(hex)}
+                  style={{ backgroundColor: hex }}
+                  className={`h-7 w-7 rounded-full ${
+                    brandColor.toLowerCase() === hex
+                      ? "ring-2 ring-foreground ring-offset-2 ring-offset-card"
+                      : ""
+                  }`}
+                />
+              ))}
+            </div>
             <p className="text-xs text-muted-foreground">
               Applied to buttons and highlights for everyone in this workspace, including clients.
             </p>
@@ -452,9 +430,9 @@ function NotificationsCard() {
   return (
     <QueryState query={prefs} errorTitle="Couldn't load your preferences">
       {(row) => (
-        <Card className="space-y-5 p-5">
+        <Card className="space-y-5 rounded-[14px] p-5">
           <div>
-            <h2 className="font-display text-xl">What we tell you about</h2>
+            <h2 className="font-display text-[22px] leading-tight">What we tell you about</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               In-app notifications always appear in your Inbox. Email is what reaches you when
               you&rsquo;re not here.
@@ -560,12 +538,17 @@ function IntegrationsCard() {
     queryFn: () => getIntegrationStatus(),
   });
 
+  const github = useQuery({
+    queryKey: [...qk.all, "integrations", "github"] as const,
+    queryFn: () => getGitHubStatus(),
+  });
+
   return (
     <QueryState query={status} errorTitle="Couldn't check integrations">
       {(data) => (
-        <Card className="space-y-4 p-5">
+        <Card className="space-y-4 rounded-[14px] p-5">
           <div>
-            <h2 className="font-display text-xl">Integrations</h2>
+            <h2 className="font-display text-[22px] leading-tight">Integrations</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Everything here is optional. Without a key the feature still works — it just works
               locally instead of reaching the outside world.
@@ -573,6 +556,19 @@ function IntegrationsCard() {
           </div>
 
           <ul className="space-y-3">
+            <Integration
+              name="GitHub"
+              provider={{
+                name: github.data?.login ? `@${github.data.login}` : "GitHub",
+                enabled: Boolean(github.data?.configured && !github.data.problem),
+              }}
+              onWhen="Repositories and pull requests link to projects and plan tasks."
+              offWhen={
+                github.data?.problem ??
+                "Repository pickers and pull request status stay empty. Plans and tickets work without it."
+              }
+              key_="GITHUB_PAT"
+            />
             <Integration
               name="Email"
               provider={data.email}
@@ -626,7 +622,7 @@ function Integration({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{name}</span>
         <StatusPill tone={provider.enabled ? "success" : "default"}>
-          {provider.enabled ? `Live — ${provider.name}` : "Not configured"}
+          {provider.enabled ? `Connected — ${provider.name}` : "Not connected"}
         </StatusPill>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{provider.enabled ? onWhen : offWhen}</p>
@@ -646,8 +642,8 @@ function OutboxCard() {
   return (
     <QueryState query={outbox} errorTitle="Couldn't load the outbox">
       {(data) => (
-        <Card className="p-5">
-          <h2 className="font-display text-xl">Outbox</h2>
+        <Card className="rounded-[14px] p-5">
+          <h2 className="font-display text-[22px] leading-tight">Outbox</h2>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
             Every message the app composed. With no email provider configured these are recorded
             rather than sent — this is what your clients would have received.
@@ -706,8 +702,8 @@ function ErrorsCard() {
   return (
     <QueryState query={errors} errorTitle="Couldn't load errors">
       {(data) => (
-        <Card className="p-5">
-          <h2 className="font-display text-xl">Errors</h2>
+        <Card className="rounded-[14px] p-5">
+          <h2 className="font-display text-[22px] leading-tight">Errors</h2>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
             Grouped by cause, newest first. A client hitting a crash shows up here without them
             having to tell you.
@@ -732,300 +728,6 @@ function ErrorsCard() {
                 </li>
               ))}
             </ul>
-          )}
-        </Card>
-      )}
-    </QueryState>
-  );
-}
-
-/**
- * Your own Claude subscription.
- *
- * Lives on the "You" tab rather than under Integrations because it is not a
- * deployment setting: an admin configures which provider this install uses, but
- * whose plan pays for a call is each person's own choice, and everyone signed in
- * can make it.
- *
- * The login is a paste flow, not a redirect. Claude's authorize page hands the
- * code back on screen, so nothing has to come back to this origin — which also
- * means it works identically in a browser that never returns here.
- */
-function ClaudeAccountCard() {
-  const connection = useQuery({
-    queryKey: [...qk.all, "claude-connection"] as const,
-    queryFn: () => claudeConnection(),
-  });
-
-  const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-
-  const begin = useServerAction<undefined, { url: string; expiresInSeconds: number }>(
-    useServerFn(startClaudeConnection),
-    {
-      label: "claude.login",
-      errorMessage: "Couldn't start the Claude login.",
-      onSuccess: (result) => setAuthorizeUrl(result.url),
-    },
-  );
-
-  const finish = useServerAction(useServerFn(finishClaudeConnection), {
-    label: "claude.login.complete",
-    errorMessage: "That code wasn't accepted.",
-    invalidate: () => [[...qk.all, "claude-connection"]],
-    onSuccess: () => {
-      setAuthorizeUrl(null);
-      setCode("");
-      toast.success("Claude connected. AI now runs on your subscription.");
-    },
-  });
-
-  const remove = useServerAction<undefined, ClaudeConnection>(useServerFn(removeClaudeConnection), {
-    label: "claude.disconnect",
-    errorMessage: "Couldn't disconnect.",
-    invalidate: () => [[...qk.all, "claude-connection"]],
-    onSuccess: () => {
-      toast.success("Claude disconnected.");
-    },
-  });
-
-  return (
-    <QueryState query={connection} errorTitle="Couldn't check your Claude connection">
-      {(data) => (
-        <Card className="space-y-4 p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-display text-xl">Claude subscription</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Sign in with your own Claude plan and the AI features here run on it. Without one,
-                AI uses whatever this workspace has configured — or stays hidden.
-              </p>
-            </div>
-            <StatusPill tone={data.connected ? "success" : "default"}>
-              {data.connected ? (data.plan ?? "Connected") : "Not connected"}
-            </StatusPill>
-          </div>
-
-          {!data.available && (
-            <p className="text-sm text-muted-foreground">
-              This deployment has nowhere to keep a connection, so the feature is unavailable.
-            </p>
-          )}
-
-          {data.available && data.connected && (
-            <div className="space-y-3">
-              {data.expired && (
-                <p className="text-sm text-muted-foreground">
-                  The access token has aged out. That is not a problem — it refreshes on the next
-                  call.
-                </p>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => remove.fire(undefined)}
-                disabled={remove.busy}
-              >
-                {remove.busy ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            </div>
-          )}
-
-          {data.available && !data.connected && !authorizeUrl && (
-            <Button onClick={() => begin.fire(undefined)} disabled={begin.busy}>
-              {begin.busy ? "Starting…" : "Connect Claude"}
-            </Button>
-          )}
-
-          {data.available && !data.connected && authorizeUrl && (
-            <div className="space-y-3">
-              <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-                <li>
-                  <a
-                    href={authorizeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-foreground underline underline-offset-4"
-                  >
-                    Open the Claude authorize page
-                  </a>{" "}
-                  and approve access.
-                </li>
-                <li>Copy the code it shows you and paste it below.</li>
-              </ol>
-
-              <div className="space-y-2">
-                <Label htmlFor="claude-code">Authorization code</Label>
-                <Input
-                  id="claude-code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Paste the code from the Claude page"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => finish.fire({ code })}
-                  disabled={finish.busy || code.trim().length === 0}
-                >
-                  {finish.busy ? "Connecting…" : "Finish connecting"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setAuthorizeUrl(null);
-                    setCode("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-    </QueryState>
-  );
-}
-
-function AntigravityAccountCard() {
-  const connection = useQuery({
-    queryKey: [...qk.all, "antigravity-connection"] as const,
-    queryFn: () => antigravityConnection(),
-  });
-
-  const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-
-  const begin = useServerAction<undefined, { url: string; expiresInSeconds: number }>(
-    useServerFn(startAntigravityConnection),
-    {
-      label: "antigravity.login",
-      errorMessage: "Couldn't start the Antigravity login.",
-      onSuccess: (result) => setAuthorizeUrl(result.url),
-    },
-  );
-
-  const finish = useServerAction(useServerFn(finishAntigravityConnection), {
-    label: "antigravity.login.complete",
-    errorMessage: "That code wasn't accepted.",
-    invalidate: () => [[...qk.all, "antigravity-connection"]],
-    onSuccess: () => {
-      setAuthorizeUrl(null);
-      setCode("");
-      toast.success("Antigravity connected. AI now runs on your Google subscription.");
-    },
-  });
-
-  const remove = useServerAction<undefined, AntigravityConnection>(
-    useServerFn(removeAntigravityConnection),
-    {
-      label: "antigravity.disconnect",
-      errorMessage: "Couldn't disconnect.",
-      invalidate: () => [[...qk.all, "antigravity-connection"]],
-      onSuccess: () => {
-        toast.success("Antigravity disconnected.");
-      },
-    },
-  );
-
-  return (
-    <QueryState query={connection} errorTitle="Couldn't check your Antigravity connection">
-      {(data) => (
-        <Card className="space-y-4 p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-display text-xl">Antigravity subscription (Google)</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Sign in with your own Google plan (Gemini Advanced/Code Assist) and the AI features
-                here run on it. Without one, AI uses whatever this workspace has configured — or
-                stays hidden.
-              </p>
-            </div>
-            <StatusPill tone={data.connected ? "success" : "default"}>
-              {data.connected ? (data.email ?? "Connected") : "Not connected"}
-            </StatusPill>
-          </div>
-
-          {!data.available && (
-            <p className="text-sm text-muted-foreground">
-              This deployment has nowhere to keep a connection, so the feature is unavailable.
-            </p>
-          )}
-
-          {data.available && data.connected && (
-            <div className="space-y-3">
-              {data.expired && (
-                <p className="text-sm text-muted-foreground">
-                  The access token has aged out. That is not a problem — it refreshes on the next
-                  call.
-                </p>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => remove.fire(undefined)}
-                disabled={remove.busy}
-              >
-                {remove.busy ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            </div>
-          )}
-
-          {data.available && !data.connected && !authorizeUrl && (
-            <Button onClick={() => begin.fire(undefined)} disabled={begin.busy}>
-              {begin.busy ? "Starting…" : "Connect Antigravity"}
-            </Button>
-          )}
-
-          {data.available && !data.connected && authorizeUrl && (
-            <div className="space-y-3">
-              <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-                <li>
-                  <a
-                    href={authorizeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-foreground underline underline-offset-4"
-                  >
-                    Open the Google authorize page
-                  </a>{" "}
-                  and approve access.
-                </li>
-                <li>Copy the code or the redirect URL it shows you and paste it below.</li>
-              </ol>
-
-              <div className="space-y-2">
-                <Label htmlFor="antigravity-code">Authorization code</Label>
-                <Input
-                  id="antigravity-code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Paste the code or URL"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => finish.fire({ code })}
-                  disabled={finish.busy || code.trim().length === 0}
-                >
-                  {finish.busy ? "Connecting…" : "Finish connecting"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setAuthorizeUrl(null);
-                    setCode("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
           )}
         </Card>
       )}

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, ChevronRight, Clock, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -21,23 +20,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/app-shell";
+import { EmptyState, PageHeader } from "@/components/app-shell";
+import { DIALOG_CONTENT_CLASS, DIALOG_TITLE_CLASS } from "@/components/dialog-styles";
+import { TimerCard } from "@/features/time/timer-card";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { deleteTimeEntry, logTime, updateTimeEntry } from "@/lib/time.functions";
 import { projectListQuery } from "@/data/projects";
-import { formatMinutes, totalMinutes, workspaceTimeQuery } from "@/data/time";
+import { dayLabel, formatMinutes, groupByDay, totalMinutes, workspaceTimeQuery } from "@/data/time";
+import { startOfWeek } from "@/data/dashboard";
 import { qk } from "@/data/keys";
 import type { TimeSheetEntry } from "@/data/types";
-
-function startOfWeek(date: Date) {
-  const copy = new Date(date);
-  const mondayOffset = (copy.getDay() + 6) % 7;
-  copy.setDate(copy.getDate() - mondayOffset);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
 
 function addDays(date: Date, days: number) {
   const copy = new Date(date);
@@ -45,42 +39,45 @@ function addDays(date: Date, days: number) {
   return copy;
 }
 
-function dayKey(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-export function TimeSheet({ projectId }: { projectId?: string }) {
+/**
+ * The week's time. With `page` it is the whole Time screen — header, timer card,
+ * week switcher and entries grouped by day. Without it (a project's Time tab) it
+ * is just the week switcher and the entries for that project.
+ */
+export function TimeSheet({
+  projectId,
+  page = false,
+  initialLogOpen = false,
+}: {
+  projectId?: string;
+  page?: boolean;
+  initialLogOpen?: boolean;
+}) {
   const { workspaceId } = useAuth();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const weekEnd = addDays(weekStart, 7);
   const entries = useQuery(
     workspaceTimeQuery(workspaceId, weekStart.toISOString(), weekEnd.toISOString()),
   );
-  const [logging, setLogging] = useState(false);
+  const [logging, setLogging] = useState(initialLogOpen);
   const [editing, setEditing] = useState<TimeSheetEntry | null>(null);
+
+  useEffect(() => {
+    if (initialLogOpen) setLogging(true);
+  }, [initialLogOpen]);
 
   const rows = useMemo(
     () => (entries.data ?? []).filter((entry) => !projectId || entry.project_id === projectId),
     [entries.data, projectId],
   );
   const billable = rows.filter((entry) => entry.billable);
-  const grouped = useMemo(() => {
-    const map = new Map<string, TimeSheetEntry[]>();
-    for (const entry of rows) {
-      const key = dayKey(entry.started_at);
-      map.set(key, [...(map.get(key) ?? []), entry]);
-    }
-    return [...map.entries()];
-  }, [rows]);
+  const grouped = useMemo(() => groupByDay(rows), [rows]);
 
   const invalidate = [
     qk.workspaceTime(workspaceId ?? undefined),
     ...(projectId ? [qk.projectTime(projectId)] : []),
     qk.timer(),
+    qk.dashboard(),
   ];
 
   const remove = useServerAction(useServerFn(deleteTimeEntry), {
@@ -89,140 +86,152 @@ export function TimeSheet({ projectId }: { projectId?: string }) {
     invalidate,
   });
 
+  const isThisWeek = weekStart.getTime() === startOfWeek(new Date()).getTime();
   const rangeLabel = `${weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${addDays(weekStart, 6).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  const summary = `${formatMinutes(totalMinutes(rows))} logged, ${formatMinutes(totalMinutes(billable))} billable`;
+
+  const logButton = (
+    <Button type="button" variant="outline" onClick={() => setLogging(true)}>
+      Log time
+    </Button>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Previous week"
-            onClick={() => setWeekStart(addDays(weekStart, -7))}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden />
-          </Button>
-          <div className="min-w-40 text-center text-sm font-medium">{rangeLabel}</div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Next week"
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setWeekStart(startOfWeek(new Date()))}
-          >
-            This week
-          </Button>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-muted-foreground">
-            {formatMinutes(totalMinutes(rows))} logged · {formatMinutes(totalMinutes(billable))}{" "}
-            billable
-          </span>
-          <Button type="button" size="sm" onClick={() => setLogging(true)}>
-            <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-            Log time
-          </Button>
-        </div>
-      </div>
+    <>
+      {page && (
+        <PageHeader
+          title="Time"
+          description={`${isThisWeek ? "This week" : rangeLabel} · ${summary}`}
+          action={logButton}
+        />
+      )}
 
-      <QueryState
-        query={entries}
-        errorTitle="Couldn't load time entries"
-        empty={
-          <Card>
-            <EmptyState
-              icon={Clock}
-              title="Nothing logged this week"
-              description="Start a timer on a ticket, or add time after the fact."
-              action={
-                <Button type="button" onClick={() => setLogging(true)}>
-                  Log time
-                </Button>
-              }
-            />
-          </Card>
+      <div
+        className={
+          page ? "mx-auto max-w-[1120px] space-y-6 px-4 py-6 md:px-8 md:py-7" : "space-y-4"
         }
       >
-        {() =>
-          rows.length === 0 ? (
-            <Card>
-              <EmptyState
-                icon={Clock}
-                title="Nothing logged this week"
-                description="Start a timer on a ticket, or add time after the fact."
-                action={
-                  <Button type="button" onClick={() => setLogging(true)}>
-                    Log time
-                  </Button>
-                }
-              />
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {grouped.map(([day, dayEntries]) => (
-                <section key={day} className="space-y-2">
-                  <h3 className="text-sm font-medium text-muted-foreground">{day}</h3>
-                  <ul className="divide-y overflow-hidden rounded-lg border">
-                    {dayEntries.map((entry) => (
-                      <li
-                        key={entry.id}
-                        className="flex flex-wrap items-center gap-3 bg-card px-3 py-2"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">
-                            {entry.ticket
-                              ? `#${entry.ticket.ticket_number} ${entry.ticket.title}`
-                              : (entry.project?.title ?? "Project")}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {entry.user?.full_name ?? entry.user?.email ?? "Someone"}
-                            {entry.project && entry.ticket ? ` · ${entry.project.title}` : ""}
-                            {entry.note ? ` · ${entry.note}` : ""}
-                          </div>
-                        </div>
-                        <span className="text-sm tabular-nums">
-                          {entry.ended_at ? formatMinutes(entry.duration_minutes) : "Running"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {entry.billable ? "Billable" : "Non-billable"}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(entry)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Delete time entry"
-                          disabled={Boolean(entry.invoice_id) || remove.busy}
-                          onClick={() => remove.fire({ entryId: entry.id })}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
+        {page && <TimerCard />}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous week"
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+            </Button>
+            <div className="min-w-40 text-center text-sm font-medium">{rangeLabel}</div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next week"
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            </Button>
+            {!isThisWeek && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setWeekStart(startOfWeek(new Date()))}
+              >
+                This week
+              </Button>
+            )}
+          </div>
+          {!page && (
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-muted-foreground">{summary}</span>
+              {logButton}
             </div>
-          )
-        }
-      </QueryState>
+          )}
+        </div>
+
+        <QueryState
+          query={entries}
+          errorTitle="Couldn't load time entries"
+          empty={<NothingLogged onLog={() => setLogging(true)} />}
+        >
+          {() =>
+            rows.length === 0 ? (
+              <NothingLogged onLog={() => setLogging(true)} />
+            ) : (
+              <div className="space-y-6">
+                {grouped.map((group) => (
+                  <section key={group.key} aria-label={dayLabel(group.key)}>
+                    <h2 className="mb-2.5 font-display text-[22px] font-normal leading-tight">
+                      {dayLabel(group.key)} · {formatMinutes(group.minutes)}
+                    </h2>
+                    <div className="overflow-hidden rounded-[14px] border bg-card">
+                      <div className="flex gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground">
+                        <span className="min-w-0 flex-[2]">Project</span>
+                        <span className="hidden min-w-0 flex-[0.7] sm:block">Ticket</span>
+                        <span className="min-w-0 flex-[3]">Note</span>
+                        <span className="hidden min-w-0 flex-1 md:block">Who</span>
+                        <span className="min-w-0 flex-[0.9] text-right">Time</span>
+                        <span className="w-[84px] shrink-0" />
+                      </div>
+                      <ul>
+                        {group.entries.map((entry) => (
+                          <li
+                            key={entry.id}
+                            className="flex items-center gap-3 border-t px-4 py-2.5 text-sm"
+                          >
+                            <span className="min-w-0 flex-[2] truncate font-medium">
+                              {entry.project?.title ?? "Project"}
+                            </span>
+                            <span className="hidden min-w-0 flex-[0.7] truncate font-mono text-xs text-muted-foreground sm:block">
+                              {entry.ticket ? `#${entry.ticket.ticket_number}` : ""}
+                            </span>
+                            <span className="min-w-0 flex-[3] truncate">
+                              {entry.note ?? entry.ticket?.title ?? ""}
+                            </span>
+                            <span className="hidden min-w-0 flex-1 truncate text-muted-foreground md:block">
+                              {entry.user?.full_name ?? entry.user?.email ?? "Someone"}
+                            </span>
+                            <span className="min-w-0 flex-[0.9] text-right font-mono text-xs tabular-nums">
+                              {entry.ended_at ? formatMinutes(entry.duration_minutes) : "Running"}
+                              {entry.billable ? "" : " · n/b"}
+                            </span>
+                            <span className="flex w-[84px] shrink-0 justify-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[13px]"
+                                onClick={() => setEditing(entry)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label="Delete time entry"
+                                disabled={Boolean(entry.invoice_id) || remove.busy}
+                                onClick={() => remove.fire({ entryId: entry.id })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                              </Button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )
+          }
+        </QueryState>
+      </div>
 
       <LogTimeDialog
         open={logging}
@@ -236,6 +245,22 @@ export function TimeSheet({ projectId }: { projectId?: string }) {
           if (!open) setEditing(null);
         }}
         invalidate={invalidate}
+      />
+    </>
+  );
+}
+
+function NothingLogged({ onLog }: { onLog: () => void }) {
+  return (
+    <div className="rounded-[14px] border bg-card">
+      <EmptyState
+        title="Nothing logged this week"
+        description="Start a timer above, or add time after the fact."
+        action={
+          <Button type="button" onClick={onLog}>
+            Log time
+          </Button>
+        }
       />
     </div>
   );
@@ -266,9 +291,9 @@ function LogTimeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={DIALOG_CONTENT_CLASS}>
         <DialogHeader>
-          <DialogTitle>Log time</DialogTitle>
+          <DialogTitle className={DIALOG_TITLE_CLASS}>Log time</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -324,7 +349,7 @@ function LogTimeDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="log-note">Note</Label>
+            <Label htmlFor="log-note">What did you do?</Label>
             <Input id="log-note" name="note" maxLength={500} />
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -332,8 +357,11 @@ function LogTimeDialog({
             <Switch id="log-billable" checked={billable} onCheckedChange={setBillable} />
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={log.busy}>
-              {log.busy ? "Saving…" : "Save"}
+              {log.busy ? "Saving…" : "Log time"}
             </Button>
           </DialogFooter>
         </form>
@@ -366,9 +394,9 @@ function EditTimeDialog({
 
   return (
     <Dialog open={Boolean(entry)} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={DIALOG_CONTENT_CLASS}>
         <DialogHeader>
-          <DialogTitle>Edit time</DialogTitle>
+          <DialogTitle className={DIALOG_TITLE_CLASS}>Edit time</DialogTitle>
         </DialogHeader>
         {entry && (
           <form
@@ -411,6 +439,9 @@ function EditTimeDialog({
               </p>
             )}
             <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={save.busy || Boolean(entry.invoice_id)}>
                 Save
               </Button>

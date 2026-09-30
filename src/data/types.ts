@@ -53,6 +53,8 @@ export type PlanTask = Row<"plan_tasks">;
 export type PlanAgent = Row<"plan_agents">;
 export type PlanEvent = Row<"plan_events">;
 export type PlanTaskComment = Row<"plan_task_comments">;
+export type PlanTaskStep = Row<"plan_task_steps">;
+export type PlanTaskAttachment = Row<"plan_task_attachments">;
 export type ApiKey = Row<"api_keys">;
 
 /** The subset of a profile shown next to something someone did. */
@@ -139,6 +141,15 @@ export type TaskWithAgent = PlanTask & {
   assigned_agent: PlanAgentRef | null;
   assigned_user?: PersonRef | null;
   ticket?: Pick<Ticket, "id" | "ticket_number" | "title" | "status"> | null;
+  /** Checklist under the task, ordered by position. */
+  steps?: PlanTaskStep[];
+  /** PostgREST aggregate: `[{ count }]`. */
+  comment_count?: Array<{ count: number }>;
+};
+/** An attachment row plus a short-lived signed URL, as the plan screen uses it. */
+export type PlanAttachmentWithUrl = PlanTaskAttachment & {
+  url: string | null;
+  uploader: PersonRef | null;
 };
 export type TaskWithComments = PlanTask & {
   plan_task_comments: (PlanTaskComment & {

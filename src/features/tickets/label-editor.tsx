@@ -44,7 +44,7 @@ export function LabelEditor({ ticket }: { ticket: TicketDetail }) {
   };
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="space-y-3 rounded-xl bg-surface p-[18px] shadow-none">
       <h2 className="text-sm font-medium">Labels</h2>
       <div className="flex flex-wrap gap-1.5">
         {ticket.labels.length === 0 && <p className="text-xs text-muted-foreground">None yet.</p>}

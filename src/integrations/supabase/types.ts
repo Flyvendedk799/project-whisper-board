@@ -502,6 +502,35 @@ export type Database = {
           },
         ]
       }
+      organization_members: {
+        Row: {
+          created_at: string
+          organization_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          user_id: string
+          workspace_id?: string
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -1944,6 +1973,96 @@ export type Database = {
           }
         ]
       }
+      plan_task_attachments: {
+        Row: {
+          comment_id: string | null
+          created_at: string
+          file_name: string
+          height: number | null
+          id: string
+          mime_type: string | null
+          plan_id: string
+          shared_with_agents: boolean
+          size_bytes: number | null
+          source_attachment_id: string | null
+          storage_bucket: string
+          storage_path: string
+          task_id: string
+          uploader_id: string | null
+          width: number | null
+        }
+        Insert: {
+          comment_id?: string | null
+          created_at?: string
+          file_name: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          plan_id?: string
+          shared_with_agents?: boolean
+          size_bytes?: number | null
+          source_attachment_id?: string | null
+          storage_bucket?: string
+          storage_path: string
+          task_id: string
+          uploader_id?: string | null
+          width?: number | null
+        }
+        Update: {
+          comment_id?: string | null
+          created_at?: string
+          file_name?: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          plan_id?: string
+          shared_with_agents?: boolean
+          size_bytes?: number | null
+          source_attachment_id?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          task_id?: string
+          uploader_id?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_task_attachments_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "plan_task_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_attachments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_attachments_source_attachment_id_fkey"
+            columns: ["source_attachment_id"]
+            isOneToOne: false
+            referencedRelation: "plan_task_attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_attachments_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       plan_task_comments: {
         Row: {
           agent_id: string | null
@@ -1996,6 +2115,57 @@ export type Database = {
           }
         ]
       }
+      plan_task_steps: {
+        Row: {
+          created_at: string
+          depth: number
+          done: boolean
+          id: string
+          plan_id: string
+          position: number
+          task_id: string
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          depth?: number
+          done?: boolean
+          id?: string
+          plan_id?: string
+          position?: number
+          task_id: string
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          depth?: number
+          done?: boolean
+          id?: string
+          plan_id?: string
+          position?: number
+          task_id?: string
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_task_steps_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_steps_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       plan_tasks: {
         Row: {
           acceptance_criteria: string | null
@@ -2005,7 +2175,7 @@ export type Database = {
           branch_name: string | null
           claimed_at: string | null
           completed_at: string | null
-          complexity: Database["public"]["Enums"]["plan_task_complexity"]
+          complexity: Database["public"]["Enums"]["plan_task_complexity"] | null
           context_files: string[]
           created_at: string
           depends_on: string[]
@@ -2035,7 +2205,7 @@ export type Database = {
           branch_name?: string | null
           claimed_at?: string | null
           completed_at?: string | null
-          complexity?: Database["public"]["Enums"]["plan_task_complexity"]
+          complexity?: Database["public"]["Enums"]["plan_task_complexity"] | null
           context_files?: string[]
           created_at?: string
           depends_on?: string[]
@@ -2065,7 +2235,7 @@ export type Database = {
           branch_name?: string | null
           claimed_at?: string | null
           completed_at?: string | null
-          complexity?: Database["public"]["Enums"]["plan_task_complexity"]
+          complexity?: Database["public"]["Enums"]["plan_task_complexity"] | null
           context_files?: string[]
           created_at?: string
           depends_on?: string[]
@@ -2227,6 +2397,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ticket_queue_counts: {
+        Args: { _viewer_id: string; _workspace_id: string }
+        Returns: Json
+      }
+      workspace_dashboard: {
+        Args: { _week_start: string; _workspace_id: string }
+        Returns: Json
+      }
       merge_organizations: {
         Args: { _from_id: string; _to_id: string }
         Returns: undefined
@@ -2302,6 +2480,10 @@ export type Database = {
         | "agent_registered"
         | "agent_deactivated"
         | "comment_added"
+        | "task_moved"
+        | "attachment_added"
+        | "attachment_removed"
+        | "task_deleted"
       plan_status: "draft" | "active" | "paused" | "completed" | "archived"
       plan_task_complexity: "trivial" | "small" | "medium" | "large" | "epic"
       plan_task_priority: "low" | "medium" | "high" | "critical"
@@ -2522,6 +2704,10 @@ export const Constants = {
         "agent_registered",
         "agent_deactivated",
         "comment_added",
+        "task_moved",
+        "attachment_added",
+        "attachment_removed",
+        "task_deleted",
       ],
       plan_status: ["draft", "active", "paused", "completed", "archived"],
       plan_task_complexity: ["trivial", "small", "medium", "large", "epic"],

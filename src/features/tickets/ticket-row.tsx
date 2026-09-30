@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Paperclip } from "lucide-react";
-import { StatusPill } from "@/components/app-shell";
+import { StatusPill } from "@/components/status-pill";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SlaBadge } from "./sla-badge";
 import { formatRelative, initials } from "@/lib/utils-format";
@@ -10,10 +10,46 @@ import {
   TICKET_PRIORITY_TONE,
   TICKET_STATUS_LABEL,
   TICKET_STATUS_TONE,
-  TICKET_TYPE_LABEL,
 } from "@/data/enums";
 import type { TicketOrigin } from "@/data/ticket-origin";
 import type { TicketListRow } from "@/data/types";
+
+/**
+ * Column header for a list of `TicketRow`s. The widths mirror the row so the
+ * header sits on the same grid; it lives in the muted surface the design uses
+ * for every table.
+ */
+export function TicketListHeader({
+  selectable = false,
+  allSelected = false,
+  onSelectAll,
+  showProject = true,
+}: {
+  selectable?: boolean;
+  allSelected?: boolean;
+  onSelectAll?: () => void;
+  showProject?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 bg-surface px-4 py-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+      {selectable && (
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className="w-[54px] shrink-0 text-left uppercase hover:text-foreground"
+        >
+          {allSelected ? "Clear" : "Select all"}
+        </button>
+      )}
+      <span className="w-10 shrink-0">#</span>
+      <span className="min-w-0 flex-1">Ticket</span>
+      {showProject && <span className="hidden w-24 shrink-0 lg:block">Project</span>}
+      <span className="hidden w-[104px] shrink-0 md:block">SLA</span>
+      <span className="w-24 shrink-0">Status</span>
+      <span className="hidden w-6 shrink-0 sm:block" />
+    </div>
+  );
+}
 
 /**
  * Memoised: the queue re-renders on every selection change and every keyboard
@@ -41,17 +77,18 @@ export const TicketRow = memo(function TicketRow({
 
   return (
     <div
-      className={`group flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0 ${
-        active ? "bg-accent/60" : "hover:bg-accent/30"
+      className={`group flex items-center gap-3 border-t px-4 py-[11px] transition-colors first:border-t-0 ${
+        selected ? "bg-accent/50" : active ? "bg-accent/40" : "hover:bg-surface"
       }`}
     >
       {onSelectedChange && (
-        <Checkbox
-          checked={selected}
-          onCheckedChange={(next) => onSelectedChange(next === true)}
-          aria-label={`Select ticket #${ticket.ticket_number}`}
-          className="shrink-0"
-        />
+        <span className="flex w-[54px] shrink-0 items-center">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={(next) => onSelectedChange(next === true)}
+            aria-label={`Select ticket #${ticket.ticket_number}`}
+          />
+        </span>
       )}
 
       <Link
@@ -60,7 +97,7 @@ export const TicketRow = memo(function TicketRow({
         search={search}
         className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground">
+        <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground">
           #{ticket.ticket_number}
         </span>
 
@@ -68,62 +105,45 @@ export const TicketRow = memo(function TicketRow({
           {TICKET_PRIORITY_LABEL[ticket.priority]}
         </StatusPill>
 
-        <span className="min-w-0 flex-1 truncate text-sm">{ticket.title}</span>
-
-        {ticket.labels.length > 0 && (
-          <span className="hidden shrink-0 gap-1 lg:flex">
-            {ticket.labels.slice(0, 2).map((label) => (
-              <StatusPill key={label}>{label}</StatusPill>
-            ))}
-          </span>
-        )}
-
-        <span className="hidden shrink-0 md:inline">
-          <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
-        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{ticket.title}</span>
       </Link>
 
-      {showProject && ticket.project && (
-        <Link
-          to="/app/projects/$projectId"
-          params={{ projectId: ticket.project.id }}
-          search={{ tab: "tickets" }}
-          className="hidden w-32 shrink-0 truncate text-xs text-muted-foreground underline-offset-2 hover:underline lg:inline"
-        >
-          {ticket.project.title}
-        </Link>
+      {showProject && (
+        <span className="hidden w-24 shrink-0 truncate text-xs text-muted-foreground lg:block">
+          {ticket.project ? (
+            <Link
+              to="/app/projects/$projectId"
+              params={{ projectId: ticket.project.id }}
+              search={{ tab: "tickets" }}
+              className="underline-offset-2 hover:underline"
+            >
+              {ticket.project.title}
+            </Link>
+          ) : null}
+        </span>
       )}
 
-      <Link
-        to="/app/tickets/$ticketId"
-        params={{ ticketId: ticket.id }}
-        search={search}
-        className="flex shrink-0 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="hidden w-20 text-xs text-muted-foreground xl:inline">
-          {TICKET_TYPE_LABEL[ticket.type]}
-        </span>
+      <span className="hidden w-[104px] shrink-0 md:block">
+        <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
+      </span>
 
-        <StatusPill tone={TICKET_STATUS_TONE[ticket.status]} className="shrink-0">
+      <span className="w-24 shrink-0">
+        <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
           {TICKET_STATUS_LABEL[ticket.status]}
         </StatusPill>
+      </span>
 
-        <span className="hidden w-16 text-right text-xs text-muted-foreground sm:inline">
-          {formatRelative(ticket.updated_at)}
-        </span>
-
-        <span
-          className="hidden h-6 w-6 place-items-center rounded-full bg-accent text-[10px] sm:grid"
-          title={who?.full_name ?? who?.email ?? "Unassigned"}
-        >
-          {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
-        </span>
-      </Link>
+      <span
+        className="hidden h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold sm:grid"
+        title={ticket.assignee ? (who?.full_name ?? who?.email ?? "Assigned") : "Unassigned"}
+      >
+        {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
+      </span>
     </div>
   );
 });
 
-/** The same ticket as a card, for the board and for narrow screens. */
+/** The same ticket as a card, for the board. */
 export const TicketCard = memo(function TicketCard({
   ticket,
   origin,
@@ -136,34 +156,31 @@ export const TicketCard = memo(function TicketCard({
       to="/app/tickets/$ticketId"
       params={{ ticketId: ticket.id }}
       search={origin ?? {}}
-      className="block rounded-lg border bg-card p-3 transition-colors hover:border-foreground/20"
+      className="flex flex-col gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50"
     >
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="font-mono text-xs text-muted-foreground">#{ticket.ticket_number}</span>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-mono text-muted-foreground">#{ticket.ticket_number}</span>
         <StatusPill tone={TICKET_PRIORITY_TONE[ticket.priority]}>
           {TICKET_PRIORITY_LABEL[ticket.priority]}
         </StatusPill>
-        <span className="ml-auto">
-          <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
+      </div>
+      <p className="line-clamp-3 text-sm font-medium leading-snug">{ticket.title}</p>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {ticket.project?.title ?? formatRelative(ticket.updated_at)}
+        </span>
+        <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
+        <span
+          className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold text-foreground"
+          title={
+            ticket.assignee
+              ? (ticket.assignee.full_name ?? ticket.assignee.email ?? "Assigned")
+              : "Unassigned"
+          }
+        >
+          {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
         </span>
       </div>
-      <p className="line-clamp-2 text-sm">{ticket.title}</p>
-      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-        {ticket.project && <span className="truncate">{ticket.project.title}</span>}
-        <span className="ml-auto shrink-0">{formatRelative(ticket.updated_at)}</span>
-        {ticket.assignee && (
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent text-[10px]">
-            {initials(ticket.assignee.full_name ?? ticket.assignee.email)}
-          </span>
-        )}
-      </div>
-      {ticket.labels.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {ticket.labels.map((label) => (
-            <StatusPill key={label}>{label}</StatusPill>
-          ))}
-        </div>
-      )}
     </Link>
   );
 });

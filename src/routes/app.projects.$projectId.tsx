@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { Bug, GripVertical, Plus, Ticket, UserPlus } from "lucide-react";
+import { Bug, Ticket, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState, ProgressBar, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
@@ -46,12 +46,14 @@ import { ProjectTimeline } from "@/features/projects/project-timeline";
 import { ProjectAiPlansTab } from "@/features/projects/project-ai-plans";
 import { ProjectRepoControl } from "@/features/projects/project-repo";
 import { ProjectSettingsDialog } from "@/features/projects/project-settings-dialog";
+import { MilestonesPanel } from "@/features/projects/project-milestones";
+import { ProjectClientCard } from "@/features/projects/project-client-card";
 import { ProjectPlanProgress } from "@/features/projects/project-plan-progress";
 import { TimeSheet } from "@/features/time/time-sheet";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { addProjectMember, inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
-import { setMilestoneStatus, setProjectStatus } from "@/lib/tickets.functions";
+import { setProjectStatus } from "@/lib/tickets.functions";
 import {
   projectMembersQuery,
   projectMilestonesQuery,
@@ -62,20 +64,14 @@ import { projectInvoicesQuery } from "@/data/billing";
 import { projectMeetingsQuery } from "@/data/meetings";
 import { ticketListQuery } from "@/data/tickets";
 import { qk } from "@/data/keys";
-import { createMilestone } from "@/data/mutations";
 import {
-  MILESTONE_STATUSES,
-  MILESTONE_STATUS_LABEL,
-  MILESTONE_STATUS_TONE,
   PROJECT_STATUSES,
   PROJECT_STATUS_LABEL,
   PROJECT_STATUS_TONE,
   ROLE_LABEL,
-  type MilestoneStatus,
   type ProjectStatus,
 } from "@/data/enums";
-import { initials } from "@/lib/utils-format";
-import { useDataMutation } from "@/lib/use-server-action";
+import { formatDate, initials } from "@/lib/utils-format";
 
 /**
  * The project page. Tabs are lazy: previously all six mounted their queries at
@@ -125,22 +121,74 @@ function ProjectPage() {
     });
   }, [search.paid, navigate]);
 
+  const setTab = (next: string) =>
+    void navigate({
+      search: (prev: { tab?: string; paid?: string }) => ({ ...prev, tab: next }),
+    });
+
+  const tabDefs: Array<{ id: string; label: string }> = [
+    ...(!isAdmin ? [{ id: "overview", label: "Overview" }] : []),
+    { id: "tickets", label: "Tickets" },
+    { id: "plans", label: "AI Plans" },
+    { id: "updates", label: "Updates" },
+    { id: "meetings", label: "Meetings" },
+    { id: "milestones", label: "Milestones" },
+    { id: "billing", label: "Billing" },
+    ...(isAdmin ? [{ id: "time", label: "Time" }] : []),
+    { id: "people", label: "People" },
+  ];
+
   return (
     <QueryState query={project} errorTitle="Couldn't load this project">
       {(p) => (
         <>
-          <div className="flex items-center gap-2 border-b px-4 py-2 text-sm text-muted-foreground md:px-6 lg:px-8">
-            <Link to="/app/projects" className="hover:text-foreground">
-              Projects
-            </Link>
-            <span aria-hidden>/</span>
-            <span className="truncate text-foreground">{p.title}</span>
-          </div>
           <PageHeader
+            back={
+              <Link to="/app/projects" className="hover:text-foreground">
+                ← Projects
+              </Link>
+            }
             title={p.title}
-            description={p.description ?? p.organization?.name ?? undefined}
+            description={p.description ?? undefined}
+            meta={
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
+                {isAdmin ? (
+                  <ProjectStatusSelect projectId={projectId} status={p.status} />
+                ) : (
+                  <StatusPill tone={PROJECT_STATUS_TONE[p.status]}>
+                    {PROJECT_STATUS_LABEL[p.status]}
+                  </StatusPill>
+                )}
+                <span>{p.organization?.name ?? "Internal"}</span>
+                <span
+                  className="flex items-center gap-2"
+                  title="Share of plan tasks or milestones finished. Not the same as project stage."
+                >
+                  <ProgressBar
+                    value={p.progress}
+                    label={`${p.title} work finished`}
+                    className="w-[120px]"
+                  />
+                  <span className="tabular-nums">{p.progress}%</span>
+                </span>
+                {p.end_date && <span>Target {formatDate(p.end_date)}</span>}
+                <ProjectPlanProgress projectId={projectId} linked={isAdmin} />
+                {isAdmin && p.budget_cents != null && (
+                  <span>
+                    Budget {p.currency} {(p.budget_cents / 100).toLocaleString()}
+                  </span>
+                )}
+                {isAdmin && (
+                  <ProjectRepoControl
+                    projectId={projectId}
+                    repo={p.github_repo}
+                    branch={p.github_default_branch}
+                  />
+                )}
+              </div>
+            }
             action={
-              <div className="flex flex-wrap gap-2">
+              <>
                 {isAdmin && <ProjectSettingsDialog project={p} />}
                 {(isAdmin || isClientAdmin) && (
                   <InviteClientButton
@@ -148,14 +196,7 @@ function ProjectPage() {
                     canChooseRole={isAdmin}
                     onInvited={(email) => {
                       setPendingInvite(email);
-                      if (tab !== "people") {
-                        void navigate({
-                          search: (prev: { tab?: string; paid?: string }) => ({
-                            ...prev,
-                            tab: "people",
-                          }),
-                        });
-                      }
+                      if (tab !== "people") setTab("people");
                     }}
                   />
                 )}
@@ -165,165 +206,91 @@ function ProjectPage() {
                     Report something
                   </Link>
                 </Button>
-              </div>
+              </>
             }
+            tabs={tabDefs.map((t) => ({
+              id: t.id,
+              label: t.label,
+              active: tab === t.id,
+              onSelect: () => setTab(t.id),
+            }))}
           />
 
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-            <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                {isAdmin ? (
-                  <ProjectStatusSelect projectId={projectId} status={p.status} />
-                ) : (
-                  <StatusPill tone={PROJECT_STATUS_TONE[p.status]}>
-                    {PROJECT_STATUS_LABEL[p.status]}
-                  </StatusPill>
-                )}
-                <span
-                  className="text-xs text-muted-foreground"
-                  title="Project stage — discovery, proposal, delivery, and so on. Separate from how much plan or milestone work is finished."
-                >
-                  stage
-                </span>
-              </div>
-              <span
-                className="text-muted-foreground"
-                title="Share of plan tasks or milestones finished. Not the same as project stage, and not whether a repository is connected."
-              >
-                Work {p.progress}%
-              </span>
-              <ProjectPlanProgress projectId={projectId} linked={isAdmin} />
-              {isAdmin && p.budget_cents != null && (
-                <span className="text-muted-foreground">
-                  Budget {p.currency} {(p.budget_cents / 100).toLocaleString()}
-                </span>
+            {isAdmin &&
+              p.progress >= 100 &&
+              (p.status === "discovery" || p.status === "proposal") && (
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Plan work is finished — update the stage when the engagement moves past{" "}
+                  {PROJECT_STATUS_LABEL[p.status].toLowerCase()}.
+                  {!p.github_repo ? " Repository is optional and separate." : ""}
+                </p>
               )}
-              {isAdmin && (
-                <ProjectRepoControl
+
+            {/* Each panel only mounts when it is the active tab. */}
+            {!isAdmin && tab === "overview" && (
+              <SectionBoundary label="project-overview">
+                <OverviewPanel projectId={projectId} project={p} />
+              </SectionBoundary>
+            )}
+
+            {tab === "tickets" && (
+              <SectionBoundary label="project-tickets">
+                <TicketsPanel
                   projectId={projectId}
-                  repo={p.github_repo}
-                  branch={p.github_default_branch}
+                  viewerId={user?.id ?? ""}
+                  workspaceId={workspaceId}
                 />
-              )}
-              <ProgressBar
-                value={p.progress}
-                label={`${p.title} work finished`}
-                className="max-w-xs flex-1"
-              />
-              {isAdmin &&
-                p.progress >= 100 &&
-                (p.status === "discovery" || p.status === "proposal") && (
-                  <span className="w-full text-xs text-muted-foreground">
-                    Plan work is finished — update the stage when the engagement moves past{" "}
-                    {PROJECT_STATUS_LABEL[p.status].toLowerCase()}.
-                    {!p.github_repo ? " Repository is optional and separate." : ""}
-                  </span>
-                )}
-            </div>
+              </SectionBoundary>
+            )}
 
-            <Tabs
-              value={tab}
-              onValueChange={(next) =>
-                void navigate({
-                  search: (prev: { tab?: string; paid?: string }) => ({ ...prev, tab: next }),
-                })
-              }
-            >
-              <TabsList className="flex-wrap">
-                {!isAdmin && <TabsTrigger value="overview">Overview</TabsTrigger>}
-                <TabsTrigger value="tickets">Tickets</TabsTrigger>
-                <TabsTrigger value="plans">AI Plans</TabsTrigger>
-                <TabsTrigger value="updates">Updates</TabsTrigger>
-                <TabsTrigger value="meetings">Meetings</TabsTrigger>
-                <TabsTrigger value="milestones">Milestones</TabsTrigger>
-                <TabsTrigger value="billing">Billing</TabsTrigger>
-                {isAdmin && <TabsTrigger value="time">Time</TabsTrigger>}
-                <TabsTrigger value="people">People</TabsTrigger>
-              </TabsList>
+            {tab === "plans" && (
+              <SectionBoundary label="project-plans">
+                <ProjectAiPlansTab projectId={projectId} />
+              </SectionBoundary>
+            )}
 
-              {/* Each panel only mounts when it is the active tab. */}
-              {!isAdmin && tab === "overview" && (
-                <TabsContent value="overview" className="mt-6" forceMount>
-                  <SectionBoundary label="project-overview">
-                    <OverviewPanel projectId={projectId} project={p} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
+            {tab === "updates" && (
+              <SectionBoundary label="project-updates">
+                <UpdatesTab projectId={projectId} />
+              </SectionBoundary>
+            )}
 
-              {tab === "tickets" && (
-                <TabsContent value="tickets" className="mt-6" forceMount>
-                  <SectionBoundary label="project-tickets">
-                    <TicketsPanel
-                      projectId={projectId}
-                      viewerId={user?.id ?? ""}
-                      workspaceId={workspaceId}
-                    />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
+            {tab === "meetings" && (
+              <SectionBoundary label="project-meetings">
+                <MeetingsTab projectId={projectId} />
+              </SectionBoundary>
+            )}
 
-              {tab === "plans" && (
-                <TabsContent value="plans" className="mt-6" forceMount>
-                  <SectionBoundary label="project-plans">
-                    <ProjectAiPlansTab projectId={projectId} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
+            {tab === "milestones" && (
+              <SectionBoundary label="project-milestones">
+                <MilestonesPanel projectId={projectId} canEdit={isAdmin} currency={p.currency} />
+              </SectionBoundary>
+            )}
 
-              {tab === "updates" && (
-                <TabsContent value="updates" className="mt-6" forceMount>
-                  <SectionBoundary label="project-updates">
-                    <UpdatesTab projectId={projectId} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
+            {tab === "billing" && (
+              <SectionBoundary label="project-billing">
+                <BillingTab projectId={projectId} currency={p.currency} />
+              </SectionBoundary>
+            )}
 
-              {tab === "meetings" && (
-                <TabsContent value="meetings" className="mt-6" forceMount>
-                  <SectionBoundary label="project-meetings">
-                    <MeetingsTab projectId={projectId} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
+            {isAdmin && tab === "time" && (
+              <SectionBoundary label="project-time">
+                <TimeSheet projectId={projectId} />
+              </SectionBoundary>
+            )}
 
-              {tab === "milestones" && (
-                <TabsContent value="milestones" className="mt-6" forceMount>
-                  <SectionBoundary label="project-milestones">
-                    <MilestonesPanel projectId={projectId} canEdit={isAdmin} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
-
-              {tab === "billing" && (
-                <TabsContent value="billing" className="mt-6" forceMount>
-                  <SectionBoundary label="project-billing">
-                    <BillingTab projectId={projectId} currency={p.currency} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
-
-              {isAdmin && tab === "time" && (
-                <TabsContent value="time" className="mt-6" forceMount>
-                  <SectionBoundary label="project-time">
-                    <TimeSheet projectId={projectId} />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
-
-              {tab === "people" && (
-                <TabsContent value="people" className="mt-6" forceMount>
-                  <SectionBoundary label="project-people">
-                    <PeoplePanel
-                      projectId={projectId}
-                      canInvite={isAdmin || isClientAdmin}
-                      canManageRoles={isAdmin}
-                      pendingInvite={pendingInvite}
-                      onPendingInviteChange={setPendingInvite}
-                    />
-                  </SectionBoundary>
-                </TabsContent>
-              )}
-            </Tabs>
+            {tab === "people" && (
+              <SectionBoundary label="project-people">
+                <PeoplePanel
+                  projectId={projectId}
+                  canInvite={isAdmin || isClientAdmin}
+                  canManageRoles={isAdmin}
+                  pendingInvite={pendingInvite}
+                  onPendingInviteChange={setPendingInvite}
+                />
+              </SectionBoundary>
+            )}
           </div>
         </>
       )}
@@ -343,12 +310,15 @@ function OverviewPanel({
   const invoices = useQuery(projectInvoicesQuery(projectId));
 
   return (
-    <ProjectTimeline
-      project={project}
-      milestones={milestones.data ?? []}
-      meetings={meetings.data ?? []}
-      invoices={invoices.data ?? []}
-    />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <ProjectTimeline
+        project={project}
+        milestones={milestones.data ?? []}
+        meetings={meetings.data ?? []}
+        invoices={invoices.data ?? []}
+      />
+      <ProjectClientCard project={project} />
+    </div>
   );
 }
 
@@ -390,8 +360,8 @@ function TicketsPanel({
       }
     >
       {() => (
-        <div className="overflow-hidden rounded-lg border">
-          <ul>
+        <div className="overflow-hidden rounded-[14px] border bg-card">
+          <ul className="divide-y">
             {rows.map((ticket) => (
               <li key={ticket.id}>
                 <TicketRow
@@ -405,113 +375,6 @@ function TicketsPanel({
         </div>
       )}
     </QueryState>
-  );
-}
-
-function MilestonesPanel({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
-  const milestones = useQuery(projectMilestonesQuery(projectId));
-  const [title, setTitle] = useState("");
-
-  const invalidate = [
-    qk.projectMilestones(projectId),
-    qk.project(projectId),
-    qk.projectUpdates(projectId),
-  ];
-
-  const add = useDataMutation(
-    "milestones.insert",
-    (input: { title: string }) => createMilestone({ project_id: projectId, title: input.title }),
-    { success: "Milestone added", invalidate, onSuccess: () => setTitle("") },
-  );
-
-  const setStatus = useServerAction(useServerFn(setMilestoneStatus), {
-    label: "milestones.setStatus",
-    invalidate,
-  });
-
-  return (
-    <div className="space-y-3">
-      {canEdit && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (title.trim()) add.fire({ title: title.trim() });
-          }}
-          className="flex gap-2"
-        >
-          <Label htmlFor="new-milestone" className="sr-only">
-            New milestone
-          </Label>
-          <Input
-            id="new-milestone"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Add a milestone…"
-          />
-          <Button type="submit" disabled={add.busy || !title.trim()}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only">Add</span>
-          </Button>
-        </form>
-      )}
-
-      <QueryState
-        query={milestones}
-        errorTitle="Couldn't load milestones"
-        empty={
-          <Card>
-            <EmptyState
-              icon={GripVertical}
-              title="No milestones yet"
-              description={
-                canEdit
-                  ? "Add them here, or accept a quote and its line items become the plan."
-                  : "Once the plan is agreed you'll see it here."
-              }
-            />
-          </Card>
-        }
-      >
-        {(data) => (
-          <Card className="divide-y">
-            {data.map((milestone) => (
-              <div key={milestone.id} className="flex flex-wrap items-center gap-3 p-4">
-                <span className="min-w-0 flex-1">{milestone.title}</span>
-                {milestone.due_date && (
-                  <span className="text-xs text-muted-foreground">due {milestone.due_date}</span>
-                )}
-                {canEdit ? (
-                  <Select
-                    value={milestone.status}
-                    onValueChange={(value) =>
-                      setStatus.fire({
-                        milestoneId: milestone.id,
-                        status: value as MilestoneStatus,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="h-8 w-40" aria-label={`Status of ${milestone.title}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MILESTONE_STATUSES.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {MILESTONE_STATUS_LABEL[value]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <StatusPill tone={MILESTONE_STATUS_TONE[milestone.status]}>
-                    {MILESTONE_STATUS_LABEL[milestone.status]}
-                  </StatusPill>
-                )}
-              </div>
-            ))}
-          </Card>
-        )}
-      </QueryState>
-    </div>
   );
 }
 

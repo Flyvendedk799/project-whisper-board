@@ -30,7 +30,7 @@ export function AttachmentGrid({ attachments }: { attachments: TicketAttachment[
 
   return (
     <>
-      <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
         {visible.map((attachment) => (
           <li key={attachment.id}>
             <AttachmentTile attachment={attachment} onOpen={() => setOpen(attachment)} />
@@ -83,7 +83,7 @@ function AttachmentTile({
       onClick={onOpen}
       className="group block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="relative grid aspect-video place-items-center overflow-hidden rounded-md border bg-muted">
+      <div className="relative grid aspect-[16/10] place-items-center overflow-hidden rounded-[10px] border bg-muted">
         {isPending ? (
           <Skeleton className="h-full w-full" />
         ) : isError || !url ? (

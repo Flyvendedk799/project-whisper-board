@@ -28,6 +28,7 @@ import { LabelEditor } from "@/features/tickets/label-editor";
 import { repoWebUrl } from "@/lib/github-url";
 import { runningTimerQuery, ticketTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
 import { workspacePeopleQuery } from "@/data/projects";
+import { formatDate } from "@/lib/utils-format";
 import { qk } from "@/data/keys";
 import {
   TICKET_PRIORITIES,
@@ -42,6 +43,8 @@ import {
   type TicketType,
 } from "@/data/enums";
 import type { RelationWithTicket, TicketDetail } from "@/data/types";
+
+const CARD = "space-y-3 rounded-xl bg-surface p-[18px] shadow-none";
 
 /** Everything an admin does to a ticket, in the order they usually do it. */
 export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
@@ -98,9 +101,8 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
 
   return (
     <div className="space-y-4">
-      <LabelEditor ticket={ticket} />
-      <Card className="space-y-3 p-4">
-        <h2 className="text-sm font-medium">Manage</h2>
+      <Card className={CARD}>
+        <h2 className="text-sm font-medium">Properties</h2>
 
         <Field label="Status" id="status">
           <Select
@@ -182,9 +184,29 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
             </SelectContent>
           </Select>
         </Field>
+
+        <div className="h-px bg-border" />
+        <dl className="space-y-2 text-[13px]">
+          <div className="flex gap-3">
+            <dt className="w-20 shrink-0 text-muted-foreground">Project</dt>
+            <dd className="min-w-0 truncate">{ticket.project?.title ?? "—"}</dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-20 shrink-0 text-muted-foreground">Reporter</dt>
+            <dd className="min-w-0 truncate">
+              {ticket.reporter?.full_name ?? ticket.reporter?.email ?? "—"}
+            </dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-20 shrink-0 text-muted-foreground">ETA</dt>
+            <dd>{ticket.eta_date ? formatDate(ticket.eta_date) : "Not set"}</dd>
+          </div>
+        </dl>
       </Card>
 
-      <Card className="space-y-3 p-4">
+      <LabelEditor ticket={ticket} />
+
+      <Card className={CARD}>
         <h2 className="text-sm font-medium">Dates</h2>
 
         <Field label="Due" id="due">
@@ -222,7 +244,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
         </Field>
       </Card>
 
-      <Card className="space-y-3 p-4">
+      <Card className={CARD}>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Time</h2>
           {logged > 0 && <StatusPill>{formatMinutes(logged)} logged</StatusPill>}
@@ -274,7 +296,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
       </Card>
 
       {aiEnabled && (
-        <Card className="space-y-3 p-4">
+        <Card className={CARD}>
           <h2 className="text-sm font-medium">AI</h2>
           <Button
             variant="outline"
@@ -323,7 +345,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
 function ProjectRepoCard({ repo, projectId }: { repo: string | null; projectId: string }) {
   const href = repo ? repoWebUrl(repo) : null;
   return (
-    <Card className="space-y-2 p-4">
+    <Card className={CARD}>
       <h2 className="text-sm font-medium">Repository</h2>
       {href ? (
         <a
@@ -379,7 +401,7 @@ function RelationsCard({
   });
 
   return (
-    <Card className="space-y-3 p-4">
+    <Card className={CARD}>
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Related</h2>
         <Button

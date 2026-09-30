@@ -2,9 +2,8 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState, PageHeader, StatusPill } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
@@ -30,6 +30,7 @@ import { inviteClient, removeWorkspaceMember, setWorkspaceMemberRole } from "@/l
 import { workspaceMembersQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
 import { ROLE_LABEL, type AppRole } from "@/data/enums";
+import { initials } from "@/lib/utils-format";
 
 export const Route = createFileRoute("/app/team")({
   head: () => ({ meta: [{ title: "Team · Boared" }] }),
@@ -47,13 +48,12 @@ function TeamPage() {
       <>
         <PageHeader title="Team" />
         <div className="mx-auto max-w-3xl px-4 py-8">
-          <Card>
+          <div className="rounded-[14px] border bg-card">
             <EmptyState
-              icon={Users}
               title="Admins manage the team"
               description="Ask an admin to invite you if you need a different role."
             />
-          </Card>
+          </div>
         </div>
       </>
     );
@@ -63,26 +63,26 @@ function TeamPage() {
     <>
       <PageHeader
         title="Team"
+        maxWidth="max-w-3xl"
         description="Agency and clients who can sign in. Clients here are the same people as on Clients."
         action={<InviteTeammateButton />}
       />
-      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
+      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-7">
         <QueryState
           query={members}
           errorTitle="Couldn't load the team"
           empty={
-            <Card>
+            <div className="rounded-[14px] border bg-card">
               <EmptyState
-                icon={Users}
                 title="Just you so far"
                 description="Invite an admin or a client."
                 action={<InviteTeammateButton />}
               />
-            </Card>
+            </div>
           }
         >
           {(rows) => (
-            <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+            <ul className="divide-y overflow-hidden rounded-[14px] border bg-card">
               {rows.map((member) => (
                 <MemberRow
                   key={member.user_id}
@@ -124,7 +124,13 @@ function MemberRow({
   });
 
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-surface">
+      <span
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
+        aria-hidden="true"
+      >
+        {initials(member.profile?.full_name ?? member.profile?.email)}
+      </span>
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">
           {member.profile?.full_name || member.profile?.email || "Invited"}
@@ -132,6 +138,7 @@ function MemberRow({
         </div>
         <div className="truncate text-xs text-muted-foreground">{member.profile?.email}</div>
       </div>
+      <StatusPill>{ROLE_LABEL[member.role]}</StatusPill>
       <Select
         value={member.role}
         onValueChange={(role) =>
@@ -139,7 +146,7 @@ function MemberRow({
         }
         disabled={setRole.busy}
       >
-        <SelectTrigger className="w-40" aria-label="Role">
+        <SelectTrigger className="h-[34px] w-36" aria-label="Role">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -150,7 +157,6 @@ function MemberRow({
           ))}
         </SelectContent>
       </Select>
-      <StatusPill>{ROLE_LABEL[member.role]}</StatusPill>
       <Button
         type="button"
         variant="ghost"
@@ -178,14 +184,14 @@ function InviteTeammateButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button>
           <UserPlus className="mr-1.5 h-4 w-4" aria-hidden />
           Invite
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Invite someone</DialogTitle>
+          <DialogTitle className="font-display text-2xl font-normal">Invite someone</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -228,6 +234,9 @@ function InviteTeammateButton() {
             </p>
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={invite.busy}>
               {invite.busy ? "Sending…" : "Send invite"}
             </Button>

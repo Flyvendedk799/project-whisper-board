@@ -450,13 +450,136 @@ select assert(
 reset role;
 
 -- ---------------------------------------------------------------------------
+\echo 'plan steps and attachments'
+-- ---------------------------------------------------------------------------
+insert into public.plan_tasks (id, section_id, plan_id, title) values
+  ('eeeeeeee-0000-0000-0000-000000000010', 'eeeeeeee-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000001', 'Checklist task');
+
+-- plan_id is derived from the task, so a client cannot file a step under a
+-- plan it does not belong to.
+insert into public.plan_task_steps (task_id, plan_id, text, position) values
+  ('eeeeeeee-0000-0000-0000-000000000010', 'eeeeeeee-0000-0000-0000-000000000099', 'Write it', 1);
+select assert(
+  (select plan_id from public.plan_task_steps where text = 'Write it')
+    = 'eeeeeeee-0000-0000-0000-000000000001',
+  'a step takes its plan from its task'
+);
+
+select assert(
+  (select count(*) from pg_constraint
+   where conrelid = 'public.plan_task_steps'::regclass and contype = 'c') >= 2,
+  'step depth and text length are constrained'
+);
+
+insert into public.plan_task_attachments
+  (id, task_id, uploader_id, storage_path, file_name, mime_type, size_bytes)
+values ('eeeeeeee-0000-0000-0000-000000000020', 'eeeeeeee-0000-0000-0000-000000000010',
+        '11111111-1111-1111-1111-111111111111',
+        '11111111-1111-1111-1111-111111111111/eeeeeeee-0000-0000-0000-000000000001/a-shot.png',
+        'shot.png', 'image/png', 1024);
+select assert(
+  (select shared_with_agents from public.plan_task_attachments
+   where id = 'eeeeeeee-0000-0000-0000-000000000020'),
+  'attachments are shared with agents unless someone hides them'
+);
+
+insert into public.plan_task_attachments
+  (task_id, uploader_id, storage_path, file_name, mime_type, size_bytes, source_attachment_id)
+values ('eeeeeeee-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111',
+        '11111111-1111-1111-1111-111111111111/eeeeeeee-0000-0000-0000-000000000001/b-marked.png',
+        'shot-marked.png', 'image/png', 2048, 'eeeeeeee-0000-0000-0000-000000000020');
+select assert(
+  (select count(*) from public.plan_task_attachments
+   where source_attachment_id = 'eeeeeeee-0000-0000-0000-000000000020') = 1,
+  'a marked-up copy points at its original'
+);
+
+do $$
+begin
+  begin
+    insert into public.plan_task_attachments
+      (task_id, uploader_id, storage_path, file_name, size_bytes)
+    values ('eeeeeeee-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111',
+            'x/too-big.bin', 'too-big.bin', 26214401);
+    raise exception 'FAILED: an oversized file was accepted';
+  exception when check_violation then
+    raise notice '  ok  files over 25 MB are refused by the database too';
+  end;
+end $$;
+
+insert into public.plan_tasks (id, section_id, plan_id, title) values
+  ('eeeeeeee-0000-0000-0000-000000000011', 'eeeeeeee-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000001', 'Another task');
+do $$
+begin
+  begin
+    insert into public.plan_task_attachments
+      (task_id, uploader_id, storage_path, file_name, size_bytes, source_attachment_id)
+    values ('eeeeeeee-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111',
+            'x/wrong-task.png', 'wrong-task.png', 10, 'eeeeeeee-0000-0000-0000-000000000020');
+    raise exception 'FAILED: a marked-up copy was filed under a different task';
+  exception when raise_exception then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    raise notice '  ok  a marked-up copy must stay on its original''s task';
+  end;
+end $$;
+
+-- Who can see and change them.
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plan_task_attachments) = 2,
+  'a workspace member reads the plan''s attachments'
+);
+select assert(
+  (select count(*) from public.plan_task_steps) = 1,
+  'and its steps'
+);
+update public.plan_task_attachments set shared_with_agents = false
+where id = 'eeeeeeee-0000-0000-0000-000000000020';
+select assert(
+  (select shared_with_agents from public.plan_task_attachments
+   where id = 'eeeeeeee-0000-0000-0000-000000000020'),
+  'but cannot hide or delete a file somebody else uploaded'
+);
+
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select assert(
+  (select count(*) from public.plan_task_attachments) = 0
+    and (select count(*) from public.plan_task_steps) = 0,
+  'another workspace sees none of it'
+);
+
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+update public.plan_task_attachments set shared_with_agents = false
+where id = 'eeeeeeee-0000-0000-0000-000000000020';
+select assert(
+  not (select shared_with_agents from public.plan_task_attachments
+       where id = 'eeeeeeee-0000-0000-0000-000000000020'),
+  'the uploader can toggle sharing'
+);
+insert into public.plan_events (plan_id, task_id, actor_id, kind) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000010',
+   '11111111-1111-1111-1111-111111111111', 'attachment_added');
+select assert(
+  (select count(*) from public.plan_events where kind = 'attachment_added') = 1,
+  'a member can record an activity event about their own action'
+);
+reset role;
+
+-- ---------------------------------------------------------------------------
 \echo 'realtime'
 -- ---------------------------------------------------------------------------
 select assert(
   (select count(*) from pg_publication_tables
    where pubname = 'supabase_realtime' and schemaname = 'public'
      and tablename in ('tickets', 'ticket_comments', 'ticket_events',
-                       'notifications', 'project_updates')) = 5,
+                       'notifications', 'project_updates')) = 5
+  and (select count(*) from pg_publication_tables
+       where pubname = 'supabase_realtime' and schemaname = 'public'
+         and tablename in ('plan_events', 'plan_tasks', 'plan_task_steps',
+                           'plan_task_attachments', 'plan_task_comments')) = 5,
   'every table the app subscribes to is published'
 );
 

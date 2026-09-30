@@ -7,6 +7,7 @@ import {
   getPlanEvents,
   listTaskComments,
   listApiKeys,
+  listPlanAttachments,
   listTasksByTicket,
 } from "@/lib/planner.functions";
 
@@ -65,4 +66,14 @@ export const apiKeysQuery = (workspaceId?: string | null) =>
     queryKey: [...qk.apiKeys(), workspaceId ?? "none"],
     enabled: Boolean(workspaceId),
     queryFn: () => listApiKeys({ data: { workspaceId: workspaceId ?? undefined } }),
+  });
+
+/** Every file on a plan with signed URLs. Refetched before the hour is up. */
+export const planAttachmentsQuery = (planId: string) =>
+  queryOptions({
+    queryKey: qk.planAttachments(planId),
+    queryFn: () => listPlanAttachments({ data: { planId } }),
+    enabled: Boolean(planId),
+    staleTime: 20 * 60_000,
+    refetchInterval: 40 * 60_000,
   });

@@ -1,39 +1,69 @@
-import { useId, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, FileUp } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { useServerAction } from "@/lib/use-server-action";
 import { importPlanMarkdown } from "@/lib/planner.functions";
 import {
   parsePlanMarkdown,
-  planMarkdownFilename,
   planMarkdownPreview,
   planMarkdownStats,
-  serializePlanMarkdown,
+  planMarkdownStepCount,
   type PlanMdDocument,
   type PlanMdPreviewNode,
 } from "@/lib/plan-markdown";
 import { qk } from "@/data/keys";
-import type { PlanWithSections } from "@/data";
+import { cn } from "@/lib/utils";
+import { DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
+import { pluralize } from "./plan-model";
+
+const SAMPLE =
+  "# Research\n- Audit support inbox\n- Review competitor flows\n  - [ ] Linear\n  - [ ] Height\n# Build\n- Checklist component\n  - [ ] Four items\n  - [ ] Dismiss state\n- Sample data seeder\n# Launch\n- Announcement post";
 
 function PreviewTree({ nodes, depth = 0 }: { nodes: PlanMdPreviewNode[]; depth?: number }) {
   if (nodes.length === 0) return null;
   return (
-    <ul className={depth === 0 ? "space-y-2" : "mt-1 space-y-1 border-l pl-3"}>
+    <ul className={depth === 0 ? "flex flex-col gap-2.5" : "mt-0.5 flex flex-col gap-0.5 pl-2.5"}>
       {nodes.map((node, index) => (
         <li key={`${depth}-${index}-${node.title}`}>
-          <span className={depth === 0 ? "font-medium text-foreground" : "text-sm text-foreground"}>
-            {node.title}
-          </span>
+          {node.step ? (
+            <span className="flex items-baseline gap-1.5 text-xs text-muted-foreground">
+              <span aria-hidden="true">{node.step.done ? "☑" : "☐"}</span>
+              <span className={node.step.done ? "line-through" : undefined}>{node.title}</span>
+            </span>
+          ) : (
+            <span
+              className={cn(
+                depth === 0 ? "text-[13px] font-medium" : "text-[13px] text-foreground/80",
+              )}
+            >
+              {node.title}
+              {depth === 0 ? (
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  · {pluralize(node.children.length, "task")}
+                </span>
+              ) : null}
+            </span>
+          )}
           {node.children.length > 0 ? (
             <PreviewTree nodes={node.children} depth={depth + 1} />
           ) : null}
@@ -43,136 +73,157 @@ function PreviewTree({ nodes, depth = 0 }: { nodes: PlanMdPreviewNode[]; depth?:
   );
 }
 
-export function ImportMarkdownButton({ planId }: { planId: string }) {
-  const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [doc, setDoc] = useState<PlanMdDocument | null>(null);
+/**
+ * Paste or choose a Markdown outline, see what it will become, then merge it
+ * in or replace the plan. Headings become sections, list items become tasks,
+ * and `- [ ]` lines under a task become its sub-steps.
+ */
+export function ImportMarkdownDialog({
+  planId,
+  open,
+  onOpenChange,
+}: {
+  planId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
   const [markdown, setMarkdown] = useState("");
-  const [parseError, setParseError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [confirmReplace, setConfirmReplace] = useState(false);
+
+  const doc: PlanMdDocument = useMemo(() => parsePlanMarkdown(markdown), [markdown]);
+  const stats = planMarkdownStats(doc);
+  const steps = planMarkdownStepCount(doc);
+  const preview = useMemo(() => planMarkdownPreview(doc), [doc]);
+  const empty = stats.sections === 0;
+
+  const reset = () => {
+    setMarkdown("");
+    setFileName("");
+    setConfirmReplace(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   const importMd = useServerAction(useServerFn(importPlanMarkdown), {
     label: "plans.importMarkdown",
-    success: (result) =>
-      result.mode === "replace"
-        ? `Replaced plan with ${result.sections} section${result.sections === 1 ? "" : "s"} and ${result.tasks} task${result.tasks === 1 ? "" : "s"}`
-        : `Merged ${result.sections} section${result.sections === 1 ? "" : "s"} and ${result.tasks} task${result.tasks === 1 ? "" : "s"}`,
-    invalidate: [qk.plan(planId)],
+    success: (result) => {
+      const parts = `${pluralize(result.sections, "section")}, ${pluralize(result.tasks, "task")}${
+        result.steps ? ` and ${pluralize(result.steps, "sub-step")}` : ""
+      }`;
+      return result.mode === "replace" ? `Replaced plan with ${parts}` : `Merged ${parts}`;
+    },
+    invalidate: [qk.plan(planId), qk.planEvents(planId), qk.planAttachments(planId)],
     onSuccess: () => {
-      setOpen(false);
-      resetPicker();
+      onOpenChange(false);
+      reset();
     },
   });
 
-  function resetPicker() {
-    setFileName(null);
-    setDoc(null);
-    setMarkdown("");
-    setParseError(null);
-    if (inputRef.current) inputRef.current.value = "";
-  }
-
-  async function onFileChange(file: File | null) {
-    if (!file) {
-      resetPicker();
-      return;
-    }
+  const pickFile = async (file: File | null) => {
+    if (!file) return;
     if (!file.name.toLowerCase().endsWith(".md") && file.type !== "text/markdown") {
-      setFileName(file.name);
-      setDoc(null);
-      setMarkdown("");
-      setParseError("Choose a .md markdown file.");
-      setOpen(true);
+      toast.error("Choose a .md markdown file.");
       return;
     }
-
-    const text = await file.text();
-    const parsed = parsePlanMarkdown(text);
-    const stats = planMarkdownStats(parsed);
+    setMarkdown(await file.text());
     setFileName(file.name);
-    setMarkdown(text);
-    if (stats.sections === 0) {
-      setDoc(null);
-      setParseError(
-        "No sections found. Use a numbered outline (1 / 1.1), headings (# / ##), or a nested list.",
-      );
-      setOpen(true);
-      return;
-    }
-    setParseError(null);
-    setDoc(parsed);
-    setOpen(true);
-  }
+  };
 
-  const stats = doc ? planMarkdownStats(doc) : null;
-  const preview = doc ? planMarkdownPreview(doc) : [];
+  const hint = markdown.trim()
+    ? "No sections found. Use headings (# / ##), a numbered outline (1 / 1.1), or a nested list."
+    : "A preview of sections and tasks appears here.";
 
   return (
     <>
-      <input
-        id={inputId}
-        ref={inputRef}
-        type="file"
-        accept=".md,text/markdown"
-        className="sr-only"
-        onChange={(event) => {
-          void onFileChange(event.target.files?.[0] ?? null);
-        }}
-      />
-      <Button
-        variant="outline"
-        size="sm"
-        type="button"
-        disabled={importMd.busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        <FileUp className="mr-1.5 h-4 w-4" aria-hidden="true" />
-        Import Markdown
-      </Button>
-
       <Dialog
         open={open}
         onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) resetPicker();
+          onOpenChange(next);
+          if (!next) reset();
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className={cn("max-w-[720px]", DIALOG_CONTENT)}>
           <DialogHeader>
-            <DialogTitle>Import Markdown</DialogTitle>
+            <DialogTitle className={DIALOG_TITLE}>Import Markdown</DialogTitle>
             <DialogDescription>
-              {fileName ? (
-                <>
-                  Preview of <span className="font-medium text-foreground">{fileName}</span>
-                  {stats
-                    ? ` — ${stats.sections} section${stats.sections === 1 ? "" : "s"}, ${stats.tasks} task${stats.tasks === 1 ? "" : "s"}`
-                    : null}
-                  .
-                </>
-              ) : (
-                "Choose a markdown outline to layer onto this plan."
-              )}
+              Headings become sections, list items become tasks, and <code>- [ ]</code> lines become
+              sub-steps.
             </DialogDescription>
           </DialogHeader>
 
-          {parseError ? (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {parseError}
-            </p>
-          ) : null}
-
-          {doc && !parseError ? (
-            <ScrollArea className="max-h-72 rounded-md border p-3">
-              <PreviewTree nodes={preview} />
-            </ScrollArea>
-          ) : null}
-
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".md,text/markdown"
+              className="sr-only"
+              aria-label="Choose a Markdown file"
+              onChange={(event) => void pickFile(event.target.files?.[0] ?? null)}
+            />
             <Button
               type="button"
               variant="outline"
-              disabled={importMd.busy || !doc}
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+            >
+              Choose .md file
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-primary"
+              onClick={() => {
+                setMarkdown(SAMPLE);
+                setFileName("sample-outline.md");
+              }}
+            >
+              Use sample outline
+            </Button>
+            <span className="flex-1" />
+            <span className="truncate text-xs text-muted-foreground">{fileName}</span>
+          </div>
+
+          <div className="grid min-h-[260px] gap-3.5 md:grid-cols-2">
+            <Textarea
+              value={markdown}
+              onChange={(event) => {
+                setMarkdown(event.target.value);
+                setFileName("");
+              }}
+              aria-label="Markdown outline"
+              placeholder="Or paste an outline here"
+              className="min-h-[260px] resize-none rounded-[10px] bg-background font-mono text-xs leading-relaxed"
+            />
+            <div
+              className="max-h-[340px] overflow-auto rounded-[10px] border p-3"
+              aria-label="Preview"
+              aria-live="polite"
+            >
+              {empty ? (
+                <p className="text-[13px] text-muted-foreground">{hint}</p>
+              ) : (
+                <PreviewTree nodes={preview} />
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-[200px] flex-1 text-xs leading-snug text-muted-foreground">
+              {empty
+                ? "Merge adds new sections at the end. Replace deletes all current sections and tasks first."
+                : `${pluralize(stats.sections, "section")}, ${pluralize(stats.tasks, "task")}${
+                    steps ? `, ${pluralize(steps, "sub-step")}` : ""
+                  }. Merge adds new sections at the end. Replace deletes all current sections and tasks first.`}
+            </p>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={empty || importMd.busy}
               onClick={() => importMd.fire({ planId, markdown, mode: "merge" })}
             >
               {importMd.busy ? "Importing…" : "Merge"}
@@ -180,57 +231,35 @@ export function ImportMarkdownButton({ planId }: { planId: string }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={importMd.busy || !doc}
-              onClick={() => importMd.fire({ planId, markdown, mode: "replace" })}
+              disabled={empty || importMd.busy}
+              onClick={() => setConfirmReplace(true)}
             >
-              {importMd.busy ? "Importing…" : "Replace"}
+              Replace
             </Button>
-          </DialogFooter>
-          <p className="text-xs text-muted-foreground">
-            Replace wipes this plan&apos;s sections and tasks, then fills from the file. Merge
-            appends new sections at the end.
-          </p>
+          </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmReplace} onOpenChange={setConfirmReplace}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className={DIALOG_TITLE}>Replace this plan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Every current section, task, note and file is deleted, then the plan is filled from
+              this outline. This can&rsquo;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep the plan</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => importMd.fire({ planId, markdown, mode: "replace" })}
+            >
+              Replace plan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
-  );
-}
-
-export function ExportMarkdownButton({ plan }: { plan: PlanWithSections }) {
-  const sections = plan.sections ?? [];
-  const empty = sections.length === 0;
-
-  function onExport() {
-    const doc: PlanMdDocument = {
-      sections: sections.map((section) => ({
-        title: section.title,
-        tasks: (section.tasks ?? []).map((task) => ({
-          title: task.title,
-          description: task.description ?? "",
-        })),
-      })),
-    };
-    const markdown = serializePlanMarkdown(doc);
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = planMarkdownFilename(plan.title);
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      type="button"
-      disabled={empty}
-      title={empty ? "Add a section before exporting" : "Download this plan as markdown"}
-      onClick={onExport}
-    >
-      <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
-      Export Markdown
-    </Button>
   );
 }
