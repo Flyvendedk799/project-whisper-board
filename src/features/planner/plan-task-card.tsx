@@ -1,180 +1,236 @@
-import { Bot, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Badge } from "@/components/ui/badge";
+import type { PlanAttachmentWithUrl, TaskWithAgent } from "@/data";
 import { hasLivePullRequest } from "@/lib/plan-refs";
 import { cardFace, nestedOutlineCount, plainTitle } from "@/lib/board-view";
-import { readTaskOutline, type TaskOutlineNode } from "@/lib/plan-markdown";
-import type { TaskWithAgent } from "@/data";
+import { readTaskOutline, stepsProgress, type TaskOutlineNode } from "@/lib/plan-markdown";
+import { cn } from "@/lib/utils";
+import { advanceTip, coverImages, initials, PRIORITY_STYLE, STATUS_STYLE } from "./plan-model";
 
+const PR_TONE: Record<string, string> = {
+  open: "text-success",
+  draft: "text-muted-foreground",
+  merged: "text-chart-5",
+  closed: "text-destructive",
+};
+
+/**
+ * A task on the board. Long imported titles split into a headline and detail,
+ * the circle advances the status, and files show up as a cover and a count.
+ */
 export function PlanTaskCard({
   task,
   expanded = false,
   onToggleExpand,
+  onAdvance,
+  attachments = [],
+  dropActive = false,
 }: {
   task: TaskWithAgent;
   expanded?: boolean;
   onToggleExpand?: () => void;
+  onAdvance?: () => void;
+  /** Visible files on this task (marked-up copies already replace their originals). */
+  attachments?: PlanAttachmentWithUrl[];
+  /** A file is being dragged over the card. */
+  dropActive?: boolean;
 }) {
   const livePr = hasLivePullRequest(task);
-  const liveTicket = Boolean(task.ticket?.id);
-  const showFooter = Boolean(
-    task.assigned_agent_id || task.assigned_user_id || livePr || liveTicket,
-  );
-  const isMerged = task.pr_status === "merged";
-  const isClosed = task.pr_status === "closed";
+  const style = STATUS_STYLE[task.status];
+  const done = task.status === "done";
   const face = cardFace(task.title);
   const outline = readTaskOutline(task.description);
   const nestedCount = nestedOutlineCount(outline.nested);
   const canExpand = Boolean(face.detail || outline.body || nestedCount > 0);
   const fullTitle = plainTitle(task.title);
-
-  const getStatusColor = (status: string | undefined | null) => {
-    switch (status) {
-      case "done":
-        return "bg-green-500";
-      case "blocked":
-      case "cancelled":
-        return "bg-red-500";
-      case "in_progress":
-      case "in_review":
-      case "claimed":
-        return "bg-yellow-500";
-      case "available":
-      case "backlog":
-      default:
-        return "bg-slate-400 dark:bg-slate-600";
-    }
-  };
+  const steps = task.steps ?? [];
+  const progress = stepsProgress(steps);
+  const covers = coverImages(attachments);
+  const notes = task.comment_count?.[0]?.count ?? 0;
+  const ticket = task.ticket;
+  const hasFooter = Boolean(
+    task.assigned_agent_id ||
+    task.assigned_user_id ||
+    ticket?.id ||
+    livePr ||
+    attachments.length ||
+    notes,
+  );
 
   return (
-    <div className="group relative flex cursor-pointer flex-col gap-3 rounded-lg border bg-card p-3 text-left shadow-sm transition-all hover:border-primary/50 hover:shadow-md">
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-start gap-2">
-          <div
-            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${getStatusColor(task.status)}`}
-            title={task.status ? task.status.replace(/_/g, " ") : "unknown"}
-          />
-          <h4 className="font-medium leading-snug" title={face.detail ? fullTitle : undefined}>
-            {face.headline}
-          </h4>
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] hover:border-primary/50 hover:shadow-md",
+        dropActive && "border-primary ring-2 ring-primary/30",
+      )}
+    >
+      {covers.length > 0 ? (
+        <div className="relative h-[104px] bg-muted/60">
+          <img src={covers[0].url!} alt="" loading="lazy" className="h-full w-full object-cover" />
+          {covers.length > 1 ? (
+            <span className="absolute bottom-2 right-2 rounded-full bg-foreground/70 px-2 py-px text-[11px] text-background">
+              +{covers.length - 1}
+            </span>
+          ) : null}
         </div>
-        {canExpand && onToggleExpand && (
+      ) : null}
+
+      <div className="flex flex-col gap-2.5 p-3">
+        <div className="flex items-start gap-2.5">
           <button
             type="button"
-            className="self-start text-xs font-medium text-muted-foreground hover:text-foreground"
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "Hide" : "Show"} detail for ${face.headline}`}
+            title={advanceTip(task.status)}
+            aria-label={`${advanceTip(task.status)} (now ${style.label})`}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              onToggleExpand();
+              onAdvance?.();
             }}
+            className={cn(
+              "mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 p-0 text-[11px] font-semibold leading-none text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              style.border,
+              done || task.status === "blocked" ? style.dot : "bg-transparent",
+            )}
           >
-            {expanded ? "Hide" : nestedCount > 0 ? `${nestedCount} nested` : "More"}
+            {done ? "✓" : task.status === "blocked" ? "!" : ""}
           </button>
-        )}
-        {expanded && canExpand && (
-          <div className="space-y-2">
-            {face.detail ? (
-              <p className="text-sm leading-snug text-foreground">{face.detail}</p>
+          <div className="min-w-0 flex-1">
+            <h4
+              className={cn(
+                "font-medium leading-snug",
+                done && "text-muted-foreground line-through",
+              )}
+              title={face.detail ? fullTitle : undefined}
+            >
+              {face.headline}
+            </h4>
+            {canExpand && onToggleExpand ? (
+              <button
+                type="button"
+                className="mt-1 text-xs text-muted-foreground hover:text-foreground"
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "Hide" : "Show"} detail for ${face.headline}`}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleExpand();
+                }}
+              >
+                {expanded ? "Hide" : nestedCount > 0 ? `${nestedCount} nested` : "More"}
+              </button>
             ) : null}
+          </div>
+        </div>
+
+        {expanded && canExpand ? (
+          <div className="flex flex-col gap-1.5 pl-[30px] text-[13px] leading-snug">
+            {face.detail ? <p>{face.detail}</p> : null}
             {outline.body ? (
-              <p className="whitespace-pre-wrap text-sm leading-snug text-muted-foreground">
-                {outline.body}
-              </p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{outline.body}</p>
             ) : null}
             {nestedCount > 0 ? <NestedOutline nodes={outline.nested} /> : null}
           </div>
-        )}
-      </div>
+        ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {task.priority && (
-          <Badge variant="outline" className="text-xs">
-            <span
-              className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                task.priority === "critical"
-                  ? "bg-red-500"
-                  : task.priority === "high"
-                    ? "bg-orange-500"
-                    : task.priority === "medium"
-                      ? "bg-yellow-500"
-                      : "bg-blue-500"
-              }`}
-            />
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className={cn("rounded-full px-2 py-0.5 text-foreground", style.chip)}>
+            {style.label}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className={cn("h-1.5 w-1.5 rounded-full", PRIORITY_STYLE[task.priority].dot)} />
             {task.priority}
-          </Badge>
-        )}
-        {task.complexity && (
-          <Badge variant="secondary" className="text-xs">
-            {task.complexity}
-          </Badge>
-        )}
-      </div>
+          </span>
+          {task.complexity ? (
+            <span className="rounded-full border px-[7px] py-px">{task.complexity}</span>
+          ) : null}
+        </div>
 
-      {showFooter && (
-        <div className="mt-1 flex flex-col gap-1.5 border-t pt-2 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {task.assigned_agent_id && (
-                <div className="flex items-center gap-1">
-                  <Bot className="h-3.5 w-3.5" />
-                  <span>{task.assigned_agent?.name || "Agent"}</span>
-                </div>
-              )}
-              {task.assigned_user_id && (
-                <div className="flex items-center gap-1">
-                  <div className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-primary/20 text-[8px] font-bold">
-                    {task.assigned_user?.full_name?.charAt(0) || "U"}
-                  </div>
-                  <span>{task.assigned_user?.full_name?.split(" ")[0] || "User"}</span>
-                </div>
-              )}
-            </div>
+        {progress.total > 0 ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span
+              role="progressbar"
+              aria-label="Sub-steps done"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="h-1 flex-1 overflow-hidden rounded-full bg-muted"
+            >
+              <span className="block h-full bg-success" style={{ width: `${progress.percent}%` }} />
+            </span>
+            {progress.done}/{progress.total} sub-steps
+          </div>
+        ) : null}
 
-            {livePr && task.pr_number && (
+        {hasFooter ? (
+          <div className="flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
+            {task.assigned_agent_id ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-chart-5/20 text-[9px] font-semibold text-foreground"
+                >
+                  AI
+                </span>
+                {task.assigned_agent?.name || "Agent"}
+              </span>
+            ) : null}
+            {task.assigned_user_id ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-accent text-[9px] font-semibold text-foreground"
+                >
+                  {initials(task.assigned_user?.full_name)}
+                </span>
+                {task.assigned_user?.full_name?.split(" ")[0] || "User"}
+              </span>
+            ) : null}
+            <span className="flex-1" />
+            {attachments.length > 0 ? (
+              <span>
+                {attachments.length} {attachments.length === 1 ? "file" : "files"}
+              </span>
+            ) : null}
+            {notes > 0 ? (
+              <span>
+                {notes} {notes === 1 ? "note" : "notes"}
+              </span>
+            ) : null}
+            {ticket ? (
+              <Link
+                to="/app/tickets/$ticketId"
+                params={{ ticketId: ticket.id }}
+                search={{ from: "home" }}
+                onClick={(event) => event.stopPropagation()}
+                className="hover:underline"
+              >
+                #{ticket.ticket_number}
+              </Link>
+            ) : null}
+            {livePr && task.pr_number ? (
               <a
                 href={task.pr_url || "#"}
                 target="_blank"
                 rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className={`flex items-center gap-1 hover:underline ${
-                  isMerged ? "text-purple-500" : isClosed ? "text-red-500" : "text-green-500"
-                }`}
-              >
-                {isMerged ? (
-                  <GitPullRequest className="h-3.5 w-3.5" />
-                ) : isClosed ? (
-                  <GitPullRequestClosed className="h-3.5 w-3.5" />
-                ) : (
-                  <GitPullRequestDraft className="h-3.5 w-3.5" />
+                onClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "font-medium hover:underline",
+                  PR_TONE[task.pr_status ?? "open"] ?? PR_TONE.open,
                 )}
-                <span>#{task.pr_number}</span>
+              >
+                PR #{task.pr_number}
+                {task.pr_status ? ` · ${task.pr_status}` : ""}
               </a>
-            )}
+            ) : null}
           </div>
-
-          {liveTicket && task.ticket && (
-            <Link
-              to="/app/tickets/$ticketId"
-              params={{ ticketId: task.ticket.id }}
-              search={{ from: "home" }}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground/80 underline-offset-2 hover:underline"
-            >
-              #{task.ticket.ticket_number}
-              {task.ticket.status ? ` · ${task.ticket.status.replace(/_/g, " ")}` : ""}
-            </Link>
-          )}
-        </div>
-      )}
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function NestedOutline({ nodes }: { nodes: TaskOutlineNode[] }) {
   return (
-    <ul className="space-y-1.5 border-l pl-3">
+    <ul className="flex flex-col gap-1.5 border-l pl-3">
       {nodes.map((node, index) => (
         <li key={`${node.title}-${index}`}>
           <p className="text-sm leading-snug text-foreground">{plainTitle(node.title)}</p>

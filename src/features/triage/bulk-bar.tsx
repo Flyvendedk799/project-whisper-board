@@ -16,6 +16,7 @@ export function BulkBar({
   count,
   busy,
   people,
+  viewerId,
   onStatus,
   onPriority,
   onAssignee,
@@ -24,6 +25,8 @@ export function BulkBar({
   count: number;
   busy: boolean;
   people: PersonRef[];
+  /** Enables the one-click "Assign to me". */
+  viewerId?: string;
   onStatus: (status: TicketStatus) => void;
   onPriority: (priority: TicketPriority) => void;
   onAssignee: (assigneeId: string | null) => void;
@@ -35,9 +38,9 @@ export function BulkBar({
     <div
       role="toolbar"
       aria-label={`${count} tickets selected`}
-      className="flex flex-wrap items-center gap-2 border-b bg-accent/40 px-3 py-2"
+      className="flex flex-wrap items-center gap-2 border-b bg-accent px-6 py-2.5 text-[13px]"
     >
-      <span className="text-sm font-medium">{count} selected</span>
+      <span className="font-medium">{count} selected</span>
 
       <Menu label="Status" disabled={busy}>
         {TICKET_STATUSES.map((status) => (
@@ -64,9 +67,21 @@ export function BulkBar({
         ))}
       </Menu>
 
-      <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto">
+      {viewerId && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 rounded-full bg-card px-3 text-xs"
+          disabled={busy}
+          onClick={() => onAssignee(viewerId)}
+        >
+          Assign to me
+        </Button>
+      )}
+
+      <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto h-7 text-xs">
         <X className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-        Clear
+        Clear selection
       </Button>
     </div>
   );
@@ -86,7 +101,12 @@ function Menu({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          className="h-7 rounded-full bg-card px-3 text-xs"
+        >
           {icon}
           <span className={icon ? "ml-1.5" : ""}>{label}</span>
         </Button>

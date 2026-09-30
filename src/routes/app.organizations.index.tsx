@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -14,12 +14,28 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { EmptyState, PageHeader } from "@/components/app-shell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
-import { useDataMutation } from "@/lib/use-server-action";
-import { organizationsQuery, projectListQuery, workspaceMembersQuery } from "@/data/projects";
-import { ROLE_LABEL } from "@/data/enums";
+import { useDataMutation, useServerAction } from "@/lib/use-server-action";
+import { setClientOrganization } from "@/lib/admin.functions";
+import { initials } from "@/lib/utils-format";
+import {
+  organizationMembersQuery,
+  organizationsQuery,
+  peopleByOrganization,
+  projectListQuery,
+  workspaceMembersQuery,
+} from "@/data/projects";
+import { ROLE_LABEL, type AppRole } from "@/data/enums";
 import { createOrganization } from "@/data/mutations";
 import { qk } from "@/data/keys";
 
@@ -33,6 +49,7 @@ function OrganizationsPage() {
   const orgs = useQuery(organizationsQuery(workspaceId));
   const projects = useQuery(projectListQuery(workspaceId));
   const members = useQuery(workspaceMembersQuery(workspaceId));
+  const links = useQuery(organizationMembersQuery(workspaceId));
   const clientPeople = (members.data ?? []).filter(
     (member) => member.role === "client" || member.role === "client_admin",
   );
@@ -42,13 +59,12 @@ function OrganizationsPage() {
       <>
         <PageHeader title="Clients" />
         <div className="mx-auto max-w-3xl px-4 py-8">
-          <Card>
+          <div className="rounded-[14px] border bg-card">
             <EmptyState
-              icon={Building2}
               title="Client directory is for the agency"
               description="Your projects are listed under Projects."
             />
-          </Card>
+          </div>
         </div>
       </>
     );
@@ -59,6 +75,11 @@ function OrganizationsPage() {
     if (!project.organization_id || project.status === "archived") continue;
     counts.set(project.organization_id, (counts.get(project.organization_id) ?? 0) + 1);
   }
+  const peopleByOrg = peopleByOrganization(links.data ?? [], clientPeople);
+  const companyOf = new Map<string, string>();
+  for (const link of links.data ?? []) {
+    if (!companyOf.has(link.user_id)) companyOf.set(link.user_id, link.organization_id);
+  }
 
   return (
     <>
@@ -67,69 +88,60 @@ function OrganizationsPage() {
         description="The same client logins as Team, grouped here with their company when you have one."
         action={<NewOrganizationButton />}
       />
-      <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8 md:py-7">
         {clientPeople.length > 0 && (
-          <Card className="mb-4 p-5">
-            <h2 className="font-display text-xl">People</h2>
-            <ul className="mt-3 divide-y">
+          <section>
+            <h2 className="mb-2.5 font-display text-[22px] leading-tight">People</h2>
+            <ul className="divide-y overflow-hidden rounded-[14px] border bg-card">
               {clientPeople.map((member) => (
-                <li
+                <PersonRow
                   key={member.user_id}
-                  className="flex items-center justify-between gap-3 py-2 text-sm"
-                >
-                  <span className="min-w-0 truncate">
-                    {member.profile?.full_name || member.profile?.email || "Client"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{ROLE_LABEL[member.role]}</span>
-                </li>
+                  member={member}
+                  workspaceId={workspaceId!}
+                  orgs={orgs.data ?? []}
+                  companyId={companyOf.get(member.user_id)}
+                />
               ))}
             </ul>
-          </Card>
+          </section>
         )}
 
         <QueryState
           query={orgs}
           errorTitle="Couldn't load clients"
           empty={
-            clientPeople.length > 0 ? (
-              <Card>
-                <EmptyState
-                  icon={Building2}
-                  title="No company record yet"
-                  description="Those people can already sign in. Add a company if you want projects grouped under it."
-                  action={<NewOrganizationButton />}
-                />
-              </Card>
-            ) : (
-              <Card>
-                <EmptyState
-                  icon={Building2}
-                  title="No clients yet"
-                  description="Invite someone from a project, or add the company they belong to."
-                  action={<NewOrganizationButton />}
-                />
-              </Card>
-            )
+            <div className="rounded-[14px] border bg-card">
+              <EmptyState
+                title={clientPeople.length > 0 ? "No company record yet" : "No clients yet"}
+                description={
+                  clientPeople.length > 0
+                    ? "Those people can already sign in. Add a company if you want projects grouped under it."
+                    : "Invite someone from a project, or add the company they belong to."
+                }
+                action={<NewOrganizationButton />}
+              />
+            </div>
           }
         >
           {(rows) => (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               {rows.map((org) => (
                 <Link
                   key={org.id}
                   to="/app/organizations/$orgId"
                   params={{ orgId: org.id }}
-                  className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Card className="h-full p-5 transition-shadow hover:shadow-sm">
-                    <h2 className="font-display text-xl">{org.name}</h2>
+                  <article className="flex h-full min-h-[120px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
+                    <h2 className="font-display text-2xl leading-tight">{org.name}</h2>
                     {org.website && (
-                      <p className="mt-1 truncate text-sm text-muted-foreground">{org.website}</p>
+                      <p className="truncate text-xs text-muted-foreground">{org.website}</p>
                     )}
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {counts.get(org.id) ?? 0} active projects
+                    <p className="mt-auto text-xs text-muted-foreground">
+                      {counts.get(org.id) ?? 0} active projects ·{" "}
+                      {peopleByOrg.get(org.id)?.length ?? 0} people
                     </p>
-                  </Card>
+                  </article>
                 </Link>
               ))}
             </div>
@@ -137,6 +149,71 @@ function OrganizationsPage() {
         </QueryState>
       </div>
     </>
+  );
+}
+
+function PersonRow({
+  member,
+  workspaceId,
+  orgs,
+  companyId,
+}: {
+  member: {
+    user_id: string;
+    role: AppRole;
+    profile: { full_name: string | null; email: string | null } | null;
+  };
+  workspaceId: string;
+  orgs: Array<{ id: string; name: string }>;
+  companyId: string | undefined;
+}) {
+  const setCompany = useServerAction(useServerFn(setClientOrganization), {
+    label: "organizations.setClientOrganization",
+    success: "Company updated",
+    invalidate: [qk.organizations(workspaceId)],
+  });
+
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface">
+      <span
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
+        aria-hidden="true"
+      >
+        {initials(member.profile?.full_name ?? member.profile?.email)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {member.profile?.full_name || member.profile?.email || "Client"}
+        </div>
+        <div className="truncate text-xs text-muted-foreground">{member.profile?.email}</div>
+      </div>
+      <Select
+        value={companyId ?? "none"}
+        disabled={setCompany.busy || orgs.length === 0}
+        onValueChange={(value) =>
+          setCompany.fire({
+            workspaceId,
+            userId: member.user_id,
+            organizationId: value === "none" ? null : value,
+          })
+        }
+      >
+        <SelectTrigger className="h-[34px] w-44" aria-label="Company">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No company</SelectItem>
+          {orgs.map((org) => (
+            <SelectItem key={org.id} value={org.id}>
+              {org.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="w-24 text-right text-xs text-muted-foreground">
+        {ROLE_LABEL[member.role]}
+      </span>
+    </li>
   );
 }
 
@@ -152,14 +229,14 @@ function NewOrganizationButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden />
           New client
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New client</DialogTitle>
+          <DialogTitle className="font-display text-2xl font-normal">New client</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -183,6 +260,9 @@ function NewOrganizationButton() {
             <Input id="org-website" name="website" type="url" placeholder="https://" />
           </div>
           <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={create.busy}>
               {create.busy ? "Saving…" : "Create"}
             </Button>

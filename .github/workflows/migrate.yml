@@ -1,0 +1,69 @@
+name: Migrate database
+
+# Applies new files in supabase/migrations/ to the production Supabase project
+# when they land on the default branch (i.e. when a PR is merged).
+#
+# One-time setup, repo Settings -> Secrets and variables -> Actions:
+#   SUPABASE_ACCESS_TOKEN  personal access token (supabase.com/dashboard/account/tokens)
+#   SUPABASE_DB_PASSWORD   the project's database password
+# The project ref comes from supabase/config.toml (`project_id`).
+#
+# Before the first run, read "repairing the migration tracker" in supabase/README.md.
+# If the remote tracker disagrees with the repo, `db push` fails instead of guessing,
+# which is the safe outcome: nothing is applied.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+# Never run two pushes against the database at once, and never cancel one midway.
+concurrency:
+  group: migrate-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment (Settings -> Environments) if you
+    # want a manual approval gate before production is touched.
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Check secrets are configured
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::error::Set SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD as repository secrets."
+            exit 1
+          fi
+
+      - name: Link project
+        run: |
+          REF=$(sed -n 's/^project_id *= *"\(.*\)"/\1/p' supabase/config.toml)
+          supabase link --project-ref "$REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Show local vs remote migrations
+        run: supabase migration list --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Dry run
+        run: supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" | tee "$RUNNER_TEMP/dry-run.txt"
+
+      - name: Apply
+        run: supabase db push --yes --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Verify remote matches repo
+        run: supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" | grep -q "up to date"

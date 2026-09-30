@@ -16,11 +16,23 @@ export function CaptureDropzone({
   onAdd,
   onRemove,
   label = "Attachments",
+  title,
+  description,
+  actions,
+  accept: acceptAttr,
 }: {
   drafts: DraftAttachment[];
   onAdd: (files: File[]) => void;
   onRemove: (id: string) => void;
   label?: string;
+  /** Replaces the default "Choose files, or drop them here" heading. */
+  title?: string;
+  /** Replaces the default hint line. */
+  description?: string;
+  /** Extra controls rendered inside the box (they do not open the file picker). */
+  actions?: React.ReactNode;
+  /** `accept` attribute for the file picker, e.g. `image/*`. */
+  accept?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -77,23 +89,43 @@ export function CaptureDropzone({
           setDragActive(false);
           accept(event.dataTransfer.files);
         }}
-        className={`cursor-pointer rounded-lg border border-dashed p-4 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          dragActive ? "border-primary bg-accent/40" : "hover:border-foreground/30"
-        }`}
+        className={`cursor-pointer rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          title ? "text-left" : "text-center"
+        } ${dragActive ? "border-primary bg-accent/40" : "hover:border-foreground/30"}`}
       >
-        <Paperclip className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
-        <p className="mt-1.5 text-sm">
-          <span className="font-medium">Choose files</span>, or drop them here
+        {title ? (
+          <p className="font-medium">{title}</p>
+        ) : (
+          <>
+            <Paperclip className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-1.5 text-sm">
+              <span className="font-medium">Choose files</span>, or drop them here
+            </p>
+          </>
+        )}
+        <p
+          id={describedBy}
+          className={`text-muted-foreground ${title ? "mt-1 text-[13px]" : "mt-0.5 text-xs"}`}
+        >
+          {description ??
+            "Screenshots, recordings, PDFs. You can paste an image straight from your clipboard."}
         </p>
-        <p id={describedBy} className="mt-0.5 text-xs text-muted-foreground">
-          Screenshots, recordings, PDFs. You can paste an image straight from your clipboard.
-        </p>
+        {actions ? (
+          <div
+            className="mt-3 flex flex-wrap gap-2"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {actions}
+          </div>
+        ) : null}
       </div>
 
       <input
         ref={inputRef}
         type="file"
         multiple
+        accept={acceptAttr}
         className="sr-only"
         aria-hidden="true"
         tabIndex={-1}

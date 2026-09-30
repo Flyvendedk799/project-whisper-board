@@ -113,7 +113,7 @@ server.tool(
 
 server.tool(
   "get_task",
-  "Get task detail with description and acceptance criteria",
+  "Get task detail with description, acceptance criteria, sub-steps and the files shared with agents",
   {
     task_id: z.string().describe("The ID of the task"),
   },
@@ -273,6 +273,119 @@ server.tool(
         body: JSON.stringify({ body }),
       });
       return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
+    } catch (error: unknown) {
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.tool(
+  "list_task_attachments",
+  "Files the team shared with agents on a task (screenshots, recordings, documents). Hidden files are never listed. URLs expire in an hour.",
+  {
+    task_id: z.string().describe("The ID of the task"),
+  },
+  async ({ task_id }) => {
+    try {
+      const attachments = await fetchApi(`tasks/${task_id}/attachments`);
+      return { content: [{ type: "text", text: JSON.stringify(attachments, null, 2) }] };
+    } catch (error: unknown) {
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+server.tool(
+  "view_task_attachment",
+  "Look at a shared task attachment. Images come back as images; other files come back as a signed URL to download.",
+  {
+    task_id: z.string().describe("The ID of the task"),
+    attachment_id: z.string().describe("The ID of the attachment, from list_task_attachments"),
+  },
+  async ({ task_id, attachment_id }) => {
+    try {
+      const attachment = (await fetchApi(`tasks/${task_id}/attachments/${attachment_id}`)) as {
+        file_name: string;
+        mime_type: string | null;
+        size_bytes: number | null;
+        kind: string;
+        marked_up: boolean;
+        url: string | null;
+      };
+      const summary = JSON.stringify(attachment, null, 2);
+
+      const inlineable =
+        attachment.url &&
+        attachment.kind === "image" &&
+        attachment.mime_type !== "image/svg+xml" &&
+        (attachment.size_bytes ?? 0) <= MAX_INLINE_IMAGE_BYTES;
+      if (!inlineable) return { content: [{ type: "text", text: summary }] };
+
+      const file = await fetch(attachment.url!);
+      if (!file.ok) return { content: [{ type: "text", text: summary }] };
+      const data = Buffer.from(await file.arrayBuffer()).toString("base64");
+      return {
+        content: [
+          { type: "text", text: summary },
+          { type: "image", data, mimeType: attachment.mime_type ?? "image/png" },
+        ],
+      };
+    } catch (error: unknown) {
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.tool(
+  "update_task_step",
+  "Tick or untick a sub-step of a task, or reword it.",
+  {
+    task_id: z.string(),
+    step_id: z.string().describe("The ID of the step, from get_task"),
+    done: z.boolean().optional(),
+    text: z.string().optional(),
+  },
+  async ({ task_id, step_id, done, text }) => {
+    try {
+      const step = await fetchApi(`tasks/${task_id}/steps/${step_id}`, {
+        method: "POST",
+        body: JSON.stringify({ done, text }),
+      });
+      return { content: [{ type: "text", text: JSON.stringify(step, null, 2) }] };
+    } catch (error: unknown) {
+      return {
+        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.tool(
+  "add_task_step",
+  "Add a sub-step to the end of a task's checklist.",
+  {
+    task_id: z.string(),
+    text: z.string(),
+  },
+  async ({ task_id, text }) => {
+    try {
+      const step = await fetchApi(`tasks/${task_id}/steps`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      return { content: [{ type: "text", text: JSON.stringify(step, null, 2) }] };
     } catch (error: unknown) {
       return {
         content: [{ type: "text", text: `Error: ${(error as Error).message}` }],

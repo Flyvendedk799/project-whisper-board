@@ -7,7 +7,6 @@ import {
   Plus,
   UserRound,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/app-shell";
 import { RichTextView } from "@/components/rich-text-view";
 import { formatRelative, initials } from "@/lib/utils-format";
@@ -37,10 +36,13 @@ export function TicketTimeline({
   comments,
   events,
   showInternal,
+  reporterId,
 }: {
   comments: CommentWithAuthor[];
   events: EventWithActor[];
   showInternal: boolean;
+  /** Whoever opened the ticket is shown as the client side of the conversation. */
+  reporterId?: string | null;
 }) {
   const entries: Entry[] = [
     ...comments
@@ -60,7 +62,11 @@ export function TicketTimeline({
     <ol className="space-y-4">
       {entries.map((entry) =>
         entry.kind === "comment" ? (
-          <CommentEntry key={`c-${entry.comment.id}`} comment={entry.comment} />
+          <CommentEntry
+            key={`c-${entry.comment.id}`}
+            comment={entry.comment}
+            fromClient={Boolean(reporterId) && entry.comment.author_id === reporterId}
+          />
         ) : (
           <EventEntry key={`e-${entry.event.id}`} event={entry.event} />
         ),
@@ -69,27 +75,33 @@ export function TicketTimeline({
   );
 }
 
-function CommentEntry({ comment }: { comment: CommentWithAuthor }) {
+function CommentEntry({
+  comment,
+  fromClient,
+}: {
+  comment: CommentWithAuthor;
+  fromClient: boolean;
+}) {
   const author = comment.author;
   return (
     <li className="flex gap-3">
-      <Avatar person={author} />
-      <div className="min-w-0 flex-1">
-        <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <Avatar person={author} muted={fromClient} />
+      <div
+        className={`min-w-0 flex-1 rounded-xl border px-4 py-3 ${
+          comment.is_internal ? "border-warning/40 bg-warning/10" : "bg-card"
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">
             {author?.full_name ?? author?.email ?? "Someone"}
           </span>
           <span aria-hidden="true">·</span>
           <time dateTime={comment.created_at}>{formatRelative(comment.created_at)}</time>
-          {comment.is_internal && (
-            <StatusPill tone="warning">Internal — client can&rsquo;t see this</StatusPill>
-          )}
+          {comment.is_internal && <StatusPill tone="warning">Internal note</StatusPill>}
         </div>
-        <Card
-          className={`p-3 text-sm ${comment.is_internal ? "border-warning/40 bg-warning/5" : ""}`}
-        >
+        <div className="mt-1 text-sm leading-relaxed">
           <RichTextView html={comment.body} />
-        </Card>
+        </div>
       </div>
     </li>
   );
@@ -185,10 +197,12 @@ function label(map: Record<string, string>, value: string | null): string {
   return map[value] ?? value.replace(/_/g, " ");
 }
 
-function Avatar({ person }: { person: PersonRef | null }) {
+function Avatar({ person, muted = false }: { person: PersonRef | null; muted?: boolean }) {
   return (
     <span
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-xs"
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+        muted ? "bg-muted" : "bg-accent"
+      }`}
       aria-hidden="true"
     >
       {initials(person?.full_name ?? person?.email)}

@@ -2,10 +2,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bug, Inbox, LayoutGrid, List, Loader2, Ticket } from "lucide-react";
+import { Bug, Inbox, Loader2, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { EmptyState, PageHeader } from "@/components/app-shell";
+import { EmptyState, PageHeader, Segmented } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
@@ -14,7 +14,7 @@ import { FilterBar } from "@/features/triage/filter-bar";
 import { TicketBoard } from "@/features/triage/ticket-board";
 import { BulkBar } from "@/features/triage/bulk-bar";
 import { ViewsRail } from "@/features/triage/views-rail";
-import { TicketRow } from "@/features/tickets/ticket-row";
+import { TicketListHeader, TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { bulkUpdateTickets, deleteView, saveView } from "@/lib/tickets.functions";
 import { EMPTY_FILTERS, isFiltered, ticketFiltersSchema, type TicketFilters } from "@/data/filters";
@@ -127,6 +127,10 @@ function TriagePage() {
     bulk.fire({ ticketIds: [ticketId], status });
   };
 
+  const canSave = isFiltered(search);
+  const saveCurrent = (name: string) =>
+    persistView.fire({ name, filters: { ...search, view: undefined }, isShared: false });
+
   if (!isAdmin) {
     return (
       <>
@@ -163,9 +167,9 @@ function TriagePage() {
     <div className="flex h-screen flex-col">
       <PageHeader
         title="Triage"
-        description={`${rows.length}${tickets.hasNextPage ? "+" : ""} tickets`}
+        description={`${rows.length}${tickets.hasNextPage ? "+" : ""} tickets · the queue across every client`}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isMobile && (
               <Sheet open={viewsOpen} onOpenChange={setViewsOpen}>
                 <SheetTrigger asChild>
@@ -175,7 +179,7 @@ function TriagePage() {
                 </SheetTrigger>
                 <SheetContent side="left" className="w-72 p-0">
                   <SheetHeader className="border-b px-4 py-3">
-                    <SheetTitle>Saved views</SheetTitle>
+                    <SheetTitle>Views</SheetTitle>
                   </SheetHeader>
                   <SectionBoundary label="views-rail-mobile">
                     <ViewsRail
@@ -183,61 +187,48 @@ function TriagePage() {
                       views={views.data ?? []}
                       activeViewId={search.view}
                       currentFilters={search}
-                      canSave={Boolean(
-                        search.q || search.status?.length || search.projectId || search.sla,
-                      )}
+                      canSave={canSave}
                       onApply={(next, viewId) => {
                         setFilters(next, viewId);
                         setViewsOpen(false);
                       }}
-                      onSave={(name) =>
-                        persistView.fire({
-                          name,
-                          filters: { ...search, view: undefined },
-                          isShared: false,
-                        })
-                      }
+                      onSave={saveCurrent}
                       onDelete={(viewId) => removeView.fire({ viewId })}
                     />
                   </SectionBoundary>
                 </SheetContent>
               </Sheet>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFilters({ board: !search.board })}
-              aria-pressed={Boolean(search.board)}
-            >
-              {search.board ? (
-                <>
-                  <List className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  List
-                </>
-              ) : (
-                <>
-                  <LayoutGrid className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Board
-                </>
-              )}
+            <Segmented
+              label="Layout"
+              value={search.board ? "board" : "list"}
+              onChange={(layout) => setFilters({ board: layout === "board" })}
+              options={[
+                { value: "list", label: "List" },
+                { value: "board", label: "Board" },
+              ]}
+            />
+            <Button asChild>
+              <Link to="/app/report">
+                <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+                New ticket
+              </Link>
             </Button>
           </div>
         }
       />
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-56 shrink-0 border-r lg:block">
+        <aside className="hidden w-[204px] shrink-0 border-r lg:block">
           <SectionBoundary label="views-rail">
             <ViewsRail
               counts={counts.data}
               views={views.data ?? []}
               activeViewId={search.view}
               currentFilters={search}
-              canSave={Boolean(search.q || search.status?.length || search.projectId || search.sla)}
+              canSave={canSave}
               onApply={setFilters}
-              onSave={(name) =>
-                persistView.fire({ name, filters: { ...search, view: undefined }, isShared: false })
-              }
+              onSave={saveCurrent}
               onDelete={(viewId) => removeView.fire({ viewId })}
             />
           </SectionBoundary>
@@ -259,6 +250,7 @@ function TriagePage() {
             count={selected.size}
             busy={bulk.busy}
             people={people.data ?? []}
+            viewerId={viewerId}
             onStatus={(status: TicketStatus) => bulk.fire({ ticketIds: [...selected], status })}
             onPriority={(priority: TicketPriority) =>
               bulk.fire({ ticketIds: [...selected], priority })
@@ -273,7 +265,6 @@ function TriagePage() {
               errorTitle="Couldn't load the queue"
               empty={
                 <EmptyState
-                  icon={Inbox}
                   title={isFiltered(search) ? "Nothing here" : "No tickets yet"}
                   description={
                     isFiltered(search)
@@ -305,6 +296,17 @@ function TriagePage() {
                   <TicketBoard tickets={rows} onMove={moveOnBoard} />
                 ) : (
                   <>
+                    <TicketListHeader
+                      selectable
+                      allSelected={rows.length > 0 && selected.size === rows.length}
+                      onSelectAll={() =>
+                        setSelected(
+                          selected.size === rows.length
+                            ? new Set()
+                            : new Set(rows.map((ticket) => ticket.id)),
+                        )
+                      }
+                    />
                     <ul>
                       {rows.map((ticket) => (
                         <li key={ticket.id}>

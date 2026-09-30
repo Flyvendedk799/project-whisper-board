@@ -1,39 +1,29 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQueries, useQuery, useInfiniteQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Bug,
-  Clock,
-  FolderKanban,
-  Inbox,
-  MessageSquareWarning,
-  Receipt,
-  Timer,
-  UserRound,
-} from "lucide-react";
-import { useMemo } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
+import { Section, SectionAction, SectionRow, RowCard } from "@/components/section-list";
 import { useAuth } from "@/components/auth-provider";
 import { OnboardingWizard, isOnboardingIncomplete } from "@/components/onboarding-wizard";
 import { GettingStartedGuide } from "@/components/getting-started";
-import { ProjectTimeline } from "@/features/projects/project-timeline";
-import { TicketRow } from "@/features/tickets/ticket-row";
+import { QUEUE_VIEWS, queueSearch, type QueueViewId } from "@/features/triage/queue-views";
 import { ticketCountsQuery, ticketListQuery } from "@/data/tickets";
-import { projectListQuery, projectMilestonesQuery, workspaceMembersQuery } from "@/data/projects";
-import { projectInvoicesQuery, outstandingCents } from "@/data/billing";
-import { projectMeetingsQuery, upcomingMeetingsQuery } from "@/data/meetings";
-import { projectTimeQuery, formatMinutes, totalMinutes } from "@/data/time";
-import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
-import { formatCents, formatRelative } from "@/lib/utils-format";
-import type { TicketFilters } from "@/data/filters";
-import type { InvoiceWithLines, TimeEntry } from "@/data/types";
+import { projectListQuery, workspaceMembersQuery } from "@/data/projects";
+import { comingUpQuery, dashboardSummaryQuery } from "@/data/dashboard";
+import { formatMinutes } from "@/data/time";
+import {
+  OPEN_TICKET_STATUSES,
+  PROJECT_STATUS_LABEL,
+  PROJECT_STATUS_TONE,
+  TICKET_STATUS_LABEL,
+  TICKET_STATUS_TONE,
+} from "@/data/enums";
+import { formatCents, formatDate, formatRelative } from "@/lib/utils-format";
+import type { TicketListRow } from "@/data/types";
 
 export const Route = createFileRoute("/app/")({
   validateSearch: z.object({
@@ -44,7 +34,10 @@ export const Route = createFileRoute("/app/")({
 
 function HomePage() {
   const { user, isAdmin } = useAuth();
-  const greeting = greet(user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there");
+  const name = (user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there")
+    .toString()
+    .split(" ")[0];
+  const greeting = greet(name);
 
   return (
     <>
@@ -53,8 +46,15 @@ function HomePage() {
         description={
           isAdmin ? "Where your client work stands." : "Your projects and what's happening."
         }
+        action={
+          !isAdmin && (
+            <Button asChild>
+              <Link to="/app/report">Report something</Link>
+            </Button>
+          )
+        }
       />
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+      <div className="mx-auto max-w-[1120px] px-4 py-6 md:px-8 md:py-7">
         {isAdmin ? <AdminHome /> : <ClientHome />}
       </div>
     </>
@@ -64,10 +64,9 @@ function HomePage() {
 /**
  * The cockpit.
  *
- * Home used to be six recent projects and eight open tickets — the same list
- * you would get anywhere. What the person running the workspace needs first is
- * what is late, what nobody has answered, and what is owed. Every tile links
- * into the queue with the filters that produced its number, so a count is
+ * What the person running the workspace needs first is what is late, what
+ * nobody has answered, and what is owed. Every tile links into the queue with
+ * the filters that produced its number (see `QUEUE_VIEWS`), so a count is
  * always one click from the tickets behind it.
  */
 function AdminHome() {
@@ -77,7 +76,6 @@ function AdminHome() {
   const counts = useQuery(ticketCountsQuery(viewerId, workspaceId));
   const projects = useQuery(projectListQuery(workspaceId));
   const members = useQuery(workspaceMembersQuery(workspaceId));
-  const meetings = useQuery(upcomingMeetingsQuery());
 
   const recent = useInfiniteQuery({
     ...ticketListQuery({ sort: "updated" }, viewerId, workspaceId),
@@ -95,7 +93,7 @@ function AdminHome() {
   const hasTickets = recentRows.length > 0 || (counts.data?.needsTriage ?? 0) > 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <GettingStartedGuide
         hasClient={hasClient}
         hasProject={(projects.data ?? []).length > 0}
@@ -104,364 +102,369 @@ function AdminHome() {
         loading={members.isPending || projects.isPending || recent.isPending}
       />
 
-      <section aria-labelledby="needs-you">
-        <h2 id="needs-you" className="mb-3 font-display text-xl">
-          Needs you
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Needs you">
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
           <Tile
+            id="breached"
             label="Overdue"
             value={counts.data?.breached}
             loading={counts.isPending}
-            icon={AlertTriangle}
-            tone={counts.data?.breached ? "destructive" : "default"}
-            to={{ sla: "breached", sort: "sla" }}
           />
           <Tile
+            id="atRisk"
             label="Due soon"
             value={counts.data?.atRisk}
             loading={counts.isPending}
-            icon={Clock}
-            tone={counts.data?.atRisk ? "warning" : "default"}
-            to={{ sla: "at_risk", sort: "sla" }}
           />
           <Tile
+            id="awaiting"
             label="Awaiting a first reply"
             value={counts.data?.awaiting}
             loading={counts.isPending}
-            icon={MessageSquareWarning}
-            to={{ awaiting: true, sort: "oldest" }}
           />
           <Tile
+            id="unassigned"
             label="Unassigned"
             value={counts.data?.unassigned}
             loading={counts.isPending}
-            icon={UserRound}
-            to={{ assignee: "unassigned" }}
           />
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <section aria-labelledby="recent-activity">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 id="recent-activity" className="font-display text-xl">
-              Latest activity
-            </h2>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/app/triage">
-                Open the queue
-                <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+      <div className="flex flex-wrap items-start gap-7">
+        <div className="min-w-0 flex-1 basis-[560px]">
+          <Section
+            id="recent-activity"
+            title="Latest activity"
+            action={
+              <Link to="/app/triage" search={queueSearch("allOpen")}>
+                <SectionAction>Open the queue</SectionAction>
               </Link>
-            </Button>
-          </div>
-
-          <QueryState
-            query={recent}
-            errorTitle="Couldn't load recent tickets"
-            empty={
-              <Card>
-                <EmptyState
-                  icon={Inbox}
-                  title="Nothing yet"
-                  description="Tickets your clients open will land here. Seed the queue yourself, or invite a client so they can report."
-                  action={
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <Button asChild>
-                        <Link to="/app/report">
-                          <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                          Report something
-                        </Link>
-                      </Button>
-                      <Button variant="outline" asChild>
-                        <Link to="/app/triage">Open the queue</Link>
-                      </Button>
-                    </div>
-                  }
-                />
-              </Card>
             }
           >
-            {() => (
-              <div className="overflow-hidden rounded-lg border">
-                <ul>
-                  {recentRows.map((ticket) => (
-                    <li key={ticket.id}>
-                      <TicketRow ticket={ticket} origin={{ from: "home" }} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </QueryState>
-        </section>
-
-        <div className="space-y-6">
-          <SectionBoundary label="money">
-            <MoneyCard projects={projects.data ?? []} />
-          </SectionBoundary>
-
-          <section aria-labelledby="upcoming">
-            <h2 id="upcoming" className="mb-3 font-display text-xl">
-              Coming up
-            </h2>
-            <Card className="divide-y">
-              {(meetings.data ?? []).length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">Nothing scheduled.</p>
-              ) : (
-                (meetings.data ?? []).map((meeting) => (
-                  <Link
-                    key={meeting.id}
-                    to="/app/projects/$projectId"
-                    params={{ projectId: meeting.project_id }}
-                    search={{ tab: "meetings", paid: undefined }}
-                    className="block p-3 hover:bg-accent/40"
-                  >
-                    <p className="truncate text-sm font-medium">{meeting.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatRelative(meeting.scheduled_at)}
-                      {meeting.project?.title ? ` · ${meeting.project.title}` : ""}
-                    </p>
-                  </Link>
-                ))
-              )}
-            </Card>
-          </section>
-
-          <section aria-labelledby="active-projects">
-            <h2 id="active-projects" className="mb-3 font-display text-xl">
-              Projects
-            </h2>
-            <Card className="divide-y">
-              {(projects.data ?? []).slice(0, 6).map((project) => (
-                <Link
-                  key={project.id}
-                  to="/app/projects/$projectId"
-                  params={{ projectId: project.id }}
-                  className="block p-3 hover:bg-accent/40"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-sm">{project.title}</span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {project.progress}%
-                    </span>
-                  </div>
-                  <ProgressBar
-                    value={project.progress}
-                    label={`${project.title} progress`}
-                    className="mt-1.5"
+            <QueryState
+              query={recent}
+              errorTitle="Couldn't load recent tickets"
+              empty={
+                <div className="rounded-[14px] border bg-card">
+                  <EmptyState
+                    title="Nothing yet"
+                    description="Tickets your clients open will land here. Seed the queue yourself, or invite a client so they can report."
+                    action={
+                      <Button asChild>
+                        <Link to="/app/report">Report something</Link>
+                      </Button>
+                    }
                   />
-                </Link>
-              ))}
-            </Card>
-          </section>
+                </div>
+              }
+            >
+              {() => (
+                <RowCard>
+                  {recentRows.map((ticket) => (
+                    <TicketActivityRow key={ticket.id} ticket={ticket} />
+                  ))}
+                </RowCard>
+              )}
+            </QueryState>
+          </Section>
+        </div>
+
+        <div className="flex min-w-0 flex-1 basis-[320px] flex-col gap-6 lg:max-w-[420px]">
+          <SectionBoundary label="money">
+            <MoneyAndTime workspaceId={workspaceId} projects={projects.data ?? []} />
+          </SectionBoundary>
+          <SectionBoundary label="coming-up">
+            <ComingUp workspaceId={workspaceId} />
+          </SectionBoundary>
+          <Section id="active-projects" title="Projects">
+            <RowCard>
+              {(projects.data ?? [])
+                .filter((project) => project.status !== "archived")
+                .slice(0, 5)
+                .map((project) => (
+                  <SectionRow
+                    key={project.id}
+                    compact
+                    title={project.title}
+                    right={`${project.progress}%`}
+                    progress={project.progress}
+                    link={(p) => (
+                      <Link
+                        to="/app/projects/$projectId"
+                        params={{ projectId: project.id }}
+                        {...p}
+                      />
+                    )}
+                  />
+                ))}
+            </RowCard>
+          </Section>
         </div>
       </div>
     </div>
   );
 }
 
-function MoneyCard({ projects }: { projects: Array<{ id: string; currency: string }> }) {
-  const invoiceQueries = useQueries({
-    queries: projects.map((project) => ({
-      ...projectInvoicesQuery(project.id),
-      enabled: Boolean(project.id),
-    })),
-  });
-  const timeQueries = useQueries({
-    queries: projects.map((project) => ({
-      ...projectTimeQuery(project.id),
-      enabled: Boolean(project.id),
-    })),
-  });
-
-  const currency = projects[0]?.currency ?? "USD";
-  const weekAgo = useMemo(() => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), []);
-
-  const owed = invoiceQueries.reduce((total, query) => {
-    const invoices = (query.data ?? []) as InvoiceWithLines[];
-    return (
-      total +
-      invoices
-        .filter((invoice) => invoice.status === "sent" || invoice.status === "overdue")
-        .reduce((sum, invoice) => sum + outstandingCents(invoice), 0)
-    );
-  }, 0);
-
-  const thisWeekMinutes = timeQueries.reduce((total, query) => {
-    const entries = (query.data ?? []) as TimeEntry[];
-    return total + totalMinutes(entries.filter((entry) => new Date(entry.started_at) >= weekAgo));
-  }, 0);
-
-  const loading = invoiceQueries.some((q) => q.isPending) || timeQueries.some((q) => q.isPending);
-
-  if (projects.length === 0) return null;
-
+function TicketActivityRow({ ticket }: { ticket: TicketListRow }) {
   return (
-    <section aria-labelledby="money">
-      <h2 id="money" className="mb-3 font-display text-xl">
-        Money and time
-      </h2>
-      <Card className="space-y-3 p-4">
-        <div className="flex items-center gap-2.5">
-          <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="text-sm">
-            {loading ? (
-              <Skeleton className="inline-block h-4 w-24" />
-            ) : (
-              <>
-                <strong className="tabular-nums">{formatCents(owed, currency)}</strong>{" "}
-                <span className="text-muted-foreground">outstanding</span>
-                {!loading && owed > 0 && projects[0] && (
-                  <>
-                    {" · "}
-                    <Link
-                      to="/app/projects/$projectId"
-                      params={{ projectId: projects[0].id }}
-                      search={{ tab: "billing" }}
-                      className="underline underline-offset-2"
-                    >
-                      Open billing
-                    </Link>
-                  </>
-                )}
-              </>
-            )}
-          </span>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <Timer className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="text-sm">
-            {loading ? (
-              <Skeleton className="inline-block h-4 w-24" />
-            ) : (
-              <>
-                <strong className="tabular-nums">{formatMinutes(thisWeekMinutes)}</strong>{" "}
-                <span className="text-muted-foreground">logged this week</span>
-              </>
-            )}
-          </span>
-        </div>
-      </Card>
-    </section>
+    <SectionRow
+      title={ticket.title}
+      pill={
+        <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
+          {TICKET_STATUS_LABEL[ticket.status]}
+        </StatusPill>
+      }
+      sub={`#${ticket.ticket_number}${ticket.project ? ` · ${ticket.project.title}` : ""}`}
+      right={formatRelative(ticket.updated_at)}
+      link={(p) => (
+        <Link
+          to="/app/tickets/$ticketId"
+          params={{ ticketId: ticket.id }}
+          search={{ from: "home" }}
+          {...p}
+        />
+      )}
+    />
   );
 }
 
-function ClientHome() {
-  const navigate = useNavigate({ from: Route.fullPath });
-  const { project: projectFromSearch } = Route.useSearch();
-  const { workspaceId } = useAuth();
-  const projects = useQuery(projectListQuery(workspaceId));
-  const selected =
-    projects.data?.find((p) => p.id === projectFromSearch) ?? projects.data?.[0] ?? null;
+function MoneyAndTime({
+  workspaceId,
+  projects,
+}: {
+  workspaceId: string | null | undefined;
+  projects: Array<{ id: string }>;
+}) {
+  const summary = useQuery(dashboardSummaryQuery(workspaceId));
 
-  const milestones = useQuery({
-    ...projectMilestonesQuery(selected?.id ?? ""),
-    enabled: Boolean(selected),
+  if (summary.isPending) {
+    return (
+      <Section title="Money and time">
+        <Skeleton className="h-24 w-full rounded-[14px]" />
+      </Section>
+    );
+  }
+  if (summary.isError) {
+    return (
+      <Section title="Money and time">
+        <p className="rounded-[14px] border bg-card p-4 text-sm text-muted-foreground">
+          Couldn&rsquo;t load this right now.
+        </p>
+      </Section>
+    );
+  }
+
+  const { outstanding, weekMinutes, weekBillableMinutes } = summary.data;
+  const invoiceCount = outstanding.reduce((n, o) => n + o.invoices, 0);
+  const amounts = outstanding.map((o) => formatCents(o.cents, o.currency)).join(" · ");
+  // Billing lives on each project; land on the first one until there is a workspace-wide view.
+  const billingTarget = projects[0]?.id;
+
+  return (
+    <Section id="money" title="Money and time">
+      <RowCard>
+        <SectionRow
+          title={
+            invoiceCount === 0
+              ? "Nothing outstanding"
+              : `${invoiceCount} ${invoiceCount === 1 ? "invoice" : "invoices"} outstanding`
+          }
+          sub={invoiceCount === 0 ? undefined : amounts}
+          link={
+            invoiceCount > 0 && billingTarget
+              ? (p) => (
+                  <Link
+                    to="/app/projects/$projectId"
+                    params={{ projectId: billingTarget }}
+                    search={{ tab: "billing" }}
+                    {...p}
+                  />
+                )
+              : undefined
+          }
+        />
+        <SectionRow
+          title={`${formatMinutes(weekMinutes)} logged this week`}
+          sub={`${formatMinutes(weekBillableMinutes)} billable`}
+          link={(p) => <Link to="/app/time" {...p} />}
+        />
+      </RowCard>
+    </Section>
+  );
+}
+
+function ComingUp({ workspaceId }: { workspaceId: string | null | undefined }) {
+  const upcoming = useQuery(comingUpQuery(workspaceId));
+  const items = upcoming.data ?? [];
+
+  return (
+    <Section id="upcoming" title="Coming up">
+      {items.length === 0 ? (
+        <p className="rounded-[14px] border bg-card p-4 text-sm text-muted-foreground">
+          {upcoming.isPending ? "Loading…" : "Nothing scheduled."}
+        </p>
+      ) : (
+        <RowCard>
+          {items.map((item) => (
+            <SectionRow
+              key={item.id}
+              compact
+              title={item.title}
+              sub={`${item.kind === "meeting" ? formatWhen(item.at) : `Milestone due ${formatDate(item.at)}`}${item.projectTitle ? ` · ${item.projectTitle}` : ""}`}
+              pill={item.overdue ? <StatusPill tone="destructive">Overdue</StatusPill> : undefined}
+              link={(p) => (
+                <Link
+                  to="/app/projects/$projectId"
+                  params={{ projectId: item.projectId }}
+                  search={{ tab: item.kind === "meeting" ? "meetings" : "milestones" }}
+                  {...p}
+                />
+              )}
+            />
+          ))}
+        </RowCard>
+      )}
+    </Section>
+  );
+}
+
+function formatWhen(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
-  const meetings = useQuery({
-    ...projectMeetingsQuery(selected?.id ?? ""),
-    enabled: Boolean(selected),
+}
+
+/**
+ * The client's home: their projects, and what is being worked on for them with
+ * an ETA where one has been set. RLS already limits both to projects they
+ * belong to.
+ */
+function ClientHome() {
+  const { user, workspaceId } = useAuth();
+  const projects = useQuery(projectListQuery(workspaceId));
+  const open = useInfiniteQuery({
+    ...ticketListQuery(
+      { sort: "updated", status: [...OPEN_TICKET_STATUSES] },
+      user?.id ?? "",
+      workspaceId,
+    ),
+    enabled: Boolean(user && workspaceId),
   });
-  const invoices = useQuery({
-    ...projectInvoicesQuery(selected?.id ?? ""),
-    enabled: Boolean(selected),
-  });
+  const openRows = (open.data?.pages[0]?.rows ?? []).slice(0, 5);
 
   return (
     <QueryState
       query={projects}
       errorTitle="Couldn't load your projects"
       empty={
-        <Card>
+        <div className="rounded-[14px] border bg-card">
           <EmptyState
-            icon={FolderKanban}
             title="Nothing shared with you yet"
-            description="Ask your agency to invite you to a project — it'll show up here with tickets, meetings and progress. Check your inbox if you're waiting on an invite."
+            description="Ask your agency to invite you to a project. It'll show up here with tickets, meetings and progress."
             action={
               <Button variant="outline" asChild>
-                <Link to="/app/inbox">
-                  <Inbox className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Open inbox
-                </Link>
+                <Link to="/app/inbox">Open inbox</Link>
               </Button>
             }
           />
-        </Card>
+        </div>
       }
     >
       {(data) => (
-        <div className="space-y-8">
-          {data.length > 1 && (
-            <div className="flex flex-wrap gap-2">
-              {data.map((project) => (
-                <Button
-                  key={project.id}
-                  size="sm"
-                  variant={selected?.id === project.id ? "secondary" : "ghost"}
-                  onClick={() =>
-                    void navigate({
-                      search: (prev: { project?: string }) => ({ ...prev, project: project.id }),
-                    })
-                  }
-                >
-                  {project.title}
-                </Button>
-              ))}
-            </div>
-          )}
-
-          {selected && (
-            <SectionBoundary label="client-timeline">
-              <ProjectTimeline
-                project={selected}
-                milestones={milestones.data ?? []}
-                meetings={meetings.data ?? []}
-                invoices={invoices.data ?? []}
-              />
-            </SectionBoundary>
-          )}
-
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-xl">
-                {data.length > 1 ? "Your projects" : "Your project"}
-              </h2>
-              <Button size="sm" asChild>
-                <Link to="/app/report">
-                  <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Report something
-                </Link>
-              </Button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {data.map((project) => (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {data
+              .filter((project) => project.status !== "archived")
+              .map((project) => (
                 <Link
                   key={project.id}
                   to="/app/projects/$projectId"
                   params={{ projectId: project.id }}
+                  search={{ tab: "overview" }}
+                  className="flex min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Card className="h-full p-5 transition-all hover:border-foreground/20 hover:shadow-sm">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
-                        {PROJECT_STATUS_LABEL[project.status]}
-                      </StatusPill>
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {project.progress}%
-                      </span>
+                  <div className="flex items-center">
+                    <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
+                      {PROJECT_STATUS_LABEL[project.status]}
+                    </StatusPill>
+                    <span className="flex-1" />
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {project.progress}%
+                    </span>
+                  </div>
+                  <h3 className="font-display text-2xl leading-tight">{project.title}</h3>
+                  {project.organization?.name && (
+                    <div className="text-xs text-muted-foreground">{project.organization.name}</div>
+                  )}
+                  {project.description && (
+                    <p className="line-clamp-3 flex-1 text-[13px] leading-normal text-muted-foreground">
+                      {project.description}
+                    </p>
+                  )}
+                  <ProgressBar
+                    value={project.progress}
+                    label={`${project.title} progress`}
+                    className="mt-1.5"
+                  />
+                  {project.end_date && (
+                    <div className="text-xs text-muted-foreground">
+                      Target {formatDate(project.end_date)}
                     </div>
-                    <h3 className="font-display text-xl">{project.title}</h3>
-                    <ProgressBar
-                      value={project.progress}
-                      label={`${project.title} progress`}
-                      className="mt-4"
-                    />
-                  </Card>
+                  )}
                 </Link>
               ))}
-            </div>
-          </section>
+          </div>
+
+          <Section
+            id="working-on"
+            title="What we are working on for you"
+            action={
+              <Link to="/app/tickets">
+                <SectionAction>All my tickets</SectionAction>
+              </Link>
+            }
+          >
+            {openRows.length === 0 ? (
+              <p className="rounded-[14px] border bg-card p-4 text-sm text-muted-foreground">
+                {open.isPending
+                  ? "Loading…"
+                  : "Nothing open right now. If something isn't right, tell us."}
+              </p>
+            ) : (
+              <RowCard>
+                {openRows.map((ticket) => (
+                  <SectionRow
+                    key={ticket.id}
+                    title={ticket.title}
+                    pill={
+                      <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
+                        {TICKET_STATUS_LABEL[ticket.status]}
+                      </StatusPill>
+                    }
+                    sub={`#${ticket.ticket_number}${ticket.project ? ` · ${ticket.project.title}` : ""}`}
+                    right={
+                      ticket.eta_date
+                        ? `ETA ${formatDate(ticket.eta_date)}`
+                        : formatRelative(ticket.updated_at)
+                    }
+                    link={(p) => (
+                      <Link
+                        to="/app/tickets/$ticketId"
+                        params={{ ticketId: ticket.id }}
+                        search={{ from: "home" }}
+                        {...p}
+                      />
+                    )}
+                  />
+                ))}
+              </RowCard>
+            )}
+          </Section>
         </div>
       )}
     </QueryState>
@@ -469,42 +472,38 @@ function ClientHome() {
 }
 
 function Tile({
+  id,
   label,
   value,
   loading,
-  icon: Icon,
-  tone = "default",
-  to,
 }: {
+  id: QueueViewId;
   label: string;
   value: number | undefined;
   loading: boolean;
-  icon: typeof AlertTriangle;
-  tone?: "default" | "warning" | "destructive";
-  to: Partial<TicketFilters>;
 }) {
-  const colour =
-    tone === "destructive"
+  const view = QUEUE_VIEWS.find((v) => v.id === id)!;
+  const ink =
+    value && view.tone === "danger"
       ? "text-destructive"
-      : tone === "warning"
-        ? "text-warning"
+      : value && view.tone === "warning"
+        ? "text-[color-mix(in_oklab,var(--warning),black_35%)]"
         : "text-foreground";
 
   return (
-    <Link to="/app/triage" search={{ sort: "updated", ...to }}>
-      <Card className="h-full p-4 transition-colors hover:border-foreground/20">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-          {label}
+    <Link
+      to="/app/triage"
+      search={queueSearch(id)}
+      className="rounded-[14px] border bg-card px-[18px] py-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {loading ? (
+        <Skeleton className="mt-2 h-9 w-12" />
+      ) : (
+        <div className={`mt-1 font-display text-[40px] leading-[1.1] tabular-nums ${ink}`}>
+          {value ?? 0}
         </div>
-        {loading ? (
-          <Skeleton className="mt-2 h-8 w-12" />
-        ) : (
-          <p className={`mt-1 font-display text-3xl tabular-nums ${value ? colour : ""}`}>
-            {value ?? 0}
-          </p>
-        )}
-      </Card>
+      )}
     </Link>
   );
 }

@@ -14,6 +14,28 @@ function getOctokit() {
   return new Octokit({ auth: pat });
 }
 
+/**
+ * Whether this deployment can reach GitHub, for the Integrations tab. Never
+ * throws: a missing token or a rejected one is a status, not an error page.
+ */
+export const getGitHubStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async (): Promise<{ configured: boolean; login: string | null; problem: string | null }> => {
+      if (!process.env.GITHUB_PAT) return { configured: false, login: null, problem: null };
+      try {
+        const { data } = await getOctokit().rest.users.getAuthenticated();
+        return { configured: true, login: data.login, problem: null };
+      } catch {
+        return {
+          configured: true,
+          login: null,
+          problem: "GitHub rejected the token. Check GITHUB_PAT.",
+        };
+      }
+    },
+  );
+
 export const testGitHubConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(() =>

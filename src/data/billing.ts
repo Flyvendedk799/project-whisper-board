@@ -65,3 +65,26 @@ export function sumLines(lines: Array<{ quantity: number; unit_price_cents: numb
 export function withTax(subtotalCents: number, taxBps: number): number {
   return subtotalCents + Math.round((subtotalCents * taxBps) / 10_000);
 }
+
+/** The invoice a finished milestone turns into: one line for the agreed amount. */
+export function milestoneInvoiceDraft(
+  milestone: { title: string; amount_cents: number | null },
+  currency: string,
+): { description: string; amountCents: number; currency: string } {
+  return {
+    description: milestone.title,
+    amountCents: Math.max(0, Math.round(milestone.amount_cents ?? 0)),
+    currency: currency.trim().toUpperCase() || "USD",
+  };
+}
+
+/**
+ * Turns what someone typed into an amount in minor units. Accepts "25000",
+ * "25 000,50" and "25000.5"; anything else (empty, negative, text) is null so
+ * the caller can decide whether that means "no amount" or "invalid".
+ */
+export function parseMoneyToCents(input: string): number | null {
+  const cleaned = input.trim().replace(/\s/g, "").replace(",", ".");
+  if (!cleaned || !/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  return Math.round(Number(cleaned) * 100);
+}

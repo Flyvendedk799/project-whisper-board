@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BrainCircuit, LayoutList, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState, StatusPill } from "@/components/app-shell";
+import { EmptyState, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { planListQuery } from "@/data/planner";
@@ -19,7 +19,6 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
       errorTitle="Couldn't load AI plans"
       empty={
         <EmptyState
-          icon={BrainCircuit}
           title="No AI Plans yet"
           description={
             isAdmin

@@ -63,10 +63,10 @@ export function SlaPoliciesCard() {
   return (
     <QueryState query={policies} errorTitle="Couldn't load SLA policies">
       {() => (
-        <Card className="space-y-4 p-5">
+        <Card className="space-y-4 rounded-[14px] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="font-display text-xl">Response times</h2>
+              <h2 className="font-display text-[22px] leading-tight">Response times</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Deadlines are applied when a ticket is opened or its priority changes. Hours, not
                 minutes — a day is 24.
@@ -100,7 +100,7 @@ export function SlaPoliciesCard() {
               {TICKET_PRIORITIES.map((priority) => (
                 <form
                   key={priority}
-                  className="grid gap-3 rounded-md border p-3 sm:grid-cols-[8rem_1fr_1fr_auto] sm:items-end"
+                  className="grid gap-3 rounded-lg border bg-surface p-3 sm:grid-cols-[8rem_1fr_1fr_auto] sm:items-end"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void persist(priority);

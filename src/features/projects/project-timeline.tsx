@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarClock, CheckCircle2, Circle, CircleDot, Receipt, Video } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { ProgressBar, StatusPill } from "@/components/app-shell";
+import { ProgressBar, StatusPill } from "@/components/status-pill";
 import { MILESTONE_STATUS_LABEL, MILESTONE_STATUS_TONE } from "@/data/enums";
 import { formatCents, formatDate } from "@/lib/utils-format";
 import { outstandingCents } from "@/data/billing";

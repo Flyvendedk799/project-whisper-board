@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Megaphone, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { EmptyState, StatusPill } from "@/components/app-shell";
+import { EmptyState, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
@@ -105,7 +105,6 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
         empty={
           <Card>
             <EmptyState
-              icon={Megaphone}
               title="Nothing yet"
               description={
                 isAdmin

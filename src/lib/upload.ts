@@ -223,3 +223,107 @@ export function newDraftId(): string {
     ? crypto.randomUUID()
     : `d-${Math.random().toString(36).slice(2)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Plan task attachments
+//
+// The AI planner attaches files to tasks and to notes on tasks. Same allowed
+// types and 25 MB ceiling as tickets; different bucket, and the validation has
+// to run on the server as well, where there is no `File`, only a name, a size
+// and a type.
+// ---------------------------------------------------------------------------
+
+export const PLAN_ATTACHMENT_BUCKET = "plan-attachments";
+
+/** What a file is, for picking a tile, a viewer and a filter chip. */
+export type PlanAttachmentKind = "image" | "video" | "audio" | "doc";
+
+export interface FileMeta {
+  name: string;
+  size: number;
+  type: string;
+}
+
+export const PLAN_ATTACHMENT_ACCEPT_HINT = "Images, recordings, PDFs, CSV and docs up to 25 MB";
+
+export function attachmentKindOf(mime: string | null | undefined): PlanAttachmentKind {
+  const type = mime ?? "";
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("audio/")) return "audio";
+  return "doc";
+}
+
+/** Upper-case extension for the placeholder tile: `report.final.pdf` -> `PDF`. */
+export function fileExtensionLabel(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1) return "FILE";
+  return name.slice(dot + 1, dot + 5).toUpperCase();
+}
+
+/** Same rules as `validateFile`, for anything that is not a browser `File`. */
+export function validateFileMeta(meta: FileMeta): string | null {
+  if (meta.size <= 0) return `${meta.name} is empty.`;
+  if (meta.size > MAX_FILE_BYTES) {
+    return `${meta.name} is ${formatBytes(meta.size)}. The limit is ${formatBytes(MAX_FILE_BYTES)}.`;
+  }
+  if (meta.type && !ALLOWED_MIME.includes(meta.type)) {
+    return `${meta.name} is a ${meta.type} file, which can't be attached.`;
+  }
+  return null;
+}
+
+/** Splits a batch into files that can go up and one sentence per refusal. */
+export function partitionUploadable<T extends FileMeta>(
+  files: readonly T[],
+): { ok: T[]; problems: string[] } {
+  const ok: T[] = [];
+  const problems: string[] = [];
+  for (const file of files) {
+    const problem = validateFileMeta(file);
+    if (problem) problems.push(problem);
+    else ok.push(file);
+  }
+  return { ok, problems };
+}
+
+/**
+ * `<uploader>/<plan>/<task>/<uuid>-<name>`. The first segment is the uploader
+ * for the same reason as tickets: `plan_attachments_upload_own` checks it.
+ */
+export function planAttachmentPath(
+  userId: string,
+  planId: string,
+  taskId: string,
+  fileName: string,
+): string {
+  return `${userId}/${planId}/${taskId}/${crypto.randomUUID()}-${slugifyFileName(fileName)}`;
+}
+
+/** True when `path` was built for this uploader, plan and task. */
+export function isPlanAttachmentPath(
+  path: string,
+  scope: { userId: string; planId: string; taskId: string },
+): boolean {
+  const parts = path.split("/");
+  return (
+    parts.length === 4 &&
+    parts[0] === scope.userId &&
+    parts[1] === scope.planId &&
+    parts[2] === scope.taskId &&
+    parts[3].length > 0 &&
+    !path.includes("..")
+  );
+}
+
+/** Marking up only makes sense where there is a bitmap to draw on. */
+export function canMarkUpMime(mime: string | null | undefined): boolean {
+  return (mime ?? "").startsWith("image/") && mime !== "image/svg+xml";
+}
+
+/** `shot.png` -> `shot-marked.png`. The copy is always a PNG. */
+export function markedUpFileName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  return `${base.replace(/-marked$/, "")}-marked.png`;
+}

@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { StatusPill } from "@/components/app-shell";
 import {
   TICKET_PRIORITIES,
   TICKET_PRIORITY_LABEL,
@@ -29,6 +28,31 @@ interface Props {
   labelOptions?: Array<{ name: string; color: string }>;
 }
 
+/** The dropdown button the design uses: muted label, then the current choice. */
+const FilterTrigger = forwardRef<
+  HTMLButtonElement,
+  {
+    label: string;
+    current: string;
+    active: boolean;
+  } & React.ButtonHTMLAttributes<HTMLButtonElement>
+>(function FilterTrigger({ label, current, active, ...rest }, ref) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...rest}
+      className={`flex h-[34px] max-w-56 items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors ${
+        active ? "border-primary bg-accent" : "bg-card hover:bg-muted"
+      }`}
+    >
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-medium">{current}</span>
+      <ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+    </button>
+  );
+});
+
 function MultiSelect<T extends string>({
   label,
   values,
@@ -52,11 +76,17 @@ function MultiSelect<T extends string>({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant={active.length ? "secondary" : "outline"} size="sm" className="gap-1.5">
-          {label}
-          {active.length > 0 && <StatusPill>{active.length}</StatusPill>}
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-        </Button>
+        <FilterTrigger
+          label={label}
+          active={active.length > 0}
+          current={
+            active.length === 0
+              ? "Any"
+              : active.length <= 2
+                ? active.map((v) => labels[v]).join(", ")
+                : `${active.length} selected`
+          }
+        />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-52 p-1">
         <ul role="listbox" aria-label={label} aria-multiselectable="true">
@@ -111,10 +141,11 @@ function SingleSelect<T extends string>({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant={value ? "secondary" : "outline"} size="sm" className="max-w-44 gap-1.5">
-          <span className="truncate">{current ? current.label : label}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden="true" />
-        </Button>
+        <FilterTrigger
+          label={label}
+          active={Boolean(value)}
+          current={current ? current.label : "Any"}
+        />
       </PopoverTrigger>
       <PopoverContent align="start" className="max-h-72 w-56 overflow-y-auto p-1">
         <ul role="listbox" aria-label={label}>
@@ -144,14 +175,26 @@ function SingleSelect<T extends string>({
 export function FilterBar({ filters, onChange, projects, people, labelOptions = [] }: Props) {
   const [term, setTerm] = useState(filters.q ?? "");
 
+  // The URL is the source of truth: a view click or "Clear" resets the box.
+  useEffect(() => setTerm(filters.q ?? ""), [filters.q]);
+
+  // Search as you type, but not on every keystroke.
+  useEffect(() => {
+    const next = term.trim() || undefined;
+    if (next === filters.q) return;
+    const id = setTimeout(() => onChange({ q: next }), 350);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [term]);
+
   const submitSearch = (event: React.FormEvent) => {
     event.preventDefault();
     onChange({ q: term.trim() || undefined });
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-      <form onSubmit={submitSearch} className="relative min-w-48 flex-1">
+    <div className="flex flex-wrap items-center gap-2 border-b bg-surface px-6 py-3">
+      <form onSubmit={submitSearch} className="relative w-full min-w-48 sm:w-56">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden="true"
@@ -159,10 +202,10 @@ export function FilterBar({ filters, onChange, projects, people, labelOptions = 
         <Input
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="Search tickets…"
+          placeholder="Search title or #number"
           aria-label="Search tickets"
           data-search-input
-          className="h-9 pl-8 pr-8"
+          className="h-[34px] rounded-lg bg-card pl-8 pr-8 text-[13px]"
         />
         {term && (
           <button
@@ -257,6 +300,7 @@ export function FilterBar({ filters, onChange, projects, people, labelOptions = 
         <Button
           variant="ghost"
           size="sm"
+          className="h-[34px] px-2 text-primary hover:text-primary"
           onClick={() => {
             setTerm("");
             onChange({
@@ -276,7 +320,7 @@ export function FilterBar({ filters, onChange, projects, people, labelOptions = 
             });
           }}
         >
-          Clear all
+          Clear
         </Button>
       )}
     </div>

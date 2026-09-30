@@ -104,6 +104,25 @@ export const inviteClient = createServerFn({ method: "POST" })
         },
         { onConflict: "project_id,user_id" },
       );
+
+      // A client invited onto a company's project belongs to that company.
+      if (data.role !== "admin") {
+        const { data: project } = await a
+          .from("projects")
+          .select("organization_id")
+          .eq("id", data.projectId)
+          .maybeSingle();
+        if (project?.organization_id) {
+          await a.from("organization_members").upsert(
+            {
+              organization_id: project.organization_id,
+              user_id: userId,
+              workspace_id: data.workspaceId,
+            },
+            { onConflict: "organization_id,user_id" },
+          );
+        }
+      }
     }
     return { ok: true, userId };
   });
@@ -214,6 +233,59 @@ export const mergeOrganizations = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Puts a client login at one company (or at none). Replaces any earlier company
+ * for that person: the UI models "their company", and project access is a
+ * separate thing that stays untouched.
+ */
+export const setClientOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+        organizationId: z.string().uuid().nullable(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWorkspaceAdmin(context.userId, data.workspaceId);
+    const a = admin();
+
+    if (data.organizationId) {
+      const { data: org, error: orgError } = await a
+        .from("organizations")
+        .select("id")
+        .eq("id", data.organizationId)
+        .eq("workspace_id", data.workspaceId)
+        .maybeSingle();
+      if (orgError) throw new Error(orgError.message);
+      if (!org) throw new Error("That client is not in this workspace");
+
+      const { error } = await a.from("organization_members").upsert(
+        {
+          organization_id: data.organizationId,
+          user_id: data.userId,
+          workspace_id: data.workspaceId,
+        },
+        { onConflict: "organization_id,user_id" },
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    let cleanup = a
+      .from("organization_members")
+      .delete()
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+    if (data.organizationId) cleanup = cleanup.neq("organization_id", data.organizationId);
+    const { error: cleanupError } = await cleanup;
+    if (cleanupError) throw new Error(cleanupError.message);
+
+    return { ok: true };
+  });
+
 export const addProjectMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -248,6 +320,24 @@ export const addProjectMember = createServerFn({ method: "POST" })
       { onConflict: "project_id,user_id" },
     );
     if (insertError) throw new Error(insertError.message);
+
+    if (member.role !== "admin") {
+      const { data: project } = await a
+        .from("projects")
+        .select("organization_id")
+        .eq("id", data.projectId)
+        .maybeSingle();
+      if (project?.organization_id) {
+        await a.from("organization_members").upsert(
+          {
+            organization_id: project.organization_id,
+            user_id: data.userId,
+            workspace_id: data.workspaceId,
+          },
+          { onConflict: "organization_id,user_id" },
+        );
+      }
+    }
     return { ok: true };
   });
 

@@ -142,3 +142,54 @@ export function formatMinutes(minutes: number | null | undefined): string {
 export function elapsedMinutes(startedAt: string, now: number = Date.now()): number {
   return Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 60_000));
 }
+
+/** `h:mm:ss` for a running timer. */
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** Local `YYYY-MM-DD`, the key entries are grouped under. */
+export function localDayKey(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "Today", "Yesterday", otherwise "Mon, Sep 28". */
+export function dayLabel(key: string, now: Date = new Date()): string {
+  if (key === localDayKey(now)) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === localDayKey(yesterday)) return "Yesterday";
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export interface DayGroup<T> {
+  key: string;
+  entries: T[];
+  minutes: number;
+}
+
+/** Entries grouped by local day, newest day first, each with its total. */
+export function groupByDay<T extends { started_at: string; duration_minutes: number | null }>(
+  entries: readonly T[],
+): DayGroup<T>[] {
+  const map = new Map<string, T[]>();
+  for (const entry of entries) {
+    const key = localDayKey(entry.started_at);
+    const list = map.get(key);
+    if (list) list.push(entry);
+    else map.set(key, [entry]);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, list]) => ({ key, entries: list, minutes: totalMinutes(list) }));
+}

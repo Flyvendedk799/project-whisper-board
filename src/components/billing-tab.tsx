@@ -25,7 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { EmptyState, StatusPill } from "@/components/app-shell";
+import { EmptyState, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
@@ -88,7 +88,6 @@ export function BillingTab({
           empty={
             <Card>
               <EmptyState
-                icon={FileText}
                 title="No quotes yet"
                 description={
                   isAdmin
@@ -127,7 +126,6 @@ export function BillingTab({
           empty={
             <Card>
               <EmptyState
-                icon={Receipt}
                 title="No invoices yet"
                 description={
                   isAdmin

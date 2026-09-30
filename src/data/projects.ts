@@ -206,3 +206,39 @@ export function organizationsQuery(workspaceId: string | null | undefined) {
     },
   });
 }
+
+export type OrganizationMemberRow = { organization_id: string; user_id: string };
+
+/** Which client logins belong to which company. Admins see all; clients see their own company. */
+export function organizationMembersQuery(workspaceId: string | null | undefined) {
+  return queryOptions({
+    queryKey: [...qk.organizations(workspaceId ?? undefined), "members"] as const,
+    enabled: Boolean(workspaceId),
+    queryFn: async (): Promise<OrganizationMemberRow[]> => {
+      const { data, error } = await supabase
+        .from("organization_members")
+        .select("organization_id, user_id")
+        .eq("workspace_id", workspaceId!);
+      if (error) throw new DataError("organization_members.list", error);
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * Groups member rows by company, keeping only ids that are still people in the
+ * workspace (a removed member can linger here until the next refresh).
+ */
+export function peopleByOrganization<T extends { user_id: string }>(
+  links: OrganizationMemberRow[],
+  people: T[],
+): Map<string, T[]> {
+  const byUser = new Map(people.map((person) => [person.user_id, person]));
+  const grouped = new Map<string, T[]>();
+  for (const link of links) {
+    const person = byUser.get(link.user_id);
+    if (!person) continue;
+    grouped.set(link.organization_id, [...(grouped.get(link.organization_id) ?? []), person]);
+  }
+  return grouped;
+}

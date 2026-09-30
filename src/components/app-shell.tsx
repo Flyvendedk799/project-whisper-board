@@ -1,27 +1,7 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Bell,
-  Bug,
-  ChevronsUpDown,
-  BarChart3,
-  Building2,
-  Clock,
-  FolderKanban,
-  Home,
-  Inbox,
-  ListFilter,
-  LogOut,
-  Menu,
-  Moon,
-  Plus,
-  Settings,
-  Sun,
-  Ticket,
-  Users,
-  BrainCircuit,
-} from "lucide-react";
+import { Bug, ChevronsUpDown, Menu, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
@@ -35,10 +15,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotificationBell } from "@/components/notification-bell";
 import { unreadCountQuery } from "@/data/notifications";
+import { ticketCountsQuery } from "@/data/tickets";
 import { RunningTimerBar } from "@/features/time/running-timer-bar";
+import { buildNavGroups, isNavActive } from "@/components/nav-groups";
 import { runningTimerQuery } from "@/data/time";
 import { CommandPalette } from "@/components/command-palette";
+import { openCommandPalette } from "@/components/command-palette-events";
 
 function brandStyle(color: string | null | undefined): React.CSSProperties | undefined {
   const value = color?.trim() ?? "";
@@ -103,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background" style={branded}>
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
+      <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r bg-sidebar md:flex">
         <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
       </aside>
 
@@ -136,7 +120,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <CommandPalette />
-      <RunningTimerBar />
+      {/* The Time screen has its own, larger timer card. */}
+      {!location.pathname.startsWith("/app/time") && <RunningTimerBar />}
       {!location.pathname.startsWith("/app/projects/") &&
         location.pathname !== "/app/report" &&
         (isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />)}
@@ -152,8 +137,8 @@ function WorkspaceSwitcher() {
 
   if (workspaces.length <= 1) {
     return (
-      <div className="border-b px-5 py-5">
-        <Link to="/app" className="flex items-center gap-2 font-display text-2xl">
+      <div className="border-b px-5 pb-4 pt-5">
+        <Link to="/app" className="flex items-center gap-2 font-display text-[28px] leading-[1.1]">
           {workspace.logo_url ? (
             <img src={workspace.logo_url} alt="" className="h-8 w-8 rounded object-contain" />
           ) : null}
@@ -217,94 +202,134 @@ function WorkspaceSwitcher() {
   );
 }
 
+function SearchJumpButton({ onNavigate }: { onNavigate: () => void }) {
+  const [hint, setHint] = useState("⌘K");
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && !/mac|iphone|ipad/i.test(navigator.platform)) {
+      setHint("Ctrl K");
+    }
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onNavigate();
+        openCommandPalette();
+      }}
+      className="flex h-[34px] w-full items-center rounded-lg border bg-card px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted"
+    >
+      <span className="flex-1 text-left">Search or jump to…</span>
+      <kbd className="rounded border px-1.5 text-[11px] font-sans">{hint}</kbd>
+    </button>
+  );
+}
+
 function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, signOut, workspaceId } = useAuth();
 
-  const nav = [
-    { to: "/app", label: "Home", icon: Home, exact: true },
-    ...(isAdmin
-      ? [{ to: "/app/triage", label: "Triage", icon: ListFilter, exact: false }]
-      : [{ to: "/app/tickets", label: "My tickets", icon: Ticket, exact: true }]),
-    { to: "/app/projects", label: "Projects", icon: FolderKanban, exact: false },
-    ...(isAdmin
-      ? [
-          { to: "/app/organizations", label: "Clients", icon: Building2, exact: false },
-          { to: "/app/time", label: "Time", icon: Clock, exact: false },
-          { to: "/app/reports", label: "Reports", icon: BarChart3, exact: false },
-          { to: "/app/team", label: "Team", icon: Users, exact: false },
-          { to: "/app/planner", label: "AI Planner", icon: BrainCircuit, exact: false },
-        ]
-      : []),
-    { to: "/app/inbox", label: "Inbox", icon: Inbox, exact: false },
-    { to: "/app/settings", label: "Settings", icon: Settings, exact: false },
-  ];
+  const counts = useQuery({
+    ...ticketCountsQuery(user?.id ?? "", workspaceId),
+    enabled: Boolean(user && workspaceId && isAdmin),
+    refetchInterval: 60_000,
+  });
+  const unread = useQuery({
+    ...unreadCountQuery(),
+    enabled: Boolean(user),
+    refetchInterval: 60_000,
+  });
+
+  const groups = buildNavGroups({
+    isAdmin,
+    needsTriage: counts.data?.needsTriage ?? 0,
+    unread: unread.data ?? 0,
+  });
 
   return (
     <>
       <WorkspaceSwitcher />
 
-      <nav aria-label="Main" className="flex-1 space-y-0.5 px-2 py-3 text-sm">
-        {nav.map((item) => {
-          const active = item.exact
-            ? location.pathname === item.to
-            : location.pathname.startsWith(item.to);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-2 rounded-md px-3 py-2.5 transition-colors md:py-1.5 ${
-                active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-              }`}
-            >
-              <item.icon className="h-4 w-4" aria-hidden="true" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="space-y-2 px-3 pb-2">
-        {isAdmin ? (
-          <Button asChild className="w-full" variant="outline" onClick={onNavigate}>
-            <Link to="/app/report">
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              New ticket
-            </Link>
-          </Button>
-        ) : (
-          <Button asChild className="w-full" onClick={onNavigate}>
-            <Link to="/app/report">
-              <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Report an issue
-            </Link>
-          </Button>
-        )}
+      <div className="px-3 pb-1 pt-3">
+        <SearchJumpButton onNavigate={onNavigate} />
       </div>
 
-      <div className="space-y-2 border-t p-3">
-        <div className="px-2 text-xs">
-          <div className="truncate font-medium">
-            {user?.user_metadata?.full_name || user?.email}
+      <nav aria-label="Main" className="flex flex-1 flex-col gap-3.5 overflow-auto px-3 py-2">
+        {groups.map((group, index) => (
+          <div key={index} className="flex flex-col gap-0.5">
+            {group.map((item) => {
+              const active = isNavActive(item, location.pathname);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  search={item.search as never}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex h-[34px] items-center rounded-lg px-2.5 text-sm transition-colors max-md:h-11 ${
+                    active
+                      ? "bg-accent font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge ? (
+                    <span
+                      className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground"
+                      aria-label={`${item.badge} ${item.label === "Inbox" ? "unread" : "waiting"}`}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </div>
-          <div className="truncate text-muted-foreground">{user?.email}</div>
+        ))}
+      </nav>
+
+      <div className="px-3 pb-3">
+        <Button
+          asChild
+          className="h-[38px] w-full"
+          variant={isAdmin ? "outline" : "default"}
+          onClick={onNavigate}
+        >
+          <Link to="/app/report">
+            {isAdmin ? (
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            )}
+            {isAdmin ? "New ticket" : "Report an issue"}
+          </Link>
+        </Button>
+      </div>
+
+      <div className="space-y-2.5 border-t p-3">
+        <div
+          role="status"
+          title="Your role decides which view you get"
+          className="inline-flex rounded-lg bg-muted px-3 py-1 text-xs font-medium"
+        >
+          {isAdmin ? "Agency view" : "Client view"}
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-1 justify-start"
-            onClick={() => void signOut().then(() => navigate({ to: "/login" }))}
-          >
-            <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
-            Sign out
-          </Button>
+        <div className="flex items-center gap-2.5 px-1">
+          <div className="min-w-0 flex-1 text-xs">
+            <div className="truncate font-medium">
+              {user?.user_metadata?.full_name || user?.email}
+            </div>
+            <div className="truncate text-muted-foreground">{user?.email}</div>
+          </div>
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => void signOut().then(() => navigate({ to: "/login" }))}
+            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </>
@@ -325,57 +350,6 @@ export function ThemeToggle() {
       ) : (
         <Moon className="h-4 w-4" aria-hidden="true" />
       )}
-    </Button>
-  );
-}
-
-export function PageHeader({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: React.ReactNode;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="sticky top-14 z-20 border-b bg-background/60 backdrop-blur md:top-0">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 md:flex-row md:items-end md:justify-between md:gap-4 md:px-8 md:py-6">
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-2xl md:text-3xl">{title}</h1>
-          {description && <div className="mt-1 text-sm text-muted-foreground">{description}</div>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {action}
-          <span className="hidden md:inline-flex">
-            <NotificationBell />
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NotificationBell() {
-  const { user } = useAuth();
-  const { data: unread = 0 } = useQuery({ ...unreadCountQuery(), enabled: Boolean(user) });
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      asChild
-      className="relative h-11 w-11 md:h-9 md:w-9"
-      aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}
-    >
-      <Link to="/app/inbox">
-        <Bell className="h-4 w-4" aria-hidden="true" />
-        {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-            {unread > 99 ? "99+" : unread}
-          </span>
-        )}
-      </Link>
     </Button>
   );
 }
@@ -415,90 +389,13 @@ function AdminReportFab({ raised = false }: { raised?: boolean }) {
   );
 }
 
-export type Tone = "default" | "success" | "warning" | "info" | "destructive";
-
-const TONE_CLASS: Record<Tone, string> = {
-  default: "bg-muted text-muted-foreground",
-  success: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
-  info: "bg-info/15 text-info",
-  destructive: "bg-destructive/15 text-destructive",
-};
-
-export function StatusPill({
-  children,
-  tone = "default",
-  className = "",
-}: {
-  children: React.ReactNode;
-  tone?: Tone;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]} ${className}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-export function EmptyState({
-  icon: Icon,
-  title,
-  description,
-  action,
-}: {
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="px-6 py-12 text-center">
-      <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent">
-        <Icon className="h-6 w-6 text-primary" aria-hidden />
-      </div>
-      <h3 className="font-display text-2xl">{title}</h3>
-      {description && (
-        <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">{description}</p>
-      )}
-      {action && <div className="mt-5">{action}</div>}
-    </div>
-  );
-}
-
-export function ListSkeleton({ rows = 4 }: { rows?: number }) {
-  return (
-    <div className="space-y-3" aria-hidden="true">
-      {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-16 w-full" />
-      ))}
-    </div>
-  );
-}
-
-/** A labelled bar with the semantics the raw div it replaces never had. */
-export function ProgressBar({
-  value,
-  label,
-  className = "",
-}: {
-  value: number;
-  label: string;
-  className?: string;
-}) {
-  const clamped = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div
-      role="progressbar"
-      aria-valuenow={clamped}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={label}
-      className={`h-1.5 overflow-hidden rounded bg-muted ${className}`}
-    >
-      <div className="h-full bg-primary transition-all" style={{ width: `${clamped}%` }} />
-    </div>
-  );
-}
+export { PageHeader } from "@/components/page-header";
+export type { PageHeaderTab } from "@/components/page-header";
+export {
+  StatusPill,
+  EmptyState,
+  ListSkeleton,
+  ProgressBar,
+  Segmented,
+} from "@/components/status-pill";
+export type { Tone, SegmentedOption } from "@/components/status-pill";

@@ -31,7 +31,7 @@ export function TicketBoard({
   };
 
   return (
-    <div className="flex h-full gap-3 overflow-x-auto p-3">
+    <div className="flex h-full items-start gap-3.5 overflow-x-auto px-6 py-5">
       {TICKET_BOARD_ORDER.map((status) => {
         const column = byStatus.get(status) ?? [];
         return (
@@ -50,16 +50,18 @@ export function TicketBoard({
               if (id) onMove(id, status);
               setDragging(null);
             }}
-            className={`flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 ${
+            className={`flex w-[264px] shrink-0 flex-col gap-2.5 rounded-[14px] border bg-surface p-3 transition-colors ${
               over === status ? "border-primary bg-accent/40" : ""
             }`}
           >
-            <header className="flex items-center justify-between border-b px-3 py-2">
-              <h3 className="text-sm font-medium">{TICKET_STATUS_LABEL[status]}</h3>
+            <header className="flex items-center px-1">
+              <h3 className="flex-1 font-display text-xl leading-tight">
+                {TICKET_STATUS_LABEL[status]}
+              </h3>
               <span className="text-xs tabular-nums text-muted-foreground">{column.length}</span>
             </header>
 
-            <ul className="flex-1 space-y-2 overflow-y-auto p-2">
+            <ul className="space-y-2.5">
               {column.map((ticket) => (
                 <li
                   key={ticket.id}
@@ -89,7 +91,10 @@ export function TicketBoard({
                 </li>
               ))}
               {column.length === 0 && (
-                <li className="px-2 py-6 text-center text-xs text-muted-foreground">
+                <li
+                  className="px-2 py-6 text-center text-xs text-muted-foreground"
+                  aria-hidden="true"
+                >
                   Nothing here
                 </li>
               )}

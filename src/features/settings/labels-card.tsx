@@ -35,9 +35,9 @@ export function LabelsCard() {
   return (
     <QueryState query={labels} errorTitle="Couldn't load labels">
       {(rows) => (
-        <Card className="space-y-4 p-5">
+        <Card className="space-y-4 rounded-[14px] p-5">
           <div>
-            <h2 className="font-display text-xl">Labels</h2>
+            <h2 className="font-display text-[22px] leading-tight">Labels</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               A shared palette so tickets don&rsquo;t collect a new spelling of the same word.
               Tickets already using a name keep it if you delete the palette entry.

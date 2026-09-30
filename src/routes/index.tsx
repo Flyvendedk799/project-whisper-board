@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Bug, CheckCircle2, Receipt, Video } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -53,7 +52,7 @@ function Landing() {
         <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-widest mb-5 md:mb-6">
           Agency workspace · Client portal
         </p>
-        <h1 className="font-display text-4xl md:text-7xl leading-[1.05] tracking-tight">
+        <h1 className="font-display text-4xl md:text-[84px] leading-[1.02] tracking-[-0.02em]">
           They point at the problem.
           <br className="hidden md:block" /> You ship the fix.
         </h1>
@@ -63,9 +62,7 @@ function Landing() {
         </p>
         <div className="mt-8 md:mt-10 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:mx-auto sm:max-w-none sm:flex-row sm:items-center">
           <Button size="lg" asChild className="w-full sm:w-auto sm:min-w-[12rem]">
-            <Link to="/signup">
-              Create your workspace <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Link>
+            <Link to="/signup">Create your workspace →</Link>
           </Button>
           <Button size="lg" variant="outline" asChild className="w-full sm:w-auto sm:min-w-[12rem]">
             <Link to="/login">I have an account</Link>
@@ -82,16 +79,16 @@ function Landing() {
           <p className="text-center text-muted-foreground mt-3 max-w-xl mx-auto">
             Every screen is a step in this, or a view of where something sits in it.
           </p>
-          <div className="mt-12 grid md:grid-cols-3 gap-8">
-            <Step n="01" icon={<Video />} title="Report">
+          <div className="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
+            <Step n="01" title="Report">
               The client records the screen or pastes a screenshot and says what went wrong. No AI
               required to send it.
             </Step>
-            <Step n="02" icon={<Bug />} title="Work">
+            <Step n="02" title="Work">
               Triage the ticket, track time, and plan the work. People and agents share the same
               queue. A merged pull request moves the ticket forward.
             </Step>
-            <Step n="03" icon={<Receipt />} title="Get paid">
+            <Step n="03" title="Get paid">
               The client sees updates and milestone progress. A finished milestone leads to the
               invoice they can approve and pay.
             </Step>
@@ -99,35 +96,15 @@ function Landing() {
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-4 md:px-6 py-16 md:py-24">
-        <h2 className="font-display text-3xl md:text-5xl text-center">What you can do today</h2>
-        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Tile label="Tickets with capture" />
-          <Tile label="Triage and SLAs" />
-          <Tile label="Projects and milestones" />
-          <Tile label="Quotes and invoices" />
-          <Tile label="Time tracking" />
-          <Tile label="Client portal" />
-          <Tile label="Planner for agents" />
-          <Tile label="Reports" />
-        </div>
-        <p className="mt-8 text-center text-sm text-muted-foreground">
-          AI drafting, summaries, and triage suggestions appear only after you configure a provider
-          in Settings.
-        </p>
-      </section>
-
-      <section className="border-t">
-        <div className="max-w-3xl mx-auto px-4 md:px-6 py-20 md:py-28 text-center">
-          <h2 className="font-display text-4xl md:text-6xl">Invite a client. Get a ticket.</h2>
+      <section>
+        <div className="max-w-3xl mx-auto px-4 md:px-6 py-16 md:py-20 text-center">
+          <h2 className="font-display text-4xl md:text-5xl">Invite a client. Get a ticket.</h2>
           <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
             Create a workspace, add a project, and send an invite. They can report from their phone.
           </p>
           <div className="mt-8">
             <Button size="lg" asChild>
-              <Link to="/signup">
-                Start free <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Link>
+              <Link to="/signup">Start free →</Link>
             </Button>
           </div>
         </div>
@@ -143,38 +120,12 @@ function Landing() {
   );
 }
 
-function Step({
-  n,
-  icon,
-  title,
-  children,
-}: {
-  n: string;
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-}) {
+function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="font-display text-3xl text-muted-foreground">{n}</span>
-        <div className="h-9 w-9 rounded-md bg-background border text-primary grid place-items-center [&>svg]:h-4 [&>svg]:w-4">
-          {icon}
-        </div>
-      </div>
-      <h3 className="font-display text-2xl">{title}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed">{children}</p>
-    </div>
-  );
-}
-
-function Tile({ label }: { label: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-5">
-      <div className="flex items-start gap-2 font-medium">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-        {label}
-      </div>
+    <div>
+      <div className="font-display text-[40px] leading-none text-muted-foreground/60">{n}</div>
+      <h3 className="mt-2 font-display text-[28px] leading-tight">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</p>
     </div>
   );
 }

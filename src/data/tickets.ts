@@ -58,9 +58,6 @@ const SORT: Record<
   priority: { column: "priority", ascending: true },
 };
 
-const countBuilder = () => supabase.from("tickets").select("id", { count: "exact", head: true });
-type CountBuilder = ReturnType<typeof countBuilder>;
-
 /**
  * The slice of a PostgREST builder these filters need, expressed structurally
  * so the same function works on the list select and the head-only count select
@@ -182,38 +179,60 @@ export function ticketListQuery(
   });
 }
 
+export interface QueueCounts {
+  allOpen: number;
+  needsTriage: number;
+  unassigned: number;
+  awaiting: number;
+  breached: number;
+  atRisk: number;
+  mine: number;
+  closed: number;
+}
+
+const ZERO_COUNTS: QueueCounts = {
+  allOpen: 0,
+  needsTriage: 0,
+  unassigned: 0,
+  awaiting: 0,
+  breached: 0,
+  atRisk: 0,
+  mine: 0,
+  closed: 0,
+};
+
 /**
- * The counts beside each saved view in the queue rail. `head: true` means
- * Postgres returns the count without any rows, so six of these is cheaper than
- * fetching one page of tickets.
+ * The RPC returns jsonb, so every field is read defensively: a missing or
+ * non-numeric key becomes 0 rather than `undefined` leaking into a badge.
+ */
+export function parseQueueCounts(raw: unknown): QueueCounts {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { ...ZERO_COUNTS };
+  const source = raw as Record<string, unknown>;
+  const out = { ...ZERO_COUNTS };
+  for (const key of Object.keys(ZERO_COUNTS) as Array<keyof QueueCounts>) {
+    const value = Number(source[key]);
+    out[key] = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }
+  return out;
+}
+
+/**
+ * Every number beside a view in the queue rail, the sidebar badge and the home
+ * tiles, from one SQL function (see `ticket_queue_counts`). It runs as the
+ * caller, so row level security decides what is counted.
  */
 export function ticketCountsQuery(viewerId: string, workspaceId: string | null | undefined) {
   return queryOptions({
-    queryKey: [...qk.ticketCounts(), workspaceId ?? "none"] as const,
-    enabled: Boolean(workspaceId),
-    queryFn: async () => {
-      const now = new Date().toISOString();
-      const soon = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const open = closedList();
-
-      const bucket = async (label: string, build: (q: CountBuilder) => CountBuilder) => {
-        const { count, error } = await build(countBuilder().eq("workspace_id", workspaceId!));
-        if (error) throw new DataError(`tickets.count.${label}`, error);
-        return count ?? 0;
-      };
-
-      const [needsTriage, unassigned, awaiting, breached, atRisk, mine] = await Promise.all([
-        bucket("needs_triage", (q) => q.eq("status", "open")),
-        bucket("unassigned", (q) => q.is("assignee_id", null).not("status", "in", open)),
-        bucket("awaiting", (q) => q.is("first_response_at", null).not("status", "in", open)),
-        bucket("breached", (q) => q.lt("sla_due_at", now).not("status", "in", open)),
-        bucket("at_risk", (q) =>
-          q.gt("sla_due_at", now).lt("sla_due_at", soon).not("status", "in", open),
-        ),
-        bucket("mine", (q) => q.eq("assignee_id", viewerId).not("status", "in", open)),
-      ]);
-
-      return { needsTriage, unassigned, awaiting, breached, atRisk, mine };
+    queryKey: [...qk.ticketCounts(), workspaceId ?? "none", viewerId] as const,
+    enabled: Boolean(workspaceId && viewerId),
+    staleTime: 15_000,
+    queryFn: async (): Promise<QueueCounts> => {
+      const { data, error } = await supabase.rpc("ticket_queue_counts", {
+        _workspace_id: workspaceId!,
+        _viewer_id: viewerId,
+      });
+      if (error) throw new DataError("tickets.counts", error);
+      return parseQueueCounts(data);
     },
   });
 }

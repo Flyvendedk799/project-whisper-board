@@ -36,6 +36,7 @@ import { useHotkeys, SHORTCUTS } from "@/lib/use-hotkeys";
 import { ticketSearchQuery } from "@/data/tickets";
 import { projectSearchQuery } from "@/data/projects";
 import { TICKET_STATUS_LABEL } from "@/data/enums";
+import { OPEN_EVENT } from "@/components/command-palette-events";
 
 /**
  * ⌘K.
@@ -69,6 +70,12 @@ export function CommandPalette() {
     enabled: open && Boolean(workspaceId) && debounced.length >= 2,
   });
 
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_EVENT, onOpen);
+  }, []);
+
   useHotkeys({
     "mod+k": () => setOpen((value) => !value),
     "?": () => setShortcutsOpen(true),
@@ -99,7 +106,7 @@ export function CommandPalette() {
     <>
       <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Find anything">
         <CommandInput
-          placeholder="Search tickets, projects, or type a command…"
+          placeholder="Jump to a screen or ticket"
           value={term}
           onValueChange={setTerm}
         />
@@ -256,9 +263,20 @@ export function CommandPalette() {
               onSelect={() => run(() => void navigate({ to: "/app/report" }))}
             >
               <Bug className="mr-2 h-4 w-4" aria-hidden="true" />
-              Report an issue
+              {isAdmin ? "New ticket" : "Report an issue"}
               <CommandShortcut>c</CommandShortcut>
             </CommandItem>
+            {isAdmin && (
+              <CommandItem
+                value="log-time"
+                onSelect={() =>
+                  run(() => void navigate({ to: "/app/time", search: { log: true } }))
+                }
+              >
+                <Clock className="mr-2 h-4 w-4" aria-hidden="true" />
+                Log time
+              </CommandItem>
+            )}
             {isAdmin && (
               <CommandItem
                 value="new-project"

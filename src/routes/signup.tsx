@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
+import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
 import { createWorkspace } from "@/lib/workspace.functions";
 import { useAuth } from "@/components/auth-provider";
@@ -25,9 +25,15 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Step one only collects the account; the agency name comes next.
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
     setBusy(true);
     // Persist name so create-workspace can prefill after email confirmation.
     try {
@@ -78,87 +84,117 @@ function SignupPage() {
 
   if (checkEmail) {
     return (
-      <div className="min-h-screen grid place-items-center px-4">
-        <Card className="w-full max-w-md space-y-4 p-8 text-center">
-          <h1 className="text-3xl font-display">Check your email</h1>
-          <p className="text-sm text-muted-foreground">
+      <AuthCard
+        title="Check your email"
+        subtitle={
+          <>
             We sent a confirmation link to <strong>{email}</strong>. After you confirm, you&rsquo;ll
             finish creating <strong>{workspaceName || "your workspace"}</strong>.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Already confirmed?{" "}
-            <Link to="/login" search={{ continue: "workspace" }} className="text-primary underline">
-              Sign in to create your workspace
-            </Link>
-            .
-          </p>
-          <Button asChild variant="outline">
-            <Link to="/login" search={{ continue: "workspace" }}>
-              Continue to create workspace
-            </Link>
-          </Button>
-        </Card>
-      </div>
+          </>
+        }
+      >
+        <p className="text-center text-xs text-muted-foreground">
+          Already confirmed?{" "}
+          <Link to="/login" search={{ continue: "workspace" }} className="text-primary underline">
+            Sign in to create your workspace
+          </Link>
+          .
+        </p>
+        <Button asChild variant="outline" className="h-11 w-full">
+          <Link to="/login" search={{ continue: "workspace" }}>
+            Continue to create workspace
+          </Link>
+        </Button>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="min-h-screen grid place-items-center px-4">
-      <Card className="w-full max-w-md space-y-6 p-8">
-        <div className="space-y-1 text-center">
-          <h1 className="text-3xl font-display">Create your workspace</h1>
-          <p className="text-sm text-muted-foreground">
-            Your agency portal — invite clients, run tickets, and bill from one place.
-          </p>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ws-name">Agency / workspace name</Label>
-            <Input
-              id="ws-name"
-              required
-              value={workspaceName}
-              onChange={(e) => setWorkspaceName(e.target.value)}
-              placeholder="Northwind Studio"
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="name">Your name</Label>
-            <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "Creating…" : "Create workspace"}
-          </Button>
-        </form>
-        <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link to="/login" className="text-primary underline">
-            Sign in
-          </Link>
-        </p>
-      </Card>
-    </div>
+    <AuthCard
+      title="Create your workspace"
+      subtitle="Two steps: your account, then your agency name."
+      width="max-w-[440px]"
+    >
+      <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        Step {step} of 2
+      </p>
+      <form onSubmit={submit} className="space-y-4">
+        {step === 1 ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="name">Your name</Label>
+              <Input
+                id="name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="h-11 w-full">
+              Continue
+            </Button>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="ws-name">Agency / workspace name</Label>
+              <Input
+                id="ws-name"
+                required
+                value={workspaceName}
+                onChange={(e) => setWorkspaceName(e.target.value)}
+                placeholder="Northwind Studio"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Clients you invite will see this name in their portal.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                disabled={busy}
+                onClick={() => setStep(1)}
+              >
+                Back
+              </Button>
+              <Button type="submit" className="h-11 flex-1" disabled={busy}>
+                {busy ? "Creating…" : "Create workspace"}
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link to="/login" className="text-primary underline">
+          Sign in
+        </Link>
+      </p>
+    </AuthCard>
   );
 }

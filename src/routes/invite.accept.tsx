@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { AuthCard } from "@/features/auth/auth-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
@@ -108,50 +108,38 @@ function InviteAcceptPage() {
 
   if (needsWorkspace) {
     return (
-      <div className="grid min-h-screen place-items-center px-4">
-        <Card className="w-full max-w-md space-y-4 p-8 text-center">
-          <h1 className="font-display text-2xl">Invitation not found</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account is signed in, but you haven&rsquo;t been added to a workspace yet. Ask your
-            agency to resend the invite.
-          </p>
-          <Button asChild variant="outline">
-            <Link to="/app">Go to home</Link>
-          </Button>
-        </Card>
-      </div>
+      <AuthCard
+        title="Invitation not found"
+        subtitle="Your account is signed in, but you haven’t been added to a workspace yet. Ask your agency to resend the invite."
+      >
+        <Button asChild variant="outline" className="h-11 w-full">
+          <Link to="/app">Go to home</Link>
+        </Button>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="grid min-h-screen place-items-center px-4">
-      <Card className="w-full max-w-md space-y-6 p-8">
-        <div className="space-y-1 text-center">
-          <h1 className="font-display text-3xl">
-            Welcome{workspace ? ` to ${workspace.name}` : ""}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            You&rsquo;ve been invited to the client portal. Set a password so you can sign in again
-            later, then jump in.
-          </p>
+    <AuthCard
+      title={`Welcome${workspace ? ` to ${workspace.name}` : ""}`}
+      subtitle="You’ve been invited to the client portal. Set a password so you can sign in again later, then jump in."
+    >
+      <form onSubmit={setPasswordAndContinue} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="pw">Choose a password (optional)</Label>
+          <Input
+            id="pw"
+            type="password"
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 6 characters"
+          />
         </div>
-        <form onSubmit={setPasswordAndContinue} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="pw">Choose a password (optional)</Label>
-            <Input
-              id="pw"
-              type="password"
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "Saving…" : resolvedProjectId ? "Open project" : "Continue"}
-          </Button>
-        </form>
-      </Card>
-    </div>
+        <Button type="submit" className="h-11 w-full" disabled={busy}>
+          {busy ? "Saving…" : resolvedProjectId ? "Open project" : "Continue"}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

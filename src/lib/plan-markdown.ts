@@ -15,10 +15,19 @@
  * Outline keys are stripped from stored titles and regenerated on export.
  */
 
+/** One line of a task's checklist. `depth` is 0 for a top-level step. */
+export type PlanMdStep = {
+  text: string;
+  done: boolean;
+  depth: number;
+};
+
 export type PlanMdTask = {
   title: string;
   /** Body paragraphs plus nested outline folded as a markdown list. */
   description: string;
+  /** `- [ ]` / `- [x]` lines under the task. Stored as plan_task_steps. */
+  steps?: PlanMdStep[];
 };
 
 export type PlanMdSection = {
@@ -34,19 +43,43 @@ export type PlanMdDocument = {
 export type PlanMdPreviewNode = {
   title: string;
   children: PlanMdPreviewNode[];
+  /** Set on checklist lines so the dialog can draw a box. */
+  step?: { done: boolean };
 };
+
+type CheckState = "open" | "done";
 
 type OutlineNode = {
   title: string;
   body: string;
   children: OutlineNode[];
+  check?: CheckState;
 };
 
 type FlatItem = {
   depth: number;
   title: string;
   bodyLines: string[];
+  check?: CheckState;
 };
+
+export const MAX_STEP_DEPTH = 3;
+export const STEP_TEXT_MAX = 500;
+
+/** `[ ] text` / `[x] text` at the start of a list item's title. */
+const CHECKBOX = /^\[(?<mark>[ xX])\]\s+(?<rest>\S.*)$/;
+/** A whole checklist line, at any indentation. */
+const CHECKLIST_LINE = /^(?<indent>[ \t]*)[-*+]\s+\[(?<mark>[ xX])\]\s+(?<text>\S.*)$/;
+const PLAIN_LIST_LINE = /^(?<indent>[ \t]*)(?:[-*+]|\d+\.)\s+(?<text>\S.*)$/;
+
+function readCheck(title: string): { title: string; check?: CheckState } {
+  const match = title.match(CHECKBOX);
+  if (!match?.groups) return { title };
+  return {
+    title: match.groups.rest.trim(),
+    check: match.groups.mark === " " ? "open" : "done",
+  };
+}
 
 const SECTION_TITLE_MAX = 100;
 const TASK_TITLE_MAX = 200;
@@ -188,10 +221,12 @@ function parseFlatItems(source: string): FlatItem[] {
     for (const line of lines) {
       const list = line.match(LIST_ITEM);
       if (list?.groups) {
+        const read = readCheck(list.groups.title.trim());
         current = {
           depth: listDepth(list.groups.indent),
-          title: list.groups.title.trim(),
+          title: read.title,
           bodyLines: [],
+          ...(read.check && { check: read.check }),
         };
         items.push(current);
         continue;
@@ -215,10 +250,12 @@ function parseFlatItems(source: string): FlatItem[] {
     const list = line.match(LIST_ITEM);
     if (list?.groups && lastStructuralDepth > 0) {
       const depth = lastStructuralDepth + listDepth(list.groups.indent);
+      const read = readCheck(list.groups.title.trim());
       current = {
         depth,
-        title: list.groups.title.trim(),
+        title: read.title,
         bodyLines: [],
+        ...(read.check && { check: read.check }),
       };
       items.push(current);
       continue;
@@ -240,6 +277,7 @@ function buildTree(items: FlatItem[]): OutlineNode[] {
       title: item.title,
       body: joinBody(item.bodyLines),
       children: [],
+      ...(item.check && { check: item.check }),
     };
 
     while (stack.length > 0 && stack[stack.length - 1].depth >= item.depth) {
@@ -261,7 +299,8 @@ function serializeNestedList(nodes: OutlineNode[], indent = 0): string {
   const pad = "  ".repeat(indent);
   return nodes
     .map((node) => {
-      const chunks: string[] = [`${pad}- ${node.title}`];
+      const box = node.check ? `[${node.check === "done" ? "x" : " "}] ` : "";
+      const chunks: string[] = [`${pad}- ${box}${node.title}`];
       if (node.body) {
         for (const line of node.body.split("\n")) {
           chunks.push(`${pad}  ${line}`);
@@ -282,16 +321,52 @@ function foldTaskDescription(body: string, nested: OutlineNode[]): string {
   return parts.join("\n\n");
 }
 
+/**
+ * Checked children of a task become its steps. Anything indented under a step
+ * is a deeper step, whether or not it carries its own box.
+ */
+function collectSteps(children: OutlineNode[]): { steps: PlanMdStep[]; rest: OutlineNode[] } {
+  const steps: PlanMdStep[] = [];
+  const rest: OutlineNode[] = [];
+
+  const take = (node: OutlineNode, depth: number) => {
+    const text = collapseSpaces(node.title).slice(0, STEP_TEXT_MAX);
+    if (text) {
+      steps.push({
+        text,
+        done: node.check === "done",
+        depth: Math.min(depth, MAX_STEP_DEPTH),
+      });
+    }
+    for (const child of node.children) take(child, depth + 1);
+  };
+
+  for (const child of children) {
+    if (child.check) take(child, 0);
+    else rest.push(child);
+  }
+  return { steps, rest };
+}
+
+/** Step text keeps its inline markdown (it is rendered as text, not a title). */
+function collapseSpaces(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function treeToDocument(roots: OutlineNode[]): PlanMdDocument {
   if (roots.length === 0) return { sections: [] };
 
   return {
     sections: roots.map((section) => ({
       title: clampTitle(section.title || "Untitled section", SECTION_TITLE_MAX),
-      tasks: section.children.map((task) => ({
-        title: clampTitle(task.title || "Untitled task", TASK_TITLE_MAX),
-        description: foldTaskDescription(task.body, task.children),
-      })),
+      tasks: section.children.map((task) => {
+        const { steps, rest } = collectSteps(task.children);
+        return {
+          title: clampTitle(task.title || "Untitled task", TASK_TITLE_MAX),
+          description: foldTaskDescription(task.body, rest),
+          steps,
+        };
+      }),
     })),
   };
 }
@@ -387,10 +462,12 @@ function unfoldDescription(description: string): { body: string; nested: Outline
     }
     const list = line.match(LIST_ITEM);
     if (list?.groups) {
+      const read = readCheck(list.groups.title.trim());
       current = {
         depth: listDepth(list.groups.indent),
-        title: list.groups.title.trim(),
+        title: read.title,
         bodyLines: [],
+        ...(read.check && { check: read.check }),
       };
       nestedItems.push(current);
       continue;
@@ -435,7 +512,9 @@ export function readTaskOutline(description: string | null | undefined): {
 function emitNumbered(nodes: OutlineNode[], prefix: string, lines: string[]) {
   nodes.forEach((node, index) => {
     const key = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
-    lines.push(`${key} ${node.title}`);
+    lines.push(
+      `${key} ${node.check ? `[${node.check === "done" ? "x" : " "}] ` : ""}${node.title}`,
+    );
     if (node.body) {
       lines.push(node.body);
     }
@@ -455,9 +534,10 @@ export function serializePlanMarkdown(doc: PlanMdDocument): string {
     body: "",
     children: section.tasks.map((task) => {
       const { body, nested } = unfoldDescription(task.description ?? "");
+      const checklist = stepsToMarkdown(task.steps ?? []);
       return {
         title: task.title,
-        body,
+        body: [body, checklist].filter(Boolean).join("\n"),
         children: nested,
       };
     }),
@@ -484,9 +564,14 @@ export function planMarkdownPreview(doc: PlanMdDocument): PlanMdPreviewNode[] {
           title: n.title,
           children: nestedPreview(n.children),
         }));
+      const stepPreview: PlanMdPreviewNode[] = (task.steps ?? []).map((step) => ({
+        title: step.text,
+        children: [],
+        step: { done: step.done },
+      }));
       return {
         title: task.title,
-        children: nestedPreview(nested),
+        children: [...stepPreview, ...nestedPreview(nested)],
       };
     }),
   }));
@@ -512,5 +597,100 @@ export function planMarkdownStats(doc: PlanMdDocument): {
   return {
     sections: doc.sections.length,
     tasks: doc.sections.reduce((n, s) => n + s.tasks.length, 0),
+  };
+}
+
+/** Number of checklist steps across the document, for the import summary. */
+export function planMarkdownStepCount(doc: PlanMdDocument): number {
+  return doc.sections.reduce(
+    (n, section) => n + section.tasks.reduce((m, task) => m + (task.steps?.length ?? 0), 0),
+    0,
+  );
+}
+
+/** `- [ ] text` lines, two spaces of indent per level. */
+export function stepsToMarkdown(steps: readonly PlanMdStep[]): string {
+  return steps
+    .filter((step) => step.text.trim().length > 0)
+    .map((step) => {
+      const depth = Math.max(0, Math.min(MAX_STEP_DEPTH, Math.round(step.depth)));
+      return `${"  ".repeat(depth)}- [${step.done ? "x" : " "}] ${step.text.trim()}`;
+    })
+    .join("\n");
+}
+
+function indentDepth(indent: string): number {
+  const spaces = indent.replace(/\t/g, "  ").length;
+  return Math.min(MAX_STEP_DEPTH, Math.floor(spaces / 2));
+}
+
+/**
+ * Pulls checklist lines out of free text. Returns the steps and what is left
+ * of the text. With `plainLists`, ordinary `-` / `1.` list items count too,
+ * which is how an old description full of nested bullets becomes a checklist.
+ */
+export function splitDescriptionSteps(
+  description: string | null | undefined,
+  options: { plainLists?: boolean } = {},
+): { description: string; steps: PlanMdStep[] } {
+  const steps: PlanMdStep[] = [];
+  const kept: string[] = [];
+
+  for (const line of (description ?? "").replace(/\r\n/g, "\n").split("\n")) {
+    const check = line.match(CHECKLIST_LINE);
+    if (check?.groups) {
+      steps.push({
+        text: collapseSpaces(check.groups.text).slice(0, STEP_TEXT_MAX),
+        done: check.groups.mark !== " ",
+        depth: indentDepth(check.groups.indent),
+      });
+      continue;
+    }
+    if (options.plainLists) {
+      const plain = line.match(PLAIN_LIST_LINE);
+      if (plain?.groups) {
+        steps.push({
+          text: collapseSpaces(plain.groups.text).slice(0, STEP_TEXT_MAX),
+          done: false,
+          depth: indentDepth(plain.groups.indent),
+        });
+        continue;
+      }
+    }
+    kept.push(line);
+  }
+
+  return { description: joinBody(kept), steps };
+}
+
+/** Steps written as a checklist in `text`. */
+export function parseChecklist(text: string): PlanMdStep[] {
+  return splitDescriptionSteps(text).steps;
+}
+
+/**
+ * A step may only sit one level under the step above it, so the list always
+ * reads as a tree. Returns the depth to store.
+ */
+export function clampStepDepth(
+  steps: ReadonlyArray<{ depth: number }>,
+  index: number,
+  wanted: number,
+): number {
+  const previous = index > 0 ? steps[index - 1].depth : -1;
+  return Math.max(0, Math.min(MAX_STEP_DEPTH, wanted, previous + 1));
+}
+
+/** `done / total`, plus a whole-number percent for the bar. */
+export function stepsProgress(steps: ReadonlyArray<{ done: boolean }>): {
+  done: number;
+  total: number;
+  percent: number;
+} {
+  const done = steps.filter((step) => step.done).length;
+  return {
+    done,
+    total: steps.length,
+    percent: steps.length === 0 ? 0 : Math.round((done / steps.length) * 100),
   };
 }

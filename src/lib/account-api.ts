@@ -6,6 +6,7 @@ import { verifyApiKey } from "@/lib/api-auth";
 import { allowsAccount } from "@/lib/api-scopes";
 import { matchAccountRoute } from "@/lib/account-route";
 import { parseRepoSlug } from "@/lib/github-url";
+import { decoratePlanForAgents } from "@/features/planner/agent-media";
 import {
   taskDescriptionFromTicket,
   taskTitleFromTicket,
@@ -163,7 +164,7 @@ export async function handleAccountRequest(
           "GET|PATCH /api/v1/tickets/:id",
           "POST /api/v1/tickets/:id/tasks",
           "GET /api/v1/plans",
-          "GET /api/v1/plans/:id",
+          "GET /api/v1/plans/:id (tasks include steps and agent-shared attachments)",
           "POST /api/v1/plans/:id/tasks",
         ],
       });
@@ -306,12 +307,13 @@ export async function handleAccountRequest(
     if (match.name === "plan" && request.method === "GET") {
       const { data, error } = await admin
         .from("plans")
-        .select("*, plan_sections(*, plan_tasks(*))")
+        .select("*, plan_sections(*, plan_tasks(*, steps:plan_task_steps(*)))")
         .eq("workspace_id", workspaceId)
         .eq("id", match.id)
         .single();
       if (error) throw new Error("Not found: plan");
-      return json(data);
+      // Tasks carry their sub-steps and the files shared with agents (signed URLs).
+      return json(await decoratePlanForAgents(admin, data));
     }
 
     if (match.name === "planTasks" && request.method === "POST") {

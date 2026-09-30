@@ -7,6 +7,7 @@ import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
 import { getPaymentsProvider } from "@/lib/providers";
 import { deliver, type NotifyTarget } from "@/lib/notifications.functions";
+import { milestoneInvoiceDraft } from "@/data/billing";
 
 function adminClient() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -309,6 +310,85 @@ export const createInvoice = createServerFn({ method: "POST" })
       }
 
       return { id: invoice.id, number: invoice.number };
+    }),
+  );
+
+/**
+ * Marks a milestone done and, when it carries an amount, drafts the invoice for
+ * it so the agency only has to review and send. The draft is skipped when the
+ * milestone has no amount or already has an invoice, so marking done twice (or
+ * re-opening and finishing again) never bills twice.
+ */
+export const completeMilestone = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({ milestoneId: z.string().uuid(), draftInvoice: z.boolean().default(true) })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("billing.completeMilestone", async () => {
+      const { supabase } = context;
+      const { data: milestone, error: readError } = await supabase
+        .from("milestones")
+        .select("id, title, project_id, amount_cents, due_date, status")
+        .eq("id", data.milestoneId)
+        .maybeSingle();
+      if (readError) throw readError;
+      const found = requireFound(milestone, "That milestone no longer exists.");
+
+      const { error } = await supabase
+        .from("milestones")
+        .update({ status: "done" })
+        .eq("id", found.id);
+      if (error) throw error;
+
+      let invoiceId: string | null = null;
+      if (data.draftInvoice && (found.amount_cents ?? 0) > 0) {
+        const { data: existing, error: existingError } = await supabase
+          .from("invoices")
+          .select("id")
+          .eq("milestone_id", found.id)
+          .limit(1);
+        if (existingError) throw existingError;
+
+        if ((existing ?? []).length === 0) {
+          const { data: project, error: projectError } = await supabase
+            .from("projects")
+            .select("currency")
+            .eq("id", found.project_id)
+            .maybeSingle();
+          if (projectError) throw projectError;
+          const draft = milestoneInvoiceDraft(found, project?.currency ?? "USD");
+
+          const { data: invoice, error: invoiceError } = await supabase
+            .from("invoices")
+            .insert({
+              project_id: found.project_id,
+              milestone_id: found.id,
+              currency: draft.currency,
+              subtotal_cents: draft.amountCents,
+              amount_cents: draft.amountCents,
+              tax_bps: 0,
+              status: "draft",
+            })
+            .select("id")
+            .single();
+          if (invoiceError) throw invoiceError;
+          invoiceId = invoice.id;
+
+          const { error: lineError } = await supabase.from("invoice_line_items").insert({
+            invoice_id: invoice.id,
+            description: draft.description,
+            unit_price_cents: draft.amountCents,
+            quantity: 1,
+            position: 0,
+          });
+          if (lineError) throw lineError;
+        }
+      }
+
+      return { ok: true as const, invoiceId };
     }),
   );
 
