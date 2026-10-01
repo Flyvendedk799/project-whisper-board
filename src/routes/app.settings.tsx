@@ -28,6 +28,7 @@ import { getGitHubStatus } from "@/lib/github.functions";
 
 import { getIntegrationStatus, listAppErrors, listOutbox } from "@/lib/admin-views.functions";
 import { updateWorkspace } from "@/lib/workspace.functions";
+import { ApiKeyManager } from "@/features/settings/api-key-manager";
 import { SlaPoliciesCard } from "@/features/settings/sla-policies-card";
 import { LabelsCard } from "@/features/settings/labels-card";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,7 +48,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/app/settings")({
   validateSearch: z.object({
     tab: z
-      .enum(["you", "notifications", "sla", "labels", "integrations", "outbox", "errors"])
+      .enum(["you", "notifications", "sla", "labels", "integrations", "api", "outbox", "errors"])
       .optional(),
   }),
   component: SettingsPage,
@@ -58,7 +59,16 @@ const BRAND_SWATCHES = ["#b4583a", "#3d6db5", "#2f8a64", "#7b4fb8"];
 
 const KINDS = Constants.public.Enums.notification_kind;
 
-const TABS = ["you", "notifications", "sla", "labels", "integrations", "outbox", "errors"] as const;
+const TABS = [
+  "you",
+  "notifications",
+  "sla",
+  "labels",
+  "integrations",
+  "api",
+  "outbox",
+  "errors",
+] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SettingsTab, string> = {
@@ -67,6 +77,7 @@ const TAB_LABEL: Record<SettingsTab, string> = {
   sla: "SLA",
   labels: "Labels",
   integrations: "Integrations",
+  api: "API keys",
   outbox: "Outbox",
   errors: "Errors",
 };
@@ -75,7 +86,7 @@ function SettingsPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = Route.useSearch();
-  const adminOnly: SettingsTab[] = ["sla", "labels", "integrations", "outbox", "errors"];
+  const adminOnly: SettingsTab[] = ["sla", "labels", "integrations", "api", "outbox", "errors"];
   const visible = TABS.filter((key) => isAdmin || !adminOnly.includes(key));
   const tab: SettingsTab = visible.includes(search.tab ?? "you") ? (search.tab ?? "you") : "you";
 
@@ -146,6 +157,14 @@ function SettingsPage() {
               <AntigravityAccountCard />
             </SectionBoundary>
           </div>
+        )}
+        {isAdmin && tab === "api" && (
+          <SectionBoundary label="api-keys">
+            <Card className="space-y-4 rounded-[14px] p-5">
+              <h2 className="font-display text-[22px] leading-tight">API keys</h2>
+              <ApiKeyManager kind="account" />
+            </Card>
+          </SectionBoundary>
         )}
         {isAdmin && tab === "outbox" && (
           <SectionBoundary label="outbox">

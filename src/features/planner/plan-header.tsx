@@ -199,7 +199,7 @@ export function PlanHeader({
                 />
                 <DropdownMenuSeparator />
                 <OptionItem
-                  label="Agent API keys"
+                  label="Planner API keys"
                   hint="Let agents read and update this plan"
                   onSelect={actions.onOpenApiKeys}
                 />

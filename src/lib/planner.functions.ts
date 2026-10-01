@@ -1251,29 +1251,6 @@ export const revokeApiKey = createServerFn({ method: "POST" })
     }),
   );
 
-export const updateApiKeyScopes = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((input) =>
-    z
-      .object({
-        keyId: z.string().uuid(),
-        scopes: z.array(z.enum(["planner", "account"])).min(1),
-      })
-      .parse(input),
-  )
-  .handler(({ data, context }) =>
-    guard("apiKeys.updateScopes", async () => {
-      const { supabase } = context;
-      const { error } = await supabase
-        .from("api_keys")
-        .update({ scopes: normalizeScopes(data.scopes) })
-        .eq("id", data.keyId)
-        .is("revoked_at", null);
-      if (error) throw error;
-      return { ok: true };
-    }),
-  );
-
 export const createTaskFromTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>

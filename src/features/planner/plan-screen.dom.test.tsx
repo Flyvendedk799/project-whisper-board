@@ -77,7 +77,6 @@ const fns = vi.hoisted(() => {
     importPlanMarkdown: vi.fn(),
     createApiKey: vi.fn(),
     revokeApiKey: ok(),
-    updateApiKeyScopes: ok(),
     registerPlanAttachment: vi.fn(),
     deletePlanAttachment: ok(),
     setPlanAttachmentShared: ok(),

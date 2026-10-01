@@ -20,7 +20,7 @@ import { updatePlan } from "@/lib/planner.functions";
 import { useHotkeys } from "@/lib/use-hotkeys";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
-import { ApiKeyManager } from "./api-key-manager";
+import { ApiKeyManager } from "@/features/settings/api-key-manager";
 import { useImportOpenTickets } from "./import-tickets-button";
 import { PlanActivityPanel } from "./plan-activity-panel";
 import { PlanBoard } from "./plan-board";
@@ -361,12 +361,12 @@ function PlanScreenBody({
       <Dialog open={modal === "keys"} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent className={cn("max-h-[90vh] max-w-[780px] overflow-auto", DIALOG_CONTENT)}>
           <DialogHeader>
-            <DialogTitle className={DIALOG_TITLE}>Agent API keys</DialogTitle>
+            <DialogTitle className={DIALOG_TITLE}>Planner API keys</DialogTitle>
             <DialogDescription className="sr-only">
-              Generate, grant and revoke the keys agents use.
+              Generate and revoke the keys agents use on plans.
             </DialogDescription>
           </DialogHeader>
-          <ApiKeyManager onClose={closeModal} />
+          <ApiKeyManager kind="planner" onClose={closeModal} />
         </DialogContent>
       </Dialog>
     </div>

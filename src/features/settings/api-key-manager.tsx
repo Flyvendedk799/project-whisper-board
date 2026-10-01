@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -7,29 +7,51 @@ import { Input } from "@/components/ui/input";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import { apiKeysQuery } from "@/data/planner";
-import { createApiKey, revokeApiKey, updateApiKeyScopes } from "@/lib/planner.functions";
+import { createApiKey, revokeApiKey } from "@/lib/planner.functions";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
 
-type Scope = "planner" | "account";
+type KeyKind = "account" | "planner";
 
-const SCOPE_OPTIONS: Array<{ value: Scope; label: string; hint: string }> = [
-  { value: "planner", label: "Planner", hint: "Tasks on AI plans" },
-  { value: "account", label: "Account", hint: "Projects, tickets and plans" },
-];
+const KIND_COPY: Record<KeyKind, { scopes: string[]; intro: ReactNode; placeholder: string }> = {
+  account: {
+    scopes: ["planner", "account"],
+    intro: (
+      <>
+        Account keys reach projects, tickets and plans at <span className="font-mono">/api/v1</span>
+        , and the planner API too. They act across the whole workspace, so treat them like a
+        password.
+      </>
+    ),
+    placeholder: "Key name, e.g. GitHub Actions",
+  },
+  planner: {
+    scopes: ["planner"],
+    intro: (
+      <>
+        Planner keys reach tasks on AI plans at <span className="font-mono">/api/planner</span> and
+        nothing else. For projects and tickets, generate an account key in Settings.
+      </>
+    ),
+    placeholder: "Key name, e.g. Claude Code on this plan",
+  },
+};
+
+const isAccountKey = (scopes: string[] | null) => (scopes ?? ["planner"]).includes("account");
 
 /**
- * Generate, grant and revoke the keys agents use. A new key is shown once, in a
- * banner you have to dismiss; revoking asks for a second click.
+ * Generate and revoke the keys agents use. An `account` manager lists and creates keys that
+ * reach the whole workspace API; a `planner` manager only deals in plan-only keys. A new key
+ * is shown once, in a banner you have to dismiss; revoking asks for a second click.
  */
-export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
+export function ApiKeyManager({ kind, onClose }: { kind: KeyKind; onClose?: () => void }) {
   const { workspaceId } = useAuth();
+  const copy = KIND_COPY[kind];
   const keys = useQuery(apiKeysQuery(workspaceId));
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
-  const [scopes, setScopes] = useState<Scope[]>(["planner", "account"]);
 
   const create = useServerAction(useServerFn(createApiKey), {
     label: "apikeys.create",
@@ -46,29 +68,15 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
     invalidate: [qk.apiKeys()],
     onSuccess: () => setRevokeId(null),
   });
-  const grantAccount = useServerAction(useServerFn(updateApiKeyScopes), {
-    label: "apikeys.updateScopes",
-    success: "Account access granted",
-    invalidate: [qk.apiKeys()],
-  });
 
-  const toggleScope = (scope: Scope) =>
-    setScopes((current) => {
-      const next = current.includes(scope)
-        ? current.filter((item) => item !== scope)
-        : [...current, scope];
-      return next.length > 0 ? next : current;
-    });
-
-  const rows = keys.data?.keys ?? [];
+  const rows = (keys.data?.keys ?? []).filter(
+    (key) => isAccountKey(key.scopes) === (kind === "account"),
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start gap-4">
-        <p className="flex-1 text-[13px] leading-normal text-muted-foreground">
-          Planner keys reach <span className="font-mono">/api/planner</span>. Account keys also
-          reach projects, tickets and plans at <span className="font-mono">/api/v1</span>.
-        </p>
+        <p className="flex-1 text-[13px] leading-normal text-muted-foreground">{copy.intro}</p>
         <Button
           type="button"
           className="whitespace-nowrap bg-foreground text-background hover:bg-foreground/90"
@@ -121,7 +129,7 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
           onSubmit={(event) => {
             event.preventDefault();
             if (name.trim() && workspaceId) {
-              create.fire({ name: name.trim(), workspaceId, scopes });
+              create.fire({ name: name.trim(), workspaceId, scopes: copy.scopes });
             }
           }}
         >
@@ -129,34 +137,10 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
             autoFocus
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Key name, e.g. GitHub Actions"
+            placeholder={copy.placeholder}
             aria-label="Key name"
             maxLength={100}
           />
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">Access</legend>
-            {SCOPE_OPTIONS.map((option) => {
-              const on = scopes.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={on}
-                  onClick={() => toggleScope(option.value)}
-                  className={cn(
-                    "rounded-[10px] border px-3.5 py-2.5 text-left text-[13px]",
-                    on ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
-                  )}
-                >
-                  {on ? "☑" : "☐"} {option.label}
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {option.hint}
-                  </span>
-                </button>
-              );
-            })}
-          </fieldset>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setCreating(false)}>
               Cancel
@@ -169,12 +153,11 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
       ) : null}
 
       <div className="overflow-x-auto rounded-[10px] border">
-        <table className="w-full min-w-[620px] text-left text-[13px]">
+        <table className="w-full min-w-[520px] text-left text-[13px]">
           <thead className="bg-surface text-xs text-muted-foreground">
             <tr>
               <th className="px-3.5 py-2.5 font-normal">Name</th>
               <th className="px-3.5 py-2.5 font-normal">Prefix</th>
-              <th className="px-3.5 py-2.5 font-normal">Access</th>
               <th className="px-3.5 py-2.5 font-normal">Created</th>
               <th className="px-3.5 py-2.5 font-normal">Last used</th>
               <th className="px-3.5 py-2.5" />
@@ -182,7 +165,6 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
           </thead>
           <tbody>
             {rows.map((key) => {
-              const keyScopes = (key.scopes ?? ["planner"]) as string[];
               const confirming = revokeId === key.id;
               return (
                 <tr key={key.id} className={cn("border-t", key.revoked_at && "opacity-50")}>
@@ -190,7 +172,6 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
                   <td className="px-3.5 py-3 font-mono text-xs text-muted-foreground">
                     {key.key_prefix}…
                   </td>
-                  <td className="px-3.5 py-3 text-muted-foreground">{keyScopes.join(", ")}</td>
                   <td className="px-3.5 py-3 text-muted-foreground">
                     {new Date(key.created_at).toLocaleDateString()}
                   </td>
@@ -199,23 +180,6 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
                   </td>
                   <td className="px-3.5 py-3">
                     <div className="flex justify-end gap-1.5">
-                      {!key.revoked_at && !keyScopes.includes("account") ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-[26px] px-2.5 text-xs"
-                          disabled={grantAccount.busy}
-                          onClick={() =>
-                            grantAccount.fire({
-                              keyId: key.id,
-                              scopes: [...new Set([...keyScopes, "account"])] as Scope[],
-                            })
-                          }
-                        >
-                          Grant account
-                        </Button>
-                      ) : null}
                       {!key.revoked_at ? (
                         <Button
                           type="button"
@@ -243,7 +207,7 @@ export function ApiKeyManager({ onClose }: { onClose?: () => void }) {
             })}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   {keys.isPending ? "Loading keys…" : "No API keys generated yet."}
                 </td>
               </tr>

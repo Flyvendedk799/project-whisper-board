@@ -68,7 +68,7 @@ export async function requireAccountAccess(
   if (!allowsAccount(auth.scopes)) {
     return json(
       {
-        error: "Forbidden: requires account scope. Grant it from the planner API key manager.",
+        error: "Forbidden: requires account scope. Generate an account key in Settings → API keys.",
       },
       403,
     );

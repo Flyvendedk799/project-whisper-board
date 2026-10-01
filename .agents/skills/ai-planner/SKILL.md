@@ -13,8 +13,9 @@ This skill enables AI agents to coordinate and execute tasks tracked on the Boar
 ## Authentication
 
 All interactions require an API key generated from the Boared UI:
-1. Open https://boared.online (or your local instance) and navigate to **Planner**.
-2. Click the **Key icon** (API Key Manager) in the plan header.
+1. Open https://boared.online (or your local instance).
+2. For a key that only reaches the planner, open a plan and choose **Plan options → Planner API keys**.
+   For a key that also reaches projects and tickets (`/api/v1`), go to **Settings → API keys**.
 3. Generate a key (starts with `cpk_...`).
 
 You can supply this key via:
