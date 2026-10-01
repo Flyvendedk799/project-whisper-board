@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Applies pending supabase/migrations/*.sql to the production Postgres container.
+# Installed on the VPS as /usr/local/sbin/boared-migrate (root-owned, not editable by CI).
+#
+#   boared-migrate check   list what is pending, change nothing
+#   boared-migrate apply   back up, then apply pending migrations in order
+#
+# stdin: a tar stream of the repo's supabase/migrations directory.
+# Each file runs in one transaction together with its supabase_migrations row, so a
+# failing migration leaves the database and the tracker exactly as they were.
+set -euo pipefail
+
+MODE=${1:-}
+CONTAINER=supabase_db_yjathlhennhrcxtndjth
+BACKUPS=/var/backups/boared-migrate
+case "$MODE" in check | apply) ;; *) echo "usage: $0 check|apply (tar on stdin)" >&2; exit 2 ;; esac
+
+exec 9>/var/lock/boared-migrate.lock
+flock -n 9 || { echo "another migration run is in progress" >&2; exit 1; }
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+head -c 20000000 | tar -x -C "$WORK" --no-same-owner --no-same-permissions
+
+psql_c() { docker exec -i "$CONTAINER" psql -U postgres -X -q -v ON_ERROR_STOP=1 "$@"; }
+
+mapfile -t LOCAL < <(find "$WORK" -maxdepth 2 -type f -name '*.sql' -printf '%f\n' | sort)
+for f in "${LOCAL[@]}"; do
+  [[ $f =~ ^[0-9]{14}_[A-Za-z0-9._-]+\.sql$ ]] || { echo "refusing unexpected file name: $f" >&2; exit 1; }
+done
+[ "${#LOCAL[@]}" -gt 0 ] || { echo "no migrations received" >&2; exit 1; }
+dir=$(dirname "$(find "$WORK" -maxdepth 2 -type f -name "${LOCAL[0]}" | head -1)")
+
+mapfile -t APPLIED < <(psql_c -At -c "select version from supabase_migrations.schema_migrations order by version")
+declare -A is_local is_applied
+for f in "${LOCAL[@]}"; do is_local[${f%%_*}]=1; done
+for v in "${APPLIED[@]}"; do is_applied[$v]=1; done
+
+# Drift: the database knows versions the repo does not. Stop rather than guess.
+for v in "${APPLIED[@]}"; do
+  [ -n "${is_local[$v]:-}" ] || { echo "ERROR: remote has version $v that is not in the repo" >&2; exit 1; }
+done
+
+PENDING=()
+for f in "${LOCAL[@]}"; do [ -n "${is_applied[${f%%_*}]:-}" ] || PENDING+=("$f"); done
+
+echo "repo: ${#LOCAL[@]} migrations, database: ${#APPLIED[@]} applied, pending: ${#PENDING[@]}"
+if [ "${#PENDING[@]}" -eq 0 ]; then echo "up to date"; exit 0; fi
+
+# Out of order: a pending file older than something already applied.
+last=${APPLIED[${#APPLIED[@]}-1]:-0}
+for f in "${PENDING[@]}"; do
+  [[ ${f%%_*} > $last ]] || { echo "ERROR: pending ${f} is older than applied $last" >&2; exit 1; }
+done
+
+printf 'pending: %s\n' "${PENDING[@]}"
+[ "$MODE" = apply ] || exit 0
+
+mkdir -p "$BACKUPS"
+BK="$BACKUPS/pre-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+docker exec "$CONTAINER" pg_dump -U postgres --no-owner postgres | gzip > "$BK"
+echo "backup: $BK ($(du -h "$BK" | cut -f1))"
+ls -1t "$BACKUPS"/pre-*.sql.gz | tail -n +11 | xargs -r rm -f
+
+for f in "${PENDING[@]}"; do
+  v=${f%%_*}; n=${f#*_}; n=${n%.sql}
+  echo "applying $f"
+  { cat "$dir/$f"; printf '\n'; echo "insert into supabase_migrations.schema_migrations (version, name, statements) values (:'v', :'n', array[]::text[]);"; } \
+    | psql_c --single-transaction -v v="$v" -v n="$n"
+done
+echo "done: applied ${#PENDING[@]} migration(s)"

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Forced command for the CI deploy key (see authorized_keys). The key can run exactly
+# `check` or `apply` and nothing else. Installed root-owned at /usr/local/sbin/.
+set -euo pipefail
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  check | apply) exec sudo /usr/local/sbin/boared-migrate "$SSH_ORIGINAL_COMMAND" ;;
+  *) echo "only 'check' or 'apply' is allowed" >&2; exit 2 ;;
+esac
