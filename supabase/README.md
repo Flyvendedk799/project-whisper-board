@@ -22,53 +22,34 @@ tests/run-local.sh                 # apply everything, then assert
 node ../scripts/gen-types-local.mjs
 ```
 
-## One-off: repairing the migration tracker
+## Production migrations
 
-**Read this before the next `supabase db push`.**
+Production is the Supabase stack on the VPS (container `supabase_db_yjathlhennhrcxtndjth`,
+behind `boared.online`), not a supabase.com project, so `supabase db push` cannot reach it.
+`.github/workflows/migrate.yml` applies migrations on merge instead: when a change under
+`supabase/migrations/` lands on `main` it sends the folder over SSH to
+`/usr/local/sbin/boared-migrate` (source: `scripts/vps/`), which
 
-On 2026-08-29 Lovable re-issued the whole schema as four migrations
-(`20260829202708`, `20260829202747`, `20260829202840`, `20260829203030`). They were a
-verbatim copy of `20260829090000`–`20260829090013` — same DDL, comments stripped, plus
-the explicit `GRANT`s that have since been folded into the originals. With both copies
-in the repo, a fresh `supabase db reset` failed at `create table public.workspaces`.
+- refuses to run if the database has versions the repo does not (drift) or if a pending
+  file is older than one already applied,
+- takes a `pg_dump` to `/var/backups/boared-migrate/` (last 10 kept),
+- applies each pending file in its own transaction together with its
+  `supabase_migrations.schema_migrations` row, so a failing migration changes nothing.
 
-The four duplicates have been deleted. The live database is unaffected — it has the
-schema exactly once — but its `supabase_migrations.schema_migrations` table still lists
-the deleted versions, and probably does _not_ list the fourteen that remain. Left alone,
-the next push would try to apply all fourteen to a database that already has every
-object.
+Run it by hand from the Actions tab (workflow_dispatch). For optional manual approval, add
+required reviewers to the `production` environment.
 
-Check first:
-
-```sh
-supabase migration list     # compare Local and Remote columns
-```
-
-If Remote lists the four deleted versions and not the fourteen, reconcile:
+The CI key in `~administrator/.ssh/authorized_keys` is `restrict`ed with a forced command
+(`boared-migrate-ssh`) that only accepts `check` or `apply`. Both scripts are root-owned
+copies; a change under `scripts/vps/` is **not** deployed automatically, so reinstall by hand:
 
 ```sh
-supabase migration repair --status reverted \
-  20260829202708 20260829202747 20260829202840 20260829203030
-
-supabase migration repair --status applied \
-  20260829090000 20260829090001 20260829090002 20260829090003 20260829090004 \
-  20260829090005 20260829090006 20260829090007 20260829090008 20260829090009 \
-  20260829090010 20260829090011 20260829090012 20260829090013
-
-supabase migration list     # Local and Remote should now agree
+scp scripts/vps/boared-migrate scripts/vps/boared-migrate-ssh administrator@<vps>:/tmp/
+ssh administrator@<vps> 'sudo install -o root -g root -m 0755 /tmp/boared-migrate /tmp/boared-migrate-ssh /usr/local/sbin/'
 ```
 
-`20260907090000_scope_storage_reads.sql` is genuinely new and has not been applied
-anywhere — it should push normally once the tracker agrees.
+Manual check from a checkout:
+`tar -c -C supabase/migrations . | ssh administrator@<vps> sudo /usr/local/sbin/boared-migrate check`.
 
-If `migration list` shows something else, stop and look rather than running the repair:
-the commands above assume the state described here.
-
-## Automatic migrations on merge
-
-`.github/workflows/migrate.yml` runs `supabase db push` against production whenever a
-change under `supabase/migrations/` lands on `main`. Add `SUPABASE_ACCESS_TOKEN` and
-`SUPABASE_DB_PASSWORD` as Actions secrets, and optionally required reviewers on the
-`production` environment for an approval step. Do the tracker repair above first; until
-the tracker agrees, the job fails without applying anything. Run it by hand from the
-Actions tab (workflow_dispatch) if needed.
+The migration tracker is in sync with the repo (34 of 34 as of 2026-10-01), so the
+repair that used to be documented here is no longer needed.
