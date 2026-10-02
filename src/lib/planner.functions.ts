@@ -295,6 +295,42 @@ export const updatePlan = createServerFn({ method: "POST" })
     }),
   );
 
+/**
+ * Deletes a plan with its sections, tasks, steps, comments and events (the
+ * foreign keys cascade) and then the files its tasks held, which a cascade
+ * cannot reach. Pull requests on GitHub are not touched. Only people do this:
+ * there is deliberately no agent route for it.
+ */
+export const deletePlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ planId: z.string().uuid() }).parse(input))
+  .handler(({ data, context }) =>
+    guard("plans.delete", async () => {
+      const { supabase } = context;
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("id")
+        .eq("id", data.planId)
+        .maybeSingle();
+      requireFound(plan, "plan");
+
+      const paths = await attachmentPathsWhere(supabase, "plan_id", [data.planId]);
+      const { data: removed, error } = await supabase
+        .from("plans")
+        .delete()
+        .eq("id", data.planId)
+        .select("id");
+      if (error) throw error;
+      if (!removed?.length) {
+        throw new AppError("forbidden", "Only workspace admins can delete a plan.", {
+          status: 403,
+        });
+      }
+      await purgePlanFiles(paths);
+      return { ok: true };
+    }),
+  );
+
 export const listPlans = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>

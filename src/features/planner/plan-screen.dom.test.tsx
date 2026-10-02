@@ -73,6 +73,7 @@ const fns = vi.hoisted(() => {
     deleteSection: ok(),
     addTaskComment: vi.fn(async () => ({ id: "c-new" })),
     updatePlan: ok(),
+    deletePlan: ok(),
     importOpenTickets: vi.fn(async () => ({ created: 0, skipped: 0, taskIds: [] })),
     importPlanMarkdown: vi.fn(),
     createApiKey: vi.fn(),
@@ -227,10 +228,22 @@ afterEach(() => {
   for (const fn of Object.values(fns)) fn.mockClear();
 });
 
-function renderScreen(taskId: string | null = null, onTaskChange = vi.fn()) {
+function renderScreen(
+  taskId: string | null = null,
+  onTaskChange = vi.fn(),
+  onDeleted: (plan: { projectId: string | null }) => void = vi.fn(),
+) {
   return {
     onTaskChange,
-    ...renderWithQuery(<PlanScreen planId="plan-1" taskId={taskId} onTaskChange={onTaskChange} />),
+    onDeleted,
+    ...renderWithQuery(
+      <PlanScreen
+        planId="plan-1"
+        taskId={taskId}
+        onTaskChange={onTaskChange}
+        onDeleted={onDeleted}
+      />,
+    ),
   };
 }
 
@@ -518,5 +531,75 @@ describe("PlanScreen", () => {
     expect(screen.getByRole("button", { name: /Import a Markdown outline/ })).toBeInTheDocument();
     // No project is linked, so tickets can't be imported yet.
     expect(screen.getByRole("button", { name: /Add open tickets/ })).toBeDisabled();
+  });
+
+  describe("deleting the plan", () => {
+    async function openDeleteDialog() {
+      const user = userEvent.setup();
+      await screen.findByRole("heading", { name: "Launch v2 onboarding" });
+      await user.click(screen.getByRole("button", { name: /Plan options/ }));
+      await user.click(await screen.findByRole("menuitem", { name: /Delete plan/ }));
+      return { user, dialog: await screen.findByRole("alertdialog") };
+    }
+
+    it("says what goes and holds the button until the title is typed", async () => {
+      const onDeleted = vi.fn();
+      renderScreen(null, vi.fn(), onDeleted);
+      const { user, dialog } = await openDeleteDialog();
+
+      expect(within(dialog).getByText(/2 sections and 3 tasks/)).toBeInTheDocument();
+      const confirm = within(dialog).getByRole("button", { name: "Delete plan" });
+      expect(confirm).toBeDisabled();
+
+      await user.type(within(dialog).getByLabelText(/Type/), "Launch v2");
+      expect(confirm).toBeDisabled();
+
+      await user.type(within(dialog).getByLabelText(/Type/), " onboarding");
+      expect(confirm).toBeEnabled();
+      expect(fns.deletePlan).not.toHaveBeenCalled();
+    });
+
+    it("deletes, then leaves the screen", async () => {
+      const onDeleted = vi.fn();
+      renderScreen(null, vi.fn(), onDeleted);
+      const { user, dialog } = await openDeleteDialog();
+
+      await user.type(within(dialog).getByLabelText(/Type/), "Launch v2 onboarding");
+      await user.click(within(dialog).getByRole("button", { name: "Delete plan" }));
+
+      await waitFor(() => expect(fns.deletePlan).toHaveBeenCalledTimes(1));
+      expect(
+        (fns.deletePlan.mock.calls[0] as unknown as [{ data: { planId: string } }])[0].data,
+      ).toEqual({ planId: "plan-1" });
+      await waitFor(() => expect(onDeleted).toHaveBeenCalledWith({ projectId: null }));
+    });
+
+    it("offers to archive instead, and does not delete", async () => {
+      renderScreen();
+      const { user, dialog } = await openDeleteDialog();
+
+      await user.click(within(dialog).getByRole("button", { name: "Archive instead" }));
+
+      await waitFor(() => expect(fns.updatePlan).toHaveBeenCalledTimes(1));
+      expect((fns.updatePlan.mock.calls[0] as unknown as [{ data: unknown }])[0].data).toEqual({
+        planId: "plan-1",
+        status: "archived",
+      });
+      expect(fns.deletePlan).not.toHaveBeenCalled();
+    });
+
+    it("stays on the plan when the delete fails", async () => {
+      fns.deletePlan.mockRejectedValueOnce(new Error("nope"));
+      const onDeleted = vi.fn();
+      renderScreen(null, vi.fn(), onDeleted);
+      const { user, dialog } = await openDeleteDialog();
+
+      await user.type(within(dialog).getByLabelText(/Type/), "Launch v2 onboarding");
+      await user.click(within(dialog).getByRole("button", { name: "Delete plan" }));
+
+      expect(await screen.findByRole("heading", { name: "Launch v2 onboarding" })).toBeVisible();
+      expect(onDeleted).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
+    });
   });
 });

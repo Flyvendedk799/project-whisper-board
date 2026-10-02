@@ -26,6 +26,7 @@ export const qk = {
   projects: () => [...qk.all, "projects"] as const,
   projectList: (wsId?: string) => [...qk.projects(), "list", wsId ?? "none"] as const,
   project: (id: string) => [...qk.projects(), "detail", id] as const,
+  projectImpact: (id: string) => [...qk.project(id), "impact"] as const,
   projectMembers: (id: string) => [...qk.project(id), "members"] as const,
   projectMilestones: (id: string) => [...qk.project(id), "milestones"] as const,
   projectMeetings: (id: string) => [...qk.project(id), "meetings"] as const,

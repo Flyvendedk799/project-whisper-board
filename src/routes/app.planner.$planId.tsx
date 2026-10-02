@@ -23,6 +23,9 @@ function PlanDetailPage() {
     <PlanScreen
       planId={planId}
       taskId={task ?? null}
+      onDeleted={({ projectId }) =>
+        navigate({ to: "/app/planner", search: { project: projectId ?? undefined } })
+      }
       onTaskChange={(next) =>
         void navigate({
           search: (prev: PlanSearch) => ({ ...prev, task: next ?? undefined }),

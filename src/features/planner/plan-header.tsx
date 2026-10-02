@@ -39,6 +39,7 @@ export interface PlanHeaderActions {
   onImportMarkdown: () => void;
   onExportMarkdown: () => void;
   onOpenApiKeys: () => void;
+  onDeletePlan: () => void;
   onImportTickets: () => void;
   onSetStatus: (status: PlanStatus) => void;
   /** Roadmap card clicked: bring that section into view. */
@@ -208,6 +209,13 @@ export function PlanHeader({
                   hint="Title, status, project, repository"
                   onSelect={actions.onOpenSettings}
                 />
+                <DropdownMenuSeparator />
+                <OptionItem
+                  label="Delete plan…"
+                  hint="Remove it and all its tasks for good"
+                  destructive
+                  onSelect={actions.onDeletePlan}
+                />
               </DropdownMenuContent>
             </DropdownMenu>
             <Button type="button" className="h-9 gap-2" onClick={actions.onNewTask}>
@@ -309,18 +317,23 @@ function OptionItem({
   label,
   hint,
   disabled,
+  destructive,
   onSelect,
 }: {
   label: string;
   hint: string;
   disabled?: boolean;
+  destructive?: boolean;
   onSelect: () => void;
 }) {
   return (
     <DropdownMenuItem
       disabled={disabled}
       onSelect={onSelect}
-      className="flex-col items-start gap-0 py-2"
+      className={cn(
+        "flex-col items-start gap-0 py-2",
+        destructive && "text-destructive focus:text-destructive",
+      )}
     >
       <span className="text-[13px]">{label}</span>
       <span className="text-[11px] text-muted-foreground">{hint}</span>

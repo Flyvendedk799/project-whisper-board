@@ -24,6 +24,7 @@ import { ApiKeyManager } from "@/features/settings/api-key-manager";
 import { useImportOpenTickets } from "./import-tickets-button";
 import { PlanActivityPanel } from "./plan-activity-panel";
 import { PlanBoard } from "./plan-board";
+import { PlanDeleteDialog } from "./plan-delete-dialog";
 import { NewTaskDialog, SectionDialog, DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
 import { PlanFilesView } from "./plan-files-view";
 import { PlanPullRequests } from "./plan-pull-requests";
@@ -50,7 +51,7 @@ import { PlanUploadsProvider } from "./use-plan-uploads";
 import { usePlanRealtime } from "./use-plan-realtime";
 import { cn } from "@/lib/utils";
 
-type Modal = "newtask" | "section" | "settings" | "import" | "keys" | null;
+type Modal = "newtask" | "section" | "settings" | "import" | "keys" | "delete" | null;
 
 /**
  * The plan screen: roadmap header, toolbar, board (columns, outline or files),
@@ -61,12 +62,30 @@ export function PlanScreen({
   planId,
   taskId,
   onTaskChange,
+  onDeleted,
 }: {
   planId: string;
   taskId: string | null;
   onTaskChange: (taskId: string | null) => void;
+  /** The plan was deleted from this screen; leave it. */
+  onDeleted?: (plan: { projectId: string | null }) => void | Promise<void>;
 }) {
   const planQuery = useQuery(planDetailQuery(planId));
+  // While a delete is in flight the rows disappear under the live connection and a refetch
+  // would fail. Show a quiet "deleting" state instead of "Couldn’t load plan".
+  const [deleting, setDeleting] = useState(false);
+
+  if (deleting) {
+    return (
+      <div
+        role="status"
+        className="flex h-[calc(100dvh-3.5rem)] items-center justify-center gap-2 text-muted-foreground md:h-dvh"
+      >
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+        Deleting plan…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-background md:h-dvh">
@@ -87,6 +106,8 @@ export function PlanScreen({
                 rawPlan={plan as unknown as PlanWithSections}
                 taskId={taskId}
                 onTaskChange={onTaskChange}
+                onDeleting={setDeleting}
+                onDeleted={onDeleted}
               />
             </PlanMediaProvider>
           </PlanUploadsProvider>
@@ -101,11 +122,15 @@ function PlanScreenBody({
   rawPlan,
   taskId,
   onTaskChange,
+  onDeleting,
+  onDeleted,
 }: {
   planId: string;
   rawPlan: PlanWithSections;
   taskId: string | null;
   onTaskChange: (taskId: string | null) => void;
+  onDeleting: (deleting: boolean) => void;
+  onDeleted?: (plan: { projectId: string | null }) => void | Promise<void>;
 }) {
   const { user } = useAuth();
   const meId = user?.id ?? null;
@@ -217,6 +242,7 @@ function PlanScreenBody({
           onImportMarkdown: () => setModal("import"),
           onExportMarkdown: () => downloadPlanMarkdown(plan),
           onOpenApiKeys: () => setModal("keys"),
+          onDeletePlan: () => setModal("delete"),
           onImportTickets: () => importTickets.fire({ planId }),
           onSetStatus: (status: PlanStatus) => {
             if (status === plan.status) return;
@@ -360,6 +386,20 @@ function PlanScreenBody({
           <PlanSettingsForm plan={plan} onClose={closeModal} />
         </DialogContent>
       </Dialog>
+
+      <PlanDeleteDialog
+        plan={{
+          id: planId,
+          title: plan.title,
+          status: plan.status ?? "draft",
+          sections: plan.sections.length,
+          tasks: tasks.length,
+        }}
+        open={modal === "delete"}
+        onOpenChange={(open) => !open && closeModal()}
+        onDeleting={onDeleting}
+        onDeleted={() => onDeleted?.({ projectId: plan.project_id })}
+      />
 
       <ImportMarkdownDialog
         planId={planId}
