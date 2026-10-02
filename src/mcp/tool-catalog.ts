@@ -7,10 +7,22 @@
  * does not mention one. Adding a tool means adding it here, and the docs follow.
  *
  * Plain data and no imports, so the browser and the stdio server both load it.
- * Paths are relative to the planner API (`/api/planner`).
+ * Paths are relative to the planner API (`/api/planner`), or to the workspace API
+ * (`/api/v1`) for a tool whose `rest.api` is `"account"`.
  */
 
 export type ParamType = "string" | "integer" | "boolean" | "string[]";
+
+/**
+ * Which REST API a tool calls. A `planner` key reaches the planner tools only; the `account`
+ * tools (projects and tickets) need a key with the account scope.
+ */
+export type RestApi = "planner" | "account";
+
+export const REST_API_BASE: Record<RestApi, string> = {
+  planner: "/api/planner",
+  account: "/api/v1",
+};
 
 export interface ToolParam {
   name: string;
@@ -28,6 +40,7 @@ export const TOOL_GROUPS = [
   "Features and steps",
   "Authoring",
   "GitHub",
+  "Workspace",
 ] as const;
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
@@ -40,7 +53,7 @@ export interface CatalogTool {
   /** What the MCP client shows the model; defaults to the summary. */
   description?: string;
   /** The REST call behind it, or null when there is none (`agent_guide`). */
-  rest: { method: "GET" | "POST"; path: string } | null;
+  rest: { method: "GET" | "POST" | "PATCH"; path: string; api?: RestApi } | null;
   /** What else the tool does around that call. */
   notes?: string;
   params: readonly ToolParam[];
@@ -49,6 +62,16 @@ export interface CatalogTool {
 const PLAN_STATUSES = ["draft", "active", "paused", "completed", "archived"] as const;
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const COMPLEXITIES = ["trivial", "small", "medium", "large", "epic"] as const;
+const TICKET_STATUSES = [
+  "open",
+  "triaged",
+  "in_progress",
+  "in_review",
+  "done",
+  "wont_fix",
+] as const;
+const TICKET_TYPES = ["bug", "feature", "question", "feedback", "change_request"] as const;
+const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 
 const TASK_ID: ToolParam = {
   name: "task_id",
@@ -67,6 +90,18 @@ const SECTION_ID: ToolParam = {
   type: "string",
   required: true,
   description: "The ID of the section (from get_plan)",
+};
+const PROJECT_ID: ToolParam = {
+  name: "project_id",
+  type: "string",
+  required: true,
+  description: "The ID of the project (from list_projects)",
+};
+const TICKET_ID: ToolParam = {
+  name: "ticket_id",
+  type: "string",
+  required: true,
+  description: "The ID of the ticket (from list_tickets)",
 };
 const AGENT_ID: ToolParam = {
   name: "agent_id",
@@ -726,6 +761,109 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       },
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // Workspace (needs an API key with the account scope)
+  // -------------------------------------------------------------------------
+  {
+    name: "list_projects",
+    group: "Workspace",
+    summary: "The workspace's projects, most recently updated first.",
+    description:
+      "List the workspace's projects (title, status, progress, GitHub repository), most recently updated first. Needs an API key with the account scope.",
+    rest: { method: "GET", path: "projects", api: "account" },
+    params: [],
+  },
+  {
+    name: "get_project",
+    group: "Workspace",
+    summary: "One project with its status, progress and GitHub repository.",
+    description:
+      "Get a project: title, description, status, progress, GitHub repository and default branch. Needs an API key with the account scope.",
+    rest: { method: "GET", path: "projects/:project_id", api: "account" },
+    params: [PROJECT_ID],
+  },
+  {
+    name: "list_tickets",
+    group: "Workspace",
+    summary: "The workspace's tickets, newest activity first, filtered by project or status.",
+    description:
+      "List the workspace's tickets (number, title, description, status, priority, type, assignee), most recently updated first, at most 100. Filter by project_id and by one status; the open queue is status open. Needs an API key with the account scope.",
+    rest: { method: "GET", path: "tickets?project_id=&status=", api: "account" },
+    notes: "Tickets are not planner tasks: put one on a plan with create_task_from_ticket.",
+    params: [
+      { name: "project_id", type: "string", description: "Only tickets of this project" },
+      {
+        name: "status",
+        type: "string",
+        enum: TICKET_STATUSES,
+        description: "Only tickets with this status",
+      },
+    ],
+  },
+  {
+    name: "get_ticket",
+    group: "Workspace",
+    summary: "One ticket in full.",
+    description:
+      "Get a ticket: number, title, description, status, priority, type, project, assignee, labels and dates. Needs an API key with the account scope.",
+    rest: { method: "GET", path: "tickets/:ticket_id", api: "account" },
+    params: [TICKET_ID],
+  },
+  {
+    name: "create_ticket",
+    group: "Workspace",
+    summary: "File a ticket in a project.",
+    description:
+      "File a ticket in a project. Type defaults to bug and priority to medium. Needs an API key with the account scope.",
+    rest: { method: "POST", path: "tickets", api: "account" },
+    params: [
+      { ...PROJECT_ID, description: "The project to file it in (from list_projects)" },
+      { name: "title", type: "string", required: true, description: "Ticket title" },
+      { name: "description", type: "string", description: "What is wrong or wanted" },
+      { name: "type", type: "string", enum: TICKET_TYPES, description: "Defaults to bug" },
+      {
+        name: "priority",
+        type: "string",
+        enum: TICKET_PRIORITIES,
+        description: "Defaults to medium",
+      },
+    ],
+  },
+  {
+    name: "update_ticket",
+    group: "Workspace",
+    summary: "Change a ticket's status, title, description, priority, type or assignee.",
+    description:
+      "Change a ticket; only the fields you pass change. Move it with status as the work moves: in_progress when you start, in_review once there is a pull request, done when it is merged. Needs an API key with the account scope.",
+    rest: { method: "PATCH", path: "tickets/:ticket_id", api: "account" },
+    params: [
+      TICKET_ID,
+      { name: "status", type: "string", enum: TICKET_STATUSES, description: "New status" },
+      { name: "title", type: "string", description: "New title" },
+      { name: "description", type: "string", description: "New description" },
+      { name: "priority", type: "string", enum: TICKET_PRIORITIES, description: "New priority" },
+      { name: "type", type: "string", enum: TICKET_TYPES, description: "New type" },
+      { name: "assignee_id", type: "string", description: "The id of the user to assign it to" },
+    ],
+  },
+  {
+    name: "create_task_from_ticket",
+    group: "Workspace",
+    summary: "Put a ticket on a plan as a task, so it can be claimed and worked like any task.",
+    description:
+      "Create a planner task from a ticket in a plan of the same project: the title, description, type tag and priority carry over and the task keeps its link to the ticket. Safe to repeat: when the plan already has a task for the ticket, that task comes back with created false. Then claim it with claim_task. Needs an API key with the account scope.",
+    rest: { method: "POST", path: "tickets/:ticket_id/tasks", api: "account" },
+    params: [
+      TICKET_ID,
+      { ...PLAN_ID, description: "The plan to put the task on (from list_plans)" },
+      {
+        name: "section_id",
+        type: "string",
+        description: "The section to put it in; defaults to the plan's first section",
+      },
+    ],
+  },
 ];
 
 export const toolByName = (name: string): CatalogTool => {
@@ -733,6 +871,11 @@ export const toolByName = (name: string): CatalogTool => {
   if (!tool) throw new Error(`No catalog entry for tool "${name}". Add it to tool-catalog.ts.`);
   return tool;
 };
+
+/** A tool's REST call as a URL path, for display: `/api/planner/plans` or `/api/v1/tickets`. */
+export function restUrlPath(rest: NonNullable<CatalogTool["rest"]>): string {
+  return `${REST_API_BASE[rest.api ?? "planner"]}/${rest.path}`;
+}
 
 /** The catalog grouped for display, in the order of TOOL_GROUPS. */
 export function toolsByGroup(

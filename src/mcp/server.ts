@@ -4,6 +4,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { accountApiUrl } from "./api-url";
 import { agentGuideText, MCP_INSTRUCTIONS } from "./agent-guide";
 import { toolDescription, toolShape } from "./tool-schema";
 
@@ -39,9 +40,13 @@ function getApiKey(): string {
   return key;
 }
 
-const fetchApi = async (path: string, options: RequestInit = {}): Promise<unknown> => {
+const request = async (
+  baseUrl: string,
+  path: string,
+  options: RequestInit = {},
+): Promise<unknown> => {
   const apiKey = getApiKey();
-  const url = `${apiUrl}/${path.replace(/^\//, "")}`;
+  const url = `${baseUrl}/${path.replace(/^\//, "")}`;
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -59,11 +64,18 @@ const fetchApi = async (path: string, options: RequestInit = {}): Promise<unknow
   return response.json();
 };
 
+const fetchApi = (path: string, options: RequestInit = {}) => request(apiUrl, path, options);
+
 const post = (path: string, body?: unknown) =>
   fetchApi(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
+// Projects and tickets live in the workspace API, which needs a key with the account scope.
+// The 403 for a planner-only key already says so; it comes back as the tool's error.
+const fetchAccount = (path: string, options: RequestInit = {}) =>
+  request(accountApiUrl(apiUrl), path, options);
+
 const server = new McpServer(
-  { name: "consflow-planner", version: "2.0.0" },
+  { name: "consflow-planner", version: "2.1.0" },
   { instructions: MCP_INSTRUCTIONS },
 );
 
@@ -416,6 +428,66 @@ server.tool(
   toolDescription("merge_plan_pull_requests"),
   toolShape("merge_plan_pull_requests"),
   ({ plan_id, ...body }) => run(() => post(`plans/${plan_id}/pull-requests/merge`, body)),
+);
+
+// ---------------------------------------------------------------------------
+// Workspace (account scope)
+// ---------------------------------------------------------------------------
+
+server.tool("list_projects", toolDescription("list_projects"), toolShape("list_projects"), () =>
+  run(() => fetchAccount("projects")),
+);
+
+server.tool(
+  "get_project",
+  toolDescription("get_project"),
+  toolShape("get_project"),
+  ({ project_id }) => run(() => fetchAccount(`projects/${project_id}`)),
+);
+
+server.tool(
+  "list_tickets",
+  toolDescription("list_tickets"),
+  toolShape("list_tickets"),
+  ({ project_id, status }) =>
+    run(() => {
+      const query = new URLSearchParams();
+      if (project_id) query.set("project_id", project_id);
+      if (status) query.set("status", status);
+      const queryString = query.toString();
+      return fetchAccount(queryString ? `tickets?${queryString}` : "tickets");
+    }),
+);
+
+server.tool("get_ticket", toolDescription("get_ticket"), toolShape("get_ticket"), ({ ticket_id }) =>
+  run(() => fetchAccount(`tickets/${ticket_id}`)),
+);
+
+server.tool(
+  "create_ticket",
+  toolDescription("create_ticket"),
+  toolShape("create_ticket"),
+  (input) => run(() => fetchAccount("tickets", { method: "POST", body: JSON.stringify(input) })),
+);
+
+server.tool(
+  "update_ticket",
+  toolDescription("update_ticket"),
+  toolShape("update_ticket"),
+  ({ ticket_id, ...patch }) =>
+    run(() =>
+      fetchAccount(`tickets/${ticket_id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    ),
+);
+
+server.tool(
+  "create_task_from_ticket",
+  toolDescription("create_task_from_ticket"),
+  toolShape("create_task_from_ticket"),
+  ({ ticket_id, ...body }) =>
+    run(() =>
+      fetchAccount(`tickets/${ticket_id}/tasks`, { method: "POST", body: JSON.stringify(body) }),
+    ),
 );
 
 // Run server

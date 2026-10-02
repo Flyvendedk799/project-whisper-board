@@ -3,9 +3,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentGuideText, MCP_INSTRUCTIONS, WORKFLOW_RULES } from "./agent-guide";
 import {
+  REST_API_BASE,
+  restUrlPath,
   searchTools,
   TOOL_CATALOG,
   TOOL_GROUPS,
+  toolByName,
   toolsByGroup,
   type CatalogTool,
 } from "./tool-catalog";
@@ -99,6 +102,53 @@ describe("tool catalog entries", () => {
   });
 });
 
+describe("workspace tools", () => {
+  const workspace = TOOL_CATALOG.filter((tool) => tool.group === "Workspace");
+
+  it("covers projects and the whole ticket flow", () => {
+    expect(workspace.map((tool) => tool.name)).toEqual([
+      "list_projects",
+      "get_project",
+      "list_tickets",
+      "get_ticket",
+      "create_ticket",
+      "update_ticket",
+      "create_task_from_ticket",
+    ]);
+  });
+
+  it("calls the workspace API, and says it needs an account key", () => {
+    for (const tool of workspace) {
+      expect(tool.rest?.api, tool.name).toBe("account");
+      expect(tool.description ?? "", tool.name).toMatch(/account scope/);
+    }
+    expect(TOOL_CATALOG.filter((tool) => tool.group !== "Workspace" && tool.rest?.api)).toEqual([]);
+  });
+
+  it("shows the URL under the API each tool calls", () => {
+    expect(restUrlPath(toolByName("list_tickets").rest!)).toBe(
+      "/api/v1/tickets?project_id=&status=",
+    );
+    expect(restUrlPath(toolByName("update_ticket").rest!)).toBe("/api/v1/tickets/:ticket_id");
+    expect(restUrlPath(toolByName("get_plan").rest!)).toBe("/api/planner/plans/:plan_id");
+  });
+
+  it("offers the ticket statuses and types the API accepts", () => {
+    expect(toolShape("list_tickets").status.safeParse("open").success).toBe(true);
+    expect(toolShape("list_tickets").status.safeParse("closed").success).toBe(false);
+    expect(toolShape("create_ticket").type.safeParse("change_request").success).toBe(true);
+    expect(toolShape("create_ticket").priority.safeParse("critical").success).toBe(false);
+  });
+
+  it("requires what the API requires", () => {
+    expect(toolShape("create_ticket").project_id.isOptional()).toBe(false);
+    expect(toolShape("create_ticket").title.isOptional()).toBe(false);
+    expect(toolShape("create_task_from_ticket").plan_id.isOptional()).toBe(false);
+    expect(toolShape("create_task_from_ticket").section_id.isOptional()).toBe(true);
+    expect(toolShape("update_ticket").status.isOptional()).toBe(true);
+  });
+});
+
 describe("the skill", () => {
   it("is named ai-planner", () => {
     expect(skill).toMatch(/^---\nname: ai-planner\n/);
@@ -113,8 +163,10 @@ describe("the skill", () => {
     for (const tool of TOOL_CATALOG as readonly CatalogTool[]) {
       if (!tool.rest) continue;
       for (const candidate of tool.rest.path.split(" or ")) {
+        // The workspace API is listed with its full path; the planner's paths are relative to it.
         const route = candidate.split("?")[0];
-        if (!skill.includes(route)) missing.push(`${tool.name}: ${route}`);
+        const listed = tool.rest.api === "account" ? `${REST_API_BASE.account}/${route}` : route;
+        if (!skill.includes(listed)) missing.push(`${tool.name}: ${listed}`);
       }
     }
     expect(missing).toEqual([]);

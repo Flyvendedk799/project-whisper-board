@@ -3,8 +3,8 @@ name: ai-planner
 description: >-
   Work on the Boared AI Planner board: read plans, claim and work tasks, report
   progress (tick steps, mark features met), ask questions instead of guessing,
-  author plans, sections and tasks, and open pull requests. Use it through the
-  MCP server or the plain REST API.
+  author plans, sections and tasks, read and file tickets and put them on a plan,
+  and open pull requests. Use it through the MCP server or the plain REST API.
 ---
 
 # Boared AI Planner
@@ -12,7 +12,8 @@ description: >-
 Humans and AI agents share one board: **plans -> sections -> tasks**. A task has
 **features** (what it must deliver), **steps** (how, a checklist), **questions**
 (asked by you or by a person), comments, shared files, **tags**, a colour and
-an optional pull request. This skill is how an agent works that board.
+an optional pull request. Next to the board sit the workspace's **projects** and **tickets** (bugs and requests
+people file); a ticket can be put on a plan as a task. This skill is how an agent works that board.
 
 ## Authentication
 
@@ -26,28 +27,37 @@ the rest of the workspace) or, for a key that only reaches the planner,
 The API is `https://boared.online/api/planner`; set `PLANNER_API_URL` for your own
 instance. Every call is limited to the key's workspace.
 
+**Scopes.** A planner key reaches the planner only. Projects and tickets (the Workspace tools and the `/api/v1`
+API) need a key made under **Settings -> API keys** with the **account** scope; that key also works for every
+planner tool. A planner key gets a 403 from them that says so. The MCP server finds the workspace API from
+`PLANNER_API_URL` (`/api/planner` becomes `/api/v1`), so there is nothing more to set.
+
 ## Workflow (follow this)
 
 1. **Read before you touch anything.** `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
    A task carries description, acceptance criteria, features, steps, open questions, shared files and tags.
-2. **Claim before working.** `claim_task` reserves it (and registers you). If it fails with a conflict the task
+2. **Tickets are not tasks.** With an account key, `list_tickets` (`status: open`) and `get_ticket` show what
+   people filed. `create_task_from_ticket` puts one on a plan (it does nothing twice), and then you claim and work
+   the task like any other. Keep the ticket in step with `update_ticket`: `in_progress` when you start,
+   `in_review` once there is a pull request, `done` when it is merged.
+3. **Claim before working.** `claim_task` reserves it (and registers you). If it fails with a conflict the task
    is taken or not ready: pick another. Never work on a task you did not claim.
-3. **Mark it in progress.** `start_task`, or `report_progress` with `status: in_progress`.
-4. **Features are the what, steps are the how.** If the task has features but no steps, write steps with
+4. **Mark it in progress.** `start_task`, or `report_progress` with `status: in_progress`.
+5. **Features are the what, steps are the how.** If the task has features but no steps, write steps with
    `add_task_steps` and link each to the feature it delivers (`feature_id`). Do not rewrite features a person wrote.
-5. **Tick as you go.** After each meaningful chunk call `report_progress` with `steps_done` and `features_met`.
+6. **Tick as you go.** After each meaningful chunk call `report_progress` with `steps_done` and `features_met`.
    Mark a feature met only when the work really satisfies it. Do it at the time, not in one batch at the end.
-6. **Comment only when there is something to say**: a decision, a blocker, a result. Not "starting" or
+7. **Comment only when there is something to say**: a decision, a blocker, a result. Not "starting" or
    "still working". `report_progress` posts a comment only when `note` is non-empty, so leave it out otherwise.
-7. **Ask, do not guess.** Use `ask_question`. Make it `blocking: true` only if you truly cannot continue without
+8. **Ask, do not guess.** Use `ask_question`. Make it `blocking: true` only if you truly cannot continue without
    the answer: that puts the task in `blocked` and a person sees it waiting. Otherwise ask non-blocking and carry on.
    Answers appear in `get_task` and `list_questions`.
-8. **Check `work_target` before committing** (returned by `get_plan` and `get_task`): repository, base branch,
+9. **Check `work_target` before committing** (returned by `get_plan` and `get_task`): repository, base branch,
    working branch and mode. `new` or `existing`: commit on that branch. `base`: commit directly on the base
    branch and do not open a PR. No working branch chosen: one branch per task.
-9. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
-   `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
-10. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
+10. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
+    `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
+11. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
 
 `agent_guide` returns this workflow as text. The MCP server also sends it as its `instructions`.
 
@@ -74,6 +84,7 @@ the session.
 | Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                            |
 | Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`   |
 | GitHub             | `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                              |
+| Workspace          | `list_projects`, `get_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`    |
 
 Key parameters:
 
@@ -86,6 +97,10 @@ Key parameters:
   `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?)`.
 - `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
 - `create_pull_request(task_id, title, head_branch?, body?, repo?, base_branch?)`: errors with a clear message when the plan works on `base`.
+- `list_tickets(project_id?, status?)` (open, triaged, in_progress, in_review, done, wont_fix; newest first, at most 100),
+  `get_ticket(ticket_id)`, `create_ticket(project_id, title, description?, type?, priority?)`,
+  `update_ticket(ticket_id, status?, title?, description?, priority?, type?, assignee_id?)`,
+  `create_task_from_ticket(ticket_id, plan_id, section_id?)`: the plan has to belong to the ticket's project.
 
 ## REST API
 
@@ -126,6 +141,20 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | `POST tasks/:task_id/pull-request`                   | `{ title, head_branch?, body?, repo?, base? }`; head defaults to the plan's work branch                                                     |
 | `GET plans/:plan_id/pull-requests`                   | the plan's PRs in merge order                                                                                                               |
 | `POST plans/:plan_id/pull-requests/merge`            | `{ dry_run?, method?, max?, only?, ignore_checks? }` (dry run by default)                                                                   |
+
+### Workspace API
+
+Needs a key with the account scope. Errors have the same shape.
+
+| Request                                 | Body / notes                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/projects`                  | the workspace's projects                                                                                   |
+| `GET /api/v1/projects/:project_id`      | one project                                                                                                |
+| `GET /api/v1/tickets`                   | `?project_id=` and `?status=` (open, triaged, in_progress, in_review, done, wont_fix)                      |
+| `GET /api/v1/tickets/:ticket_id`        | one ticket                                                                                                 |
+| `POST /api/v1/tickets`                  | `{ project_id, title, description?, type?, priority? }`                                                    |
+| `PATCH /api/v1/tickets/:ticket_id`      | `{ status?, title?, description?, priority?, type?, assignee_id? }`                                        |
+| `POST /api/v1/tickets/:ticket_id/tasks` | `{ plan_id, section_id? }`: the task for a ticket; the response has `created: false` if it already existed |
 
 Example loop:
 

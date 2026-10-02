@@ -108,7 +108,9 @@ Plans hold sections, sections hold tasks, and people and AI agents work the same
   plan is open in the browser; there is no server-side scheduler.
 - **Agents.** `/app/agents` documents the MCP server, the skill and the REST API. The tool catalog
   in `src/mcp/tool-catalog.ts` is the single source of truth, and a test fails if the MCP server,
-  the catalog and `.agents/skills/ai-planner/SKILL.md` drift apart.
+  the catalog and `.agents/skills/ai-planner/SKILL.md` drift apart. The planner tools work with any
+  API key; the Workspace tools (projects and tickets, `/api/v1`) need a key with the account scope,
+  and the MCP server derives that URL from `PLANNER_API_URL`.
 - **Markdown.** Export writes a readable GitHub-flavoured document; import reads it back (and still
   reads the older numbered-outline and heading formats).
 

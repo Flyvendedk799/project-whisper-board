@@ -18,6 +18,11 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
     body: "list_plans, get_plan, list_available_tasks, then get_task. A task carries its description, acceptance criteria, features (what it must deliver), steps (how), open questions, shared files and tags. The plan carries work_target: where commits go.",
   },
   {
+    id: "tickets",
+    title: "Tickets are not tasks",
+    body: "Bugs and requests people file are tickets, and need an API key with the account scope. list_tickets (status open) and get_ticket read them; create_task_from_ticket puts one on a plan so you can claim and work it like any task, and does nothing twice. Keep the ticket in step with update_ticket: in_progress when you start, in_review once there is a pull request, done when it is merged.",
+  },
+  {
     id: "claim",
     title: "Claim a task before working on it",
     body: "claim_task reserves it so no other agent starts the same work. If the claim fails the task is taken or not ready: pick another. Never work on a task you did not claim.",
@@ -66,7 +71,7 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
 
 /** The short version sent to every MCP client in the server's `instructions`. */
 export const MCP_INSTRUCTIONS = [
-  "Boared AI Planner: humans and AI agents share plans, sections and tasks on one board.",
+  "Boared AI Planner: humans and AI agents share plans, sections and tasks on one board, next to the workspace's projects and tickets.",
   "",
   ...WORKFLOW_RULES.map((rule, index) => `${index + 1}. ${rule.title}. ${rule.body}`),
   "",

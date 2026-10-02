@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { StatusPill } from "@/components/status-pill";
-import { searchTools, toolsByGroup, type CatalogTool } from "../../mcp/tool-catalog";
+import { restUrlPath, searchTools, toolsByGroup, type CatalogTool } from "../../mcp/tool-catalog";
 
 function ToolCard({ tool }: { tool: CatalogTool }) {
   return (
@@ -20,7 +20,10 @@ function ToolCard({ tool }: { tool: CatalogTool }) {
             <StatusPill tone={tool.rest.method === "GET" ? "info" : "default"}>
               {tool.rest.method}
             </StatusPill>
-            <code className="break-all text-xs">/api/planner/{tool.rest.path}</code>
+            <code className="break-all text-xs">{restUrlPath(tool.rest)}</code>
+            {tool.rest.api === "account" ? (
+              <StatusPill tone="warning">needs an account key</StatusPill>
+            ) : null}
           </p>
         ) : null}
         {tool.notes ? <p className="text-xs text-muted-foreground">{tool.notes}</p> : null}
