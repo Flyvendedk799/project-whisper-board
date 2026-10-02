@@ -38,6 +38,12 @@ function task(
 ): TaskWithAgent {
   return {
     acceptance_criteria: null,
+    ai_assessed_at: null,
+    ai_assessment: null,
+    ai_context: null,
+    ai_context_at: null,
+    blocked_from: null,
+    color: null,
     actual_minutes: null,
     assigned_agent_id: null,
     assigned_user_id: null,
@@ -93,6 +99,8 @@ function actionsMock() {
   return {
     advance: vi.fn(),
     moveTask: vi.fn(),
+    moveSection: vi.fn(),
+    shiftSection: vi.fn(),
     create: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
     removeSection: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
   };
@@ -346,5 +354,119 @@ describe("PlanBoard", () => {
     expect(screen.getByText("2 files")).toBeInTheDocument();
     expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("+1")).toBeInTheDocument();
+  });
+
+  it("shows what a section is for: description, goals and intentions", async () => {
+    const user = userEvent.setup();
+    const p = plan([
+      {
+        id: "s1",
+        title: "Build",
+        tasks: [task({ id: "t1", section_id: "s1", title: "Open one" })],
+      },
+    ]);
+    Object.assign(p.sections[0], {
+      description: "The payment flow.",
+      goals: "Checkout under 3 clicks.",
+      intentions: "Keep it boring.",
+      tags: ["payments"],
+    });
+    board(p);
+
+    await user.click(screen.getByText("About this section"));
+    expect(screen.getByText("What it covers")).toBeInTheDocument();
+    expect(screen.getByText("The payment flow.")).toBeInTheDocument();
+    expect(screen.getByText("Goals")).toBeInTheDocument();
+    expect(screen.getByText("Checkout under 3 clicks.")).toBeInTheDocument();
+    expect(screen.getByText("Intentions")).toBeInTheDocument();
+    expect(screen.getByText("Keep it boring.")).toBeInTheDocument();
+    expect(screen.getByText("payments")).toBeInTheDocument();
+  });
+
+  it("shows task colour, tags and open questions on the card, and tags filter", async () => {
+    const user = userEvent.setup();
+    const onTagFilter = vi.fn();
+    const tagged = task({ id: "t1", section_id: "s1", title: "Tagged" });
+    Object.assign(tagged, {
+      color: "#ef4444",
+      labels: ["bug", "backend"],
+      questions: [
+        { id: "q1", status: "open", blocking: true },
+        { id: "q2", status: "open", blocking: false },
+        { id: "q3", status: "answered", blocking: false },
+      ],
+    });
+    const actions = actionsMock();
+    render(
+      <PlanBoard
+        plan={plan([{ id: "s1", title: "Build", tasks: [tagged] }])}
+        layout="columns"
+        filters={NO_FILTERS}
+        onOpenTask={vi.fn()}
+        onTagFilter={onTagFilter}
+        actions={actions}
+      />,
+    );
+    expect(screen.getByText("2 questions")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "bug" }));
+    expect(onTagFilter).toHaveBeenCalledWith("bug");
+  });
+
+  it("filters cards by tag and by open question", () => {
+    const a = task({ id: "t1", section_id: "s1", title: "Has bug tag" });
+    Object.assign(a, { labels: ["bug"] });
+    const b = task({ id: "t2", section_id: "s1", title: "Plain" });
+    board(plan([{ id: "s1", title: "Build", tasks: [a, b] }]), {
+      filters: { ...NO_FILTERS, tag: "bug" },
+    });
+    expect(screen.getByRole("heading", { name: "Has bug tag" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Plain" })).not.toBeInTheDocument();
+  });
+
+  it("reorders sections: a dropped column goes before the target, or after when moving right", () => {
+    const { actions, container } = board(
+      plan([
+        { id: "s1", title: "One", tasks: [] },
+        { id: "s2", title: "Two", tasks: [] },
+        { id: "s3", title: "Three", tasks: [] },
+      ]),
+    );
+    const store = new Map<string, string>();
+    const dataTransfer = {
+      types: ["sectionId"],
+      files: [],
+      getData: (key: string) => store.get(key) ?? "",
+      setData: (key: string, value: string) => store.set(key, value),
+      setDragImage: () => undefined,
+      dropEffect: "move",
+      effectAllowed: "move",
+    };
+
+    // Drag section one onto section three (moving right): it lands after it.
+    fireEvent.dragStart(screen.getByRole("button", { name: "Drag section One" }), { dataTransfer });
+    fireEvent.drop(container.querySelector("#col-s3")!, { dataTransfer });
+    expect(actions.moveSection).toHaveBeenCalledWith("s1", null);
+
+    // Drag section three onto section one (moving left): it lands before it.
+    actions.moveSection.mockClear();
+    store.clear();
+    fireEvent.dragStart(screen.getByRole("button", { name: "Drag section Three" }), {
+      dataTransfer,
+    });
+    fireEvent.drop(container.querySelector("#col-s1")!, { dataTransfer });
+    expect(actions.moveSection).toHaveBeenCalledWith("s3", "s1");
+  });
+
+  it("moves a section from the keyboard with the arrow keys on its handle", () => {
+    const { actions } = board(
+      plan([
+        { id: "s1", title: "One", tasks: [] },
+        { id: "s2", title: "Two", tasks: [] },
+      ]),
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Drag section One" }), {
+      key: "ArrowRight",
+    });
+    expect(actions.shiftSection).toHaveBeenCalledWith("s1", 1);
   });
 });

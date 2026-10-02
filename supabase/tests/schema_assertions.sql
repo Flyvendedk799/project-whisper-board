@@ -569,6 +569,93 @@ select assert(
 reset role;
 
 -- ---------------------------------------------------------------------------
+\echo 'questions, features and tags'
+-- ---------------------------------------------------------------------------
+update public.plan_tasks set status = 'in_progress'
+where id = 'eeeeeeee-0000-0000-0000-000000000011';
+
+insert into public.plan_task_questions (id, task_id, body, blocking, asked_by_user_id)
+values ('eeeeeeee-0000-0000-0000-000000000030', 'eeeeeeee-0000-0000-0000-000000000011',
+        'Which payment provider?', true, '11111111-1111-1111-1111-111111111111');
+select assert(
+  (select plan_id from public.plan_task_questions
+   where id = 'eeeeeeee-0000-0000-0000-000000000030') = 'eeeeeeee-0000-0000-0000-000000000001',
+  'a question takes its plan from its task'
+);
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000011') = 'blocked'
+  and (select blocked_from from public.plan_tasks
+       where id = 'eeeeeeee-0000-0000-0000-000000000011') = 'in_progress',
+  'an open blocking question blocks the task and remembers where it was'
+);
+
+insert into public.plan_task_questions (id, task_id, body, blocking, asked_by_user_id)
+values ('eeeeeeee-0000-0000-0000-000000000031', 'eeeeeeee-0000-0000-0000-000000000010',
+        'Is a dark mode wanted?', false, '11111111-1111-1111-1111-111111111111');
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000010') <> 'blocked',
+  'a question that does not block leaves the task alone'
+);
+
+update public.plan_task_questions
+set status = 'answered', answer = 'Stripe', answered_at = now()
+where id = 'eeeeeeee-0000-0000-0000-000000000030';
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000011') = 'in_progress'
+  and (select blocked_from from public.plan_tasks
+       where id = 'eeeeeeee-0000-0000-0000-000000000011') is null,
+  'answering the last blocking question puts the task back'
+);
+
+-- Two blocking questions: the task stays blocked until both are settled.
+insert into public.plan_task_questions (id, task_id, body, blocking, asked_by_user_id) values
+  ('eeeeeeee-0000-0000-0000-000000000032', 'eeeeeeee-0000-0000-0000-000000000011', 'One?', true,
+   '11111111-1111-1111-1111-111111111111'),
+  ('eeeeeeee-0000-0000-0000-000000000033', 'eeeeeeee-0000-0000-0000-000000000011', 'Two?', true,
+   '11111111-1111-1111-1111-111111111111');
+update public.plan_task_questions set status = 'dismissed'
+where id = 'eeeeeeee-0000-0000-0000-000000000032';
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000011') = 'blocked',
+  'one open blocking question is enough to keep the task blocked'
+);
+update public.plan_task_questions set status = 'answered', answer = 'ok'
+where id = 'eeeeeeee-0000-0000-0000-000000000033';
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000011') = 'in_progress',
+  'and it is released once none are open'
+);
+
+-- A task someone blocked by hand is not released by an unrelated answer.
+update public.plan_tasks set status = 'blocked' where id = 'eeeeeeee-0000-0000-0000-000000000010';
+update public.plan_task_questions set status = 'answered', answer = 'no'
+where id = 'eeeeeeee-0000-0000-0000-000000000031';
+select assert(
+  (select status from public.plan_tasks where id = 'eeeeeeee-0000-0000-0000-000000000010') = 'blocked',
+  'a hand-blocked task stays blocked when an unrelated question is answered'
+);
+
+insert into public.plan_task_features (task_id, plan_id, text, position)
+values ('eeeeeeee-0000-0000-0000-000000000010', 'eeeeeeee-0000-0000-0000-000000000099',
+        'Must be able to block questions', 1);
+select assert(
+  (select plan_id from public.plan_task_features where text like 'Must be able%')
+    = 'eeeeeeee-0000-0000-0000-000000000001',
+  'a feature takes its plan from its task'
+);
+
+do $$
+begin
+  begin
+    update public.plan_tasks set color = 'red; drop table x'
+    where id = 'eeeeeeee-0000-0000-0000-000000000010';
+    raise exception 'FAILED: an arbitrary colour string was accepted';
+  exception when check_violation then
+    raise notice '  ok  a colour must be a token or a hex value';
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
 \echo 'realtime'
 -- ---------------------------------------------------------------------------
 select assert(

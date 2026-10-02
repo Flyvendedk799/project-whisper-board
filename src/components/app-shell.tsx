@@ -23,6 +23,8 @@ import { buildNavGroups, isNavActive } from "@/components/nav-groups";
 import { runningTimerQuery } from "@/data/time";
 import { CommandPalette } from "@/components/command-palette";
 import { openCommandPalette } from "@/components/command-palette-events";
+import { AssistantProvider } from "@/features/assistant/assistant-provider";
+import { AssistantRoot } from "@/features/assistant/assistant-root";
 
 function brandStyle(color: string | null | undefined): React.CSSProperties | undefined {
   const value = color?.trim() ?? "";
@@ -86,46 +88,55 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-background" style={branded}>
-      <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r bg-sidebar md:flex">
-        <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
-      </aside>
+    <AssistantProvider>
+      <div className="flex min-h-screen bg-background" style={branded}>
+        <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r bg-sidebar md:flex">
+          <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
+        </aside>
 
-      <div
-        className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-3 backdrop-blur md:hidden"
-        style={branded}
-      >
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Open navigation" className="h-11 w-11">
-              <Menu className="h-5 w-5" aria-hidden="true" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 bg-sidebar p-0">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <SidebarInner isAdmin={isAdmin} onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
-        <Link to="/app" className="flex min-w-0 items-center gap-2 font-display text-xl">
-          {workspace?.logo_url ? (
-            <img src={workspace.logo_url} alt="" className="h-6 w-6 rounded object-contain" />
-          ) : null}
-          <span className="truncate">{workspace?.name ?? "Workspace"}</span>
-        </Link>
-        <NotificationBell />
+        <div
+          className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-3 backdrop-blur md:hidden"
+          style={branded}
+        >
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Open navigation"
+                className="h-11 w-11"
+              >
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 bg-sidebar p-0">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SidebarInner isAdmin={isAdmin} onNavigate={() => setMobileOpen(false)} />
+            </SheetContent>
+          </Sheet>
+          <Link to="/app" className="flex min-w-0 items-center gap-2 font-display text-xl">
+            {workspace?.logo_url ? (
+              <img src={workspace.logo_url} alt="" className="h-6 w-6 rounded object-contain" />
+            ) : null}
+            <span className="truncate">{workspace?.name ?? "Workspace"}</span>
+          </Link>
+          <NotificationBell />
+        </div>
+
+        <main id="main" className="min-w-0 flex-1 pt-14 pb-24 md:pt-0 md:pb-0">
+          {children}
+        </main>
+
+        <CommandPalette />
+        {/* The Time screen has its own, larger timer card. */}
+        {!location.pathname.startsWith("/app/time") && <RunningTimerBar />}
+        {!location.pathname.startsWith("/app/projects/") &&
+          location.pathname !== "/app/report" &&
+          (isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />)}
+        {/* Above the mobile Report button, which is raised when the timer bar is up. */}
+        <AssistantRoot raised={timerRaised} />
       </div>
-
-      <main id="main" className="min-w-0 flex-1 pt-14 pb-24 md:pt-0 md:pb-0">
-        {children}
-      </main>
-
-      <CommandPalette />
-      {/* The Time screen has its own, larger timer card. */}
-      {!location.pathname.startsWith("/app/time") && <RunningTimerBar />}
-      {!location.pathname.startsWith("/app/projects/") &&
-        location.pathname !== "/app/report" &&
-        (isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />)}
-    </div>
+    </AssistantProvider>
   );
 }
 

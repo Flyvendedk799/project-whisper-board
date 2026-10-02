@@ -1608,6 +1608,32 @@ export type Database = {
           },
         ]
       }
+      user_ai_settings: {
+        Row: {
+          auto_enrich: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_enrich?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_enrich?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_ai_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1944,6 +1970,9 @@ export type Database = {
           plan_id: string
           position: number
           title: string
+          goals: string | null
+          intentions: string | null
+          tags: string[]
         }
         Insert: {
           color?: string | null
@@ -1953,6 +1982,9 @@ export type Database = {
           plan_id: string
           position?: number
           title: string
+          goals?: string | null
+          intentions?: string | null
+          tags?: string[]
         }
         Update: {
           color?: string | null
@@ -1962,6 +1994,9 @@ export type Database = {
           plan_id?: string
           position?: number
           title?: string
+          goals?: string | null
+          intentions?: string | null
+          tags?: string[]
         }
         Relationships: [
           {
@@ -2115,6 +2150,151 @@ export type Database = {
           }
         ]
       }
+      plan_task_features: {
+        Row: {
+          created_at: string
+          id: string
+          met: boolean
+          plan_id: string
+          position: number
+          source: string
+          task_id: string
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          met?: boolean
+          plan_id?: string
+          position?: number
+          source?: string
+          task_id: string
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          met?: boolean
+          plan_id?: string
+          position?: number
+          source?: string
+          task_id?: string
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_task_features_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_features_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      plan_task_questions: {
+        Row: {
+          answer: string | null
+          answered_at: string | null
+          answered_by_agent_id: string | null
+          answered_by_user_id: string | null
+          asked_by_agent_id: string | null
+          asked_by_user_id: string | null
+          blocking: boolean
+          body: string
+          created_at: string
+          id: string
+          plan_id: string
+          status: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          answer?: string | null
+          answered_at?: string | null
+          answered_by_agent_id?: string | null
+          answered_by_user_id?: string | null
+          asked_by_agent_id?: string | null
+          asked_by_user_id?: string | null
+          blocking?: boolean
+          body: string
+          created_at?: string
+          id?: string
+          plan_id?: string
+          status?: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: string | null
+          answered_at?: string | null
+          answered_by_agent_id?: string | null
+          answered_by_user_id?: string | null
+          asked_by_agent_id?: string | null
+          asked_by_user_id?: string | null
+          blocking?: boolean
+          body?: string
+          created_at?: string
+          id?: string
+          plan_id?: string
+          status?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_task_questions_answered_by_agent_id_fkey"
+            columns: ["answered_by_agent_id"]
+            isOneToOne: false
+            referencedRelation: "plan_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_questions_answered_by_user_id_fkey"
+            columns: ["answered_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_questions_asked_by_agent_id_fkey"
+            columns: ["asked_by_agent_id"]
+            isOneToOne: false
+            referencedRelation: "plan_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_questions_asked_by_user_id_fkey"
+            columns: ["asked_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_questions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_task_questions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       plan_task_steps: {
         Row: {
           created_at: string
@@ -2126,6 +2306,8 @@ export type Database = {
           task_id: string
           text: string
           updated_at: string
+          feature_id: string | null
+          source: string
         }
         Insert: {
           created_at?: string
@@ -2137,6 +2319,8 @@ export type Database = {
           task_id: string
           text: string
           updated_at?: string
+          feature_id?: string | null
+          source?: string
         }
         Update: {
           created_at?: string
@@ -2148,8 +2332,17 @@ export type Database = {
           task_id?: string
           text?: string
           updated_at?: string
+          feature_id?: string | null
+          source?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "plan_task_steps_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "plan_task_features"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "plan_task_steps_plan_id_fkey"
             columns: ["plan_id"]
@@ -2196,6 +2389,12 @@ export type Database = {
           ticket_id: string | null
           title: string
           updated_at: string
+          ai_assessed_at: string | null
+          ai_assessment: Json | null
+          ai_context: string | null
+          ai_context_at: string | null
+          blocked_from: Database["public"]["Enums"]["plan_task_status"] | null
+          color: string | null
         }
         Insert: {
           acceptance_criteria?: string | null
@@ -2226,6 +2425,12 @@ export type Database = {
           ticket_id?: string | null
           title: string
           updated_at?: string
+          ai_assessed_at?: string | null
+          ai_assessment?: Json | null
+          ai_context?: string | null
+          ai_context_at?: string | null
+          blocked_from?: Database["public"]["Enums"]["plan_task_status"] | null
+          color?: string | null
         }
         Update: {
           acceptance_criteria?: string | null
@@ -2256,6 +2461,12 @@ export type Database = {
           ticket_id?: string | null
           title?: string
           updated_at?: string
+          ai_assessed_at?: string | null
+          ai_assessment?: Json | null
+          ai_context?: string | null
+          ai_context_at?: string | null
+          blocked_from?: Database["public"]["Enums"]["plan_task_status"] | null
+          color?: string | null
         }
         Relationships: [
           {
@@ -2341,6 +2552,8 @@ export type Database = {
           title: string
           updated_at: string
           workspace_id: string
+          github_work_branch: string | null
+          github_work_mode: string | null
         }
         Insert: {
           created_at?: string
@@ -2354,6 +2567,8 @@ export type Database = {
           title: string
           updated_at?: string
           workspace_id: string
+          github_work_branch?: string | null
+          github_work_mode?: string | null
         }
         Update: {
           created_at?: string
@@ -2367,6 +2582,8 @@ export type Database = {
           title?: string
           updated_at?: string
           workspace_id?: string
+          github_work_branch?: string | null
+          github_work_mode?: string | null
         }
         Relationships: [
           {
@@ -2484,6 +2701,8 @@ export type Database = {
         | "attachment_added"
         | "attachment_removed"
         | "task_deleted"
+        | "question_asked"
+        | "question_answered"
       plan_status: "draft" | "active" | "paused" | "completed" | "archived"
       plan_task_complexity: "trivial" | "small" | "medium" | "large" | "epic"
       plan_task_priority: "low" | "medium" | "high" | "critical"
@@ -2708,6 +2927,8 @@ export const Constants = {
         "attachment_added",
         "attachment_removed",
         "task_deleted",
+        "question_asked",
+        "question_answered",
       ],
       plan_status: ["draft", "active", "paused", "completed", "archived"],
       plan_task_complexity: ["trivial", "small", "medium", "large", "epic"],

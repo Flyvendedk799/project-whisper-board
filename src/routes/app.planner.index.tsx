@@ -28,6 +28,7 @@ import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { CardActionsMenu } from "@/components/card-actions-menu";
+import { CopyIdButton } from "@/features/planner/copy-id-button";
 import { PlanDeleteDialog } from "@/features/planner/plan-delete-dialog";
 import { qk } from "@/data/keys";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
@@ -278,6 +279,11 @@ function PlannerIndexPage() {
                           </p>
                         </article>
                       </Link>
+                      <CopyIdButton
+                        id={plan.id}
+                        label="plan"
+                        className="absolute right-12 top-[15px] z-10"
+                      />
                       <CardActionsMenu
                         label={plan.title}
                         archived={status === "archived"}

@@ -1,15 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { listGitHubRepos } from "@/lib/github.functions";
+import { SearchableSelect } from "@/components/searchable-select";
+import { useGitHubRepos } from "./use-github";
+import { parseRepoSlug } from "@/lib/github-url";
 
-/** Pick a repository the server token can see, or type owner/name. */
+/**
+ * Pick one of your repositories (type to search the whole list) or type
+ * owner/name yourself.
+ */
 export function GitHubRepoField({
   id,
   value,
@@ -19,30 +16,29 @@ export function GitHubRepoField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const repos = useQuery({
-    queryKey: ["github", "repos"],
-    queryFn: () => listGitHubRepos({ data: { page: 1, perPage: 50 } }),
-    retry: false,
-  });
-
+  const repos = useGitHubRepos();
   const known = repos.data?.repos ?? [];
 
   return (
     <div className="space-y-2">
-      {known.length > 0 && (
-        <Select value={value || undefined} onValueChange={onChange}>
-          <SelectTrigger id={`${id}-picker`} aria-label="Choose a GitHub repository">
-            <SelectValue placeholder="Choose a repository" />
-          </SelectTrigger>
-          <SelectContent>
-            {known.map((repo) => (
-              <SelectItem key={repo.fullName} value={repo.fullName}>
-                {repo.fullName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      {known.length > 0 || repos.isPending ? (
+        <SearchableSelect
+          id={`${id}-picker`}
+          ariaLabel="Choose a GitHub repository"
+          value={value}
+          onChange={onChange}
+          loading={repos.isPending}
+          placeholder="Choose a repository"
+          searchPlaceholder="Search your repositories"
+          emptyText="No repository matches."
+          allowCustom
+          validateCustom={(text) => parseRepoSlug(text) !== null}
+          options={known.map((repo) => ({
+            value: repo.fullName,
+            hint: repo.private ? "private" : undefined,
+          }))}
+        />
+      ) : null}
       <Input
         id={id}
         value={value}
@@ -55,6 +51,11 @@ export function GitHubRepoField({
           Connect GitHub in Settings to pick from your repositories.
         </p>
       )}
+      {repos.data?.truncated ? (
+        <p className="text-xs text-muted-foreground">
+          Showing your 500 most recently updated repositories. Type owner/name for any other.
+        </p>
+      ) : null}
     </div>
   );
 }

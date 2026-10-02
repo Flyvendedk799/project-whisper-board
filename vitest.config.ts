@@ -22,7 +22,7 @@ export default defineConfig({
           ...SHARED,
           name: "node",
           environment: "node",
-          include: ["src/{lib,data}/**/*.{test,spec}.ts"],
+          include: ["src/{lib,data,mcp}/**/*.{test,spec}.ts"],
         },
       },
       {

@@ -354,6 +354,8 @@ export const PLAN_EVENT_KIND_LABEL: Record<PlanEventKind, string> = {
   attachment_added: "attached a file",
   attachment_removed: "removed a file",
   task_deleted: "deleted a task",
+  question_asked: "asked a question",
+  question_answered: "answered a question",
 };
 
 /** `[{ value, label }]` for a Select, in the database's own order. */

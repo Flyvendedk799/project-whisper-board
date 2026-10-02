@@ -4,7 +4,17 @@ import { hasLivePullRequest } from "@/lib/plan-refs";
 import { cardFace, nestedOutlineCount, plainTitle } from "@/lib/board-view";
 import { readTaskOutline, stepsProgress, type TaskOutlineNode } from "@/lib/plan-markdown";
 import { cn } from "@/lib/utils";
-import { advanceTip, coverImages, initials, PRIORITY_STYLE, STATUS_STYLE } from "./plan-model";
+import { questionCounts } from "@/lib/plan-fields";
+import {
+  advanceTip,
+  coverImages,
+  initials,
+  PRIORITY_STYLE,
+  STATUS_STYLE,
+  taskColor,
+} from "./plan-model";
+import { CopyIdButton } from "./copy-id-button";
+import { TagChip } from "./tag-editor";
 
 const PR_TONE: Record<string, string> = {
   open: "text-success",
@@ -24,6 +34,8 @@ export function PlanTaskCard({
   onAdvance,
   attachments = [],
   dropActive = false,
+  onTagClick,
+  activeTag = null,
 }: {
   task: TaskWithAgent;
   expanded?: boolean;
@@ -33,6 +45,9 @@ export function PlanTaskCard({
   attachments?: PlanAttachmentWithUrl[];
   /** A file is being dragged over the card. */
   dropActive?: boolean;
+  /** Clicking a tag chip filters the board by it. */
+  onTagClick?: (tag: string) => void;
+  activeTag?: string | null;
 }) {
   const livePr = hasLivePullRequest(task);
   const style = STATUS_STYLE[task.status];
@@ -46,6 +61,9 @@ export function PlanTaskCard({
   const progress = stepsProgress(steps);
   const covers = coverImages(attachments);
   const notes = task.comment_count?.[0]?.count ?? 0;
+  const color = taskColor(task.color);
+  const tags = task.labels ?? [];
+  const questions = questionCounts(task.questions);
   const ticket = task.ticket;
   const hasFooter = Boolean(
     task.assigned_agent_id ||
@@ -58,8 +76,10 @@ export function PlanTaskCard({
 
   return (
     <div
+      style={color ? { borderLeftColor: color } : undefined}
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] hover:border-primary/50 hover:shadow-md",
+        "group/card flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] hover:border-primary/50 hover:shadow-md",
+        color && "border-l-[5px]",
         dropActive && "border-primary ring-2 ring-primary/30",
       )}
     >
@@ -119,6 +139,11 @@ export function PlanTaskCard({
               </button>
             ) : null}
           </div>
+          <CopyIdButton
+            id={task.id}
+            label="task"
+            className="opacity-0 focus-visible:opacity-100 group-hover/card:opacity-100"
+          />
         </div>
 
         {expanded && canExpand ? (
@@ -142,7 +167,40 @@ export function PlanTaskCard({
           {task.complexity ? (
             <span className="rounded-full border px-[7px] py-px">{task.complexity}</span>
           ) : null}
+          {questions.open > 0 ? (
+            <span
+              title={
+                questions.blocking > 0
+                  ? `${questions.blocking} blocking question${questions.blocking === 1 ? "" : "s"} waiting for an answer`
+                  : "Waiting for an answer"
+              }
+              className={cn(
+                "rounded-full px-2 py-0.5 font-medium",
+                questions.blocking > 0
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-warning/15 text-foreground",
+              )}
+            >
+              {questions.open} {questions.open === 1 ? "question" : "questions"}
+            </span>
+          ) : null}
         </div>
+
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 4).map((tag) => (
+              <TagChip
+                key={tag}
+                tag={tag}
+                active={activeTag === tag}
+                onClick={onTagClick ? () => onTagClick(tag) : undefined}
+              />
+            ))}
+            {tags.length > 4 ? (
+              <span className="text-[11px] text-muted-foreground">+{tags.length - 4}</span>
+            ) : null}
+          </div>
+        ) : null}
 
         {progress.total > 0 ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

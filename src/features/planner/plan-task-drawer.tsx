@@ -21,10 +21,15 @@ import type { EventWithRefs, PlanWithSections, TaskWithAgent } from "@/data";
 import { AttachmentLightbox } from "./attachment-lightbox";
 import { usePlanMedia } from "./plan-media";
 import { taskHeadline, taskLink } from "./plan-model";
+import { collectTags, questionCounts, workTargetOf } from "@/lib/plan-fields";
+import { CopyIdButton } from "./copy-id-button";
 import { TaskAttachments } from "./task-attachments";
 import { TaskDiscussion } from "./task-discussion";
+import { TaskFeatures } from "./task-features";
 import { TaskProperties } from "./task-properties";
+import { TaskQuestions } from "./task-questions";
 import { TaskSteps } from "./task-steps";
+import { TaskTechnicalContext } from "./task-technical-context";
 import type { PlanActions } from "./use-plan-actions";
 import { useSyncedField } from "./use-synced-field";
 
@@ -39,6 +44,7 @@ export function PlanTaskDrawer({
   order,
   actions,
   onSelect,
+  renderAiMenu,
 }: {
   plan: PlanWithSections;
   taskId: string | null;
@@ -46,6 +52,8 @@ export function PlanTaskDrawer({
   order: string[];
   actions: PlanActions;
   onSelect: (taskId: string | null) => void;
+  /** Slot for the task's AI menu, shown only when AI is configured. */
+  renderAiMenu?: (task: TaskWithAgent) => React.ReactNode;
 }) {
   const task = useMemo(() => {
     if (!taskId) return null;
@@ -72,6 +80,7 @@ export function PlanTaskDrawer({
             order={order}
             actions={actions}
             onSelect={onSelect}
+            aiMenu={renderAiMenu?.(task)}
           />
         ) : taskId ? (
           <div className="p-8 text-sm text-muted-foreground">
@@ -89,12 +98,14 @@ function DrawerBody({
   order,
   actions,
   onSelect,
+  aiMenu,
 }: {
   plan: PlanWithSections;
   task: TaskWithAgent;
   order: string[];
   actions: PlanActions;
   onSelect: (taskId: string | null) => void;
+  aiMenu?: React.ReactNode;
 }) {
   const media = usePlanMedia();
   const events = useQuery(planEventsQuery(plan.id));
@@ -103,6 +114,8 @@ function DrawerBody({
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const section = plan.sections.find((s) => s.id === task.section_id);
+  const tagSuggestions = useMemo(() => collectTags(plan).map((entry) => entry.tag), [plan]);
+  const questions = questionCounts(task.questions);
   const position = order.indexOf(task.id);
   const files = media.byTask.get(task.id) ?? [];
 
@@ -176,6 +189,8 @@ function DrawerBody({
             </span>
           ) : null}
         </span>
+        {aiMenu}
+        <CopyIdButton id={task.id} label="task" />
         <Button
           type="button"
           variant="ghost"
@@ -225,7 +240,25 @@ function DrawerBody({
             />
           </div>
 
+          {questions.open > 0 ? (
+            <a
+              href={`#questions-${task.id}`}
+              className={
+                questions.blocking > 0
+                  ? "rounded-lg bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive"
+                  : "rounded-lg bg-warning/15 px-3.5 py-2.5 text-[13px]"
+              }
+            >
+              {questions.blocking > 0
+                ? `Blocked by ${questions.blocking} open question${questions.blocking === 1 ? "" : "s"}. Answer to release the task.`
+                : `${questions.open} open question${questions.open === 1 ? "" : "s"} waiting for an answer.`}
+            </a>
+          ) : null}
+
+          <TaskFeatures task={task} actions={actions} />
           <TaskSteps task={task} actions={actions} />
+          <TaskQuestions task={task} actions={actions} />
+          <TaskTechnicalContext task={task} actions={actions} />
           <TaskAttachments task={task} onOpenFile={setLightboxId} />
           <TaskDiscussion
             taskId={task.id}
@@ -236,7 +269,14 @@ function DrawerBody({
         </div>
 
         <div className="border-t bg-surface px-5 pb-10 pt-6 md:w-[272px] md:shrink-0 md:self-stretch md:border-l md:border-t-0">
-          <TaskProperties task={task} planId={plan.id} actions={actions} createdBy={createdBy} />
+          <TaskProperties
+            task={task}
+            planId={plan.id}
+            actions={actions}
+            createdBy={createdBy}
+            tagSuggestions={tagSuggestions}
+            work={workTargetOf(plan)}
+          />
         </div>
       </div>
 

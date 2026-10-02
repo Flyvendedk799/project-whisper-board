@@ -1,146 +1,186 @@
 ---
 name: ai-planner
 description: >-
-  Interact with the Boared AI Planner. Use this skill to view active
-  product plans, check available tasks, claim tasks, track progress, add comments,
-  and complete tasks on the planning board via MCP or direct REST API.
+  Work on the Boared AI Planner board: read plans, claim and work tasks, report
+  progress (tick steps, mark features met), ask questions instead of guessing,
+  author plans, sections and tasks, and open pull requests. Use it through the
+  MCP server or the plain REST API.
 ---
 
 # Boared AI Planner
 
-This skill enables AI agents to coordinate and execute tasks tracked on the Boared AI Planner board (https://boared.online/planner).
+Humans and AI agents share one board: **plans -> sections -> tasks**. A task has
+**features** (what it must deliver), **steps** (how, a checklist), **questions**
+(asked by you or by a person), comments, shared files, **tags**, a colour and
+an optional pull request. This skill is how an agent works that board.
 
 ## Authentication
 
-All interactions require an API key generated from the Boared UI:
-1. Open https://boared.online (or your local instance).
-2. For a key that only reaches the planner, open a plan and choose **Plan options → Planner API keys**.
-   For a key that also reaches projects and tickets (`/api/v1`), go to **Settings → API keys**.
-3. Generate a key (starts with `cpk_...`).
+Create an API key in Boared: **Settings -> API keys** (reaches the planner and
+the rest of the workspace) or, for a key that only reaches the planner,
+**Plan options -> Planner API keys**. Keys start with `cpk_`. Supply it as:
 
-You can supply this key via:
-- Environment variable `PLANNER_API_KEY` (in `.env`, `~/.boared.env`, or your shell environment).
-- HTTP header: `Authorization: Bearer <PLANNER_API_KEY>`.
+- the `PLANNER_API_KEY` environment variable (in `.env`, `~/.boared.env` or the shell), or
+- the header `Authorization: Bearer <PLANNER_API_KEY>`.
 
-The API endpoint defaults to `https://boared.online/api/planner` (or set `PLANNER_API_URL` to override).
+The API is `https://boared.online/api/planner`; set `PLANNER_API_URL` for your own
+instance. Every call is limited to the key's workspace.
 
----
+## Workflow (follow this)
 
-## Workflow Overview
+1. **Read before you touch anything.** `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
+   A task carries description, acceptance criteria, features, steps, open questions, shared files and tags.
+2. **Claim before working.** `claim_task` reserves it (and registers you). If it fails with a conflict the task
+   is taken or not ready: pick another. Never work on a task you did not claim.
+3. **Mark it in progress.** `start_task`, or `report_progress` with `status: in_progress`.
+4. **Features are the what, steps are the how.** If the task has features but no steps, write steps with
+   `add_task_steps` and link each to the feature it delivers (`feature_id`). Do not rewrite features a person wrote.
+5. **Tick as you go.** After each meaningful chunk call `report_progress` with `steps_done` and `features_met`.
+   Mark a feature met only when the work really satisfies it. Do it at the time, not in one batch at the end.
+6. **Comment only when there is something to say**: a decision, a blocker, a result. Not "starting" or
+   "still working". `report_progress` posts a comment only when `note` is non-empty, so leave it out otherwise.
+7. **Ask, do not guess.** Use `ask_question`. Make it `blocking: true` only if you truly cannot continue without
+   the answer: that puts the task in `blocked` and a person sees it waiting. Otherwise ask non-blocking and carry on.
+   Answers appear in `get_task` and `list_questions`.
+8. **Check `work_target` before committing** (returned by `get_plan` and `get_task`): repository, base branch,
+   working branch and mode. `new` or `existing`: commit on that branch. `base`: commit directly on the base
+   branch and do not open a PR. No working branch chosen: one branch per task.
+9. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
+   `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
+10. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
 
-When picking up work from the board:
-1. **Find Active Plan**: Get the active plan and its `id`.
-2. **Find Available Tasks**: Fetch available tasks where dependencies are already `done`.
-3. **Claim Task**: Reserve the task so other agents know it's being worked on.
-4. **Start Task**: Mark status as `in_progress`.
-5. **Post Comments**: Share milestones or notes with comments.
-6. **Complete Task**: When finished, mark the task as `done` (optionally attach a PR URL or summary). Dependent tasks are automatically unblocked!
-7. **If Blocked**: Mark task as `blocked` with a clear explanation so a human or parent agent can unblock you.
+`agent_guide` returns this workflow as text. The MCP server also sends it as its `instructions`.
 
----
+## Ids, tags, colours
 
-## Method 1: Universal REST API (Works anywhere, zero MCP setup required)
+- Ids are uuids. Get plan, section, task, step, feature and question ids from `get_plan` / `get_task`.
+- Tags are short words: lower-cased, hyphenated, at most 20 per task or section. Tasks store them as `labels`.
+- Colours are hex (`#3b82f6`) or a design token (`var(--chart-1)`). `null` clears one.
+- A **blocking question** that is open holds its task in `blocked` and restores it when the last one is answered
+  or dismissed. Do not set the status yourself.
+- Statuses: `backlog`, `available`, `claimed`, `in_progress`, `in_review`, `done`, `blocked`.
+  `report_progress` accepts `claimed`, `in_progress`, `in_review`, `done` and refuses to touch an unclaimed task.
 
-Any agent with bash / PowerShell / curl / fetch can interact directly with the board without requiring MCP servers:
+## MCP tools
 
-### 1. List Plans
+Server name: `consflow-planner`. `agent_id` is optional everywhere: it defaults to the agent that claimed a task in
+the session.
+
+| Group              | Tools                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment` |
+| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`             |
+| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                      |
+| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                            |
+| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`   |
+| GitHub             | `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                              |
+
+Key parameters:
+
+- `report_progress(task_id, status?, steps_done?[], features_met?[], note?)`: ids are checked before anything is written.
+- `ask_question(task_id, body, blocking?)`, `answer_question(task_id, question_id, answer)`, `list_questions(plan_id | task_id, status?)`.
+- `add_task_features(task_id, items[] | text)`, `update_task_feature(task_id, feature_id, met?, text?)`.
+- `add_task_steps(task_id, items[] | text, feature_id?)`: `text` is one step per line, indent two spaces to nest.
+- `create_section(plan_id, title, description?, goals?, intentions?, color?, tags?)`, `update_section(section_id, ...)`.
+- `create_task(plan_id, section_id, title, description?, priority?, complexity?, tags?, color?, features?[], acceptance_criteria?[], depends_on?[], status?)`,
+  `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?)`.
+- `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
+- `create_pull_request(task_id, title, head_branch?, body?, repo?, base_branch?)`: errors with a clear message when the plan works on `base`.
+
+## REST API
+
+All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...", "code": "..." }` with a 4xx status.
+
+| Request                                              | Body / notes                                                                                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET plans`                                          | `?status=` one status, a comma list or `all` (active by default)                                                                            |
+| `GET plans/:plan_id`                                 | sections, tasks, features, steps, questions, files, `work_target`                                                                           |
+| `GET plans/:plan_id/available-tasks`                 | dependencies already done                                                                                                                   |
+| `GET plans/:plan_id/questions`                       | `?status=open` (default), `answered`, `dismissed`, `all`                                                                                    |
+| `GET tasks/:task_id`                                 | one task in full, plus `work_target`                                                                                                        |
+| `GET tasks/:task_id/questions`                       | `?status=` (all by default)                                                                                                                 |
+| `GET tasks/:task_id/attachments`                     | files shared with agents; `GET tasks/:task_id/attachments/:attachment_id` for one                                                           |
+| `POST agents/register`                               | `{ name, provider, model? }` -> agent `id` (same agent comes back as the same row)                                                          |
+| `POST tasks/:task_id/claim`                          | `{ agent_id }`; 409 if not available                                                                                                        |
+| `POST tasks/:task_id/start`                          |                                                                                                                                             |
+| `POST tasks/:task_id/progress`                       | `{ agent_id, status?, note?, steps_done?[], features_met?[] }`; comment only if `note` is non-empty                                         |
+| `POST tasks/:task_id/complete`                       | `{ pr_url?, branch_name? }`                                                                                                                 |
+| `POST tasks/:task_id/block`                          | `{ reason, agent_id }`: creates a blocking question                                                                                         |
+| `POST tasks/:task_id/unclaim`                        |                                                                                                                                             |
+| `POST tasks/:task_id/comment`                        | `{ body, agent_id }`                                                                                                                        |
+| `POST tasks/:task_id/questions`                      | `{ body, blocking?, agent_id }`                                                                                                             |
+| `POST tasks/:task_id/questions/:question_id/answer`  | `{ answer, agent_id }`                                                                                                                      |
+| `POST tasks/:task_id/questions/:question_id/dismiss` |                                                                                                                                             |
+| `POST tasks/:task_id/features`                       | `{ text }` (one per line) or `{ items[] }`                                                                                                  |
+| `POST tasks/:task_id/features/:feature_id`           | `{ met?, text? }`                                                                                                                           |
+| `POST tasks/:task_id/steps`                          | `{ text }` (one per line) or `{ items[] }`, `feature_id?`, `depth?`, `done?`                                                                |
+| `POST tasks/:task_id/steps/:step_id`                 | `{ done?, text?, feature_id? }`                                                                                                             |
+| `POST tasks/:task_id`                                | `{ title?, description?, priority?, complexity?, tags?[], color?, acceptance_criteria?[], branch_name? }`                                   |
+| `POST plans`                                         | `{ title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status? }`                           |
+| `POST plans/:plan_id/import`                         | `{ markdown, mode: sync \| merge \| replace }`                                                                                              |
+| `POST plans/:plan_id/status`                         | `{ status }`                                                                                                                                |
+| `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, color?, tags?[] }`                                                                             |
+| `POST sections/:section_id`                          | same fields, all optional                                                                                                                   |
+| `POST plans/:plan_id/tasks`                          | `{ section_id, title, description?, priority?, complexity?, tags?[], color?, features?[], acceptance_criteria?[], depends_on?[], status? }` |
+| `GET tasks/:task_id/pull-request`                    | live PR state from GitHub                                                                                                                   |
+| `POST tasks/:task_id/pull-request`                   | `{ title, head_branch?, body?, repo?, base? }`; head defaults to the plan's work branch                                                     |
+| `GET plans/:plan_id/pull-requests`                   | the plan's PRs in merge order                                                                                                               |
+| `POST plans/:plan_id/pull-requests/merge`            | `{ dry_run?, method?, max?, only?, ignore_checks? }` (dry run by default)                                                                   |
+
+Example loop:
+
 ```bash
-curl -s -H "Authorization: Bearer $PLANNER_API_KEY" https://boared.online/api/planner/plans
+H=(-H "Authorization: Bearer $PLANNER_API_KEY" -H "Content-Type: application/json")
+API=https://boared.online/api/planner
+
+AGENT_ID=$(curl -s "${H[@]}" -d '{"name":"Claude Code","provider":"anthropic"}' $API/agents/register | jq -r .id)
+curl -s "${H[@]}" $API/plans/$PLAN_ID/available-tasks | jq '.[0] | {id, title, features, steps}'
+curl -s "${H[@]}" -d "{\"agent_id\":\"$AGENT_ID\"}" $API/tasks/$TASK_ID/claim
+curl -s "${H[@]}" -d "{\"agent_id\":\"$AGENT_ID\",\"status\":\"in_progress\"}" $API/tasks/$TASK_ID/progress
+curl -s "${H[@]}" -d "{\"agent_id\":\"$AGENT_ID\",\"steps_done\":[\"$STEP_ID\"],\"features_met\":[\"$FEATURE_ID\"]}" $API/tasks/$TASK_ID/progress
+curl -s "${H[@]}" -d '{"body":"Which auth provider should this use?","blocking":true}' $API/tasks/$TASK_ID/questions
+curl -s "${H[@]}" -d '{"pr_url":"https://github.com/o/r/pull/1"}' $API/tasks/$TASK_ID/complete
 ```
 
-### 2. Get Plan Details (Sections and Tasks)
-```bash
-curl -s -H "Authorization: Bearer $PLANNER_API_KEY" https://boared.online/api/planner/plans/<plan_id>
+## MCP server setup
+
+The MCP server is a stdio process in the Boared repository (`src/mcp/server.ts`). Clone the repo, run `npm install`
+once, and put the key in `~/.boared.env`:
+
+```
+PLANNER_API_KEY=cpk_...
+PLANNER_API_URL=https://boared.online/api/planner
 ```
 
-### 3. List Available Tasks (Dependencies already met)
+The **Agents & MCP** page in Boared (admins) shows these snippets filled in for your instance.
+
+**Claude Code**
+
 ```bash
-curl -s -H "Authorization: Bearer $PLANNER_API_KEY" https://boared.online/api/planner/plans/<plan_id>/available-tasks
+claude mcp add --scope user consflow-planner -- npx --prefix <path-to-boared> tsx <path-to-boared>/src/mcp/server.ts
 ```
 
-### 4. Get Task Details
-```bash
-curl -s -H "Authorization: Bearer $PLANNER_API_KEY" https://boared.online/api/planner/tasks/<task_id>
+**Cursor** (`~/.cursor/mcp.json` or `.cursor/mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "consflow-planner": {
+      "command": "npx",
+      "args": ["--prefix", "<path-to-boared>", "tsx", "<path-to-boared>/src/mcp/server.ts"],
+      "env": {
+        "PLANNER_API_KEY": "cpk_...",
+        "PLANNER_API_URL": "https://boared.online/api/planner"
+      }
+    }
+  }
+}
 ```
 
-### 5. Claim a Task
-Register agent (if needed):
+**Antigravity (agy)**
+
 ```bash
-AGENT=$(curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" -H "Content-Type: application/json" \
-  -d '{"name": "Antigravity", "provider": "google", "model": "gemini-3.8-flash"}' \
-  https://boared.online/api/planner/agents/register)
-AGENT_ID=$(echo $AGENT | jq -r '.id')
-```
-Claim task:
-```bash
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" -H "Content-Type: application/json" \
-  -d "{\"agent_id\": \"$AGENT_ID\"}" \
-  https://boared.online/api/planner/tasks/<task_id>/claim
+agy mcp add consflow-planner npx --prefix <path-to-boared> tsx <path-to-boared>/src/mcp/server.ts
 ```
 
-### 6. Start Task
-```bash
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" \
-  https://boared.online/api/planner/tasks/<task_id>/start
-```
-
-### 7. Add Comment
-```bash
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" -H "Content-Type: application/json" \
-  -d '{"body": "Investigating the API routes and preparing the fix."}' \
-  https://boared.online/api/planner/tasks/<task_id>/comment
-```
-
-### 8. Complete Task
-```bash
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" -H "Content-Type: application/json" \
-  -d '{"pr_url": "https://github.com/.../pull/123"}' \
-  https://boared.online/api/planner/tasks/<task_id>/complete
-```
-
-### 9. Block / Unclaim Task
-```bash
-# Block:
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" \
-  https://boared.online/api/planner/tasks/<task_id>/block
-
-# Unclaim (release back to pool):
-curl -s -X POST -H "Authorization: Bearer $PLANNER_API_KEY" \
-  https://boared.online/api/planner/tasks/<task_id>/unclaim
-```
-
----
-
-## Method 2: MCP Tools (When MCP is configured)
-
-If the `consflow-planner` MCP server is active in your agent session, you have access to these tools:
-- `list_plans`: List active plans.
-- `get_plan`: Get plan details with sections and tasks (`plan_id`).
-- `list_available_tasks`: Get tasks ready to be worked on (`plan_id`).
-- `get_task`: Inspect description and acceptance criteria (`task_id`).
-- `claim_task`: Claim an available task (`task_id`, `agent_name`, `provider`, `model`).
-- `start_task`: Mark as in_progress (`task_id`).
-- `complete_task`: Mark as done (`task_id`, `summary`, `pr_url`).
-- `block_task`: Mark as blocked with reason (`task_id`, `reason`).
-- `unclaim_task`: Return task to available pool (`task_id`).
-- `add_task_comment`: Post a progress comment (`task_id`, `body`).
-
----
-
-## MCP Server Setup
-
-To make MCP tools available globally:
-
-### For Claude Code
-Run in terminal:
-```bash
-claude mcp add --scope user consflow-planner npx --prefix C:/Users/tobia/Boared tsx C:/Users/tobia/Boared/src/mcp/server.ts
-```
-
-### For Antigravity CLI (AGY)
-Run in terminal:
-```bash
-agy mcp add consflow-planner npx --prefix C:/Users/tobia/Boared tsx C:/Users/tobia/Boared/src/mcp/server.ts
-```
-
-Ensure `PLANNER_API_KEY` is present in `C:\Users\tobia\Boared\.env` or `~/.boared.env`.
+No MCP? Every tool above is one REST request: use the table and `curl`.

@@ -16,6 +16,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ApiV1RouteImport } from './routes/api.v1'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppCreateWorkspaceRouteImport } from './routes/app.create-workspace'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
@@ -72,6 +73,11 @@ const ApiV1Route = ApiV1RouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAgentsRoute = AppAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCreateWorkspaceRoute = AppCreateWorkspaceRouteImport.update({
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/api/v1': typeof ApiV1RouteWithChildren
+  '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/organizations': typeof AppOrganizationsRouteWithChildren
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/api/v1': typeof ApiV1RouteWithChildren
+  '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/report': typeof AppReportRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/api/v1': typeof ApiV1RouteWithChildren
+  '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/organizations': typeof AppOrganizationsRouteWithChildren
@@ -285,6 +294,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/api/v1'
+    | '/app/agents'
     | '/app/create-workspace'
     | '/app/inbox'
     | '/app/organizations'
@@ -315,6 +325,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/api/v1'
+    | '/app/agents'
     | '/app/create-workspace'
     | '/app/inbox'
     | '/app/report'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/api/v1'
+    | '/app/agents'
     | '/app/create-workspace'
     | '/app/inbox'
     | '/app/organizations'
@@ -430,6 +442,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/agents': {
+      id: '/app/agents'
+      path: '/agents'
+      fullPath: '/app/agents'
+      preLoaderRoute: typeof AppAgentsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/create-workspace': {
@@ -617,6 +636,7 @@ const AppPlannerRouteWithChildren = AppPlannerRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAgentsRoute: typeof AppAgentsRoute
   AppCreateWorkspaceRoute: typeof AppCreateWorkspaceRoute
   AppInboxRoute: typeof AppInboxRoute
   AppOrganizationsRoute: typeof AppOrganizationsRouteWithChildren
@@ -635,6 +655,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAgentsRoute: AppAgentsRoute,
   AppCreateWorkspaceRoute: AppCreateWorkspaceRoute,
   AppInboxRoute: AppInboxRoute,
   AppOrganizationsRoute: AppOrganizationsRouteWithChildren,

@@ -1,0 +1,546 @@
+/**
+ * What the agent API accepts in a request body, as pure functions.
+ *
+ * The REST handlers in `routes/api.planner.$.ts` only wire these to the
+ * database, so every rule an agent can trip over (a colour, a tag, a feature
+ * list, a step line) is testable without a server. They use the same helpers as
+ * the screen (`plan-fields`), so a value means the same thing whoever writes it.
+ */
+import { AppError } from "@/lib/errors";
+import {
+  FEATURE_TEXT_MAX,
+  isValidBranchName,
+  isWorkMode,
+  MAX_FEATURES,
+  normalizeTags,
+  parseColor,
+  parseFeatureList,
+  QUESTION_ANSWER_MAX,
+  QUESTION_BODY_MAX,
+  workBranchProblem,
+  type ParsedFeature,
+  type WorkMode,
+} from "@/lib/plan-fields";
+import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
+import { Constants, type Database } from "@/integrations/supabase/types";
+
+type Body = Record<string, unknown>;
+type TaskPriority = Database["public"]["Enums"]["plan_task_priority"];
+type TaskComplexity = Database["public"]["Enums"]["plan_task_complexity"];
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const TASK_PRIORITIES: readonly string[] = Constants.public.Enums.plan_task_priority;
+export const TASK_COMPLEXITIES: readonly string[] = Constants.public.Enums.plan_task_complexity;
+/** Where an agent may put a task it creates. Claiming and finishing have their own calls. */
+export const CREATE_STATUSES = ["backlog", "available"] as const;
+/** Statuses `report_progress` can move a task to. Blocked goes through a question. */
+export const PROGRESS_STATUSES = ["claimed", "in_progress", "in_review", "done"] as const;
+export type ProgressStatus = (typeof PROGRESS_STATUSES)[number];
+
+export const MAX_PROGRESS_NOTE = 5000;
+const MAX_STEPS_PER_CALL = 100;
+
+// ---------------------------------------------------------------------------
+// Scalars
+// ---------------------------------------------------------------------------
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID.test(value);
+}
+
+export function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** A required piece of text, trimmed, within a length. */
+export function requireText(value: unknown, label: string, max: number): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) throw new AppError("validation", `${label} is required.`);
+  if (text.length > max) {
+    throw new AppError("validation", `${label} is over ${max} characters.`);
+  }
+  return text;
+}
+
+/** An optional text field: `undefined` leaves it alone, `null` or blank clears it. */
+function textField(value: unknown, label: string, max: number): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") throw new AppError("validation", `${label} must be text.`);
+  const text = value.trim();
+  if (text.length > max) throw new AppError("validation", `${label} is over ${max} characters.`);
+  return text || null;
+}
+
+/** An optional id: absent or null is null, anything that is not a uuid is refused. */
+export function optionalUuid(value: unknown, label: string): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (!isUuid(value)) throw new AppError("validation", `${label} must be an id (a uuid).`);
+  return value;
+}
+
+function uuidList(value: unknown, label: string, max: number): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > max || !value.every(isUuid)) {
+    throw new AppError("validation", `${label} must be a list of up to ${max} ids.`);
+  }
+  return [...new Set(value as string[])];
+}
+
+function enumField(value: unknown, allowed: readonly string[], label: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new AppError("validation", `${label} is one of ${allowed.join(", ")}.`);
+  }
+  return value;
+}
+
+/** `undefined` when absent, a safe colour or `null` when present, an error when malformed. */
+function colorField(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  const color = parseColor(value);
+  if (color === undefined) {
+    throw new AppError(
+      "validation",
+      "`color` is a hex value like #3b82f6 or a design token like var(--chart-1); send null to clear it.",
+    );
+  }
+  return color;
+}
+
+function tagsField(body: Body): string[] | undefined {
+  const raw = body.tags ?? body.labels;
+  if (raw === undefined) return undefined;
+  const list = typeof raw === "string" ? raw.split(",") : raw;
+  if (!Array.isArray(list) || !list.every((tag) => typeof tag === "string") || list.length > 40) {
+    throw new AppError("validation", "`tags` is a list of up to 40 words.");
+  }
+  return normalizeTags(list as string[]);
+}
+
+/** A list of lines from either an array of strings or one multi-line string. */
+function lineList(value: unknown, label: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  const lines =
+    typeof value === "string" ? value.split(/\r?\n/) : Array.isArray(value) ? value : null;
+  if (!lines || !lines.every((line) => typeof line === "string")) {
+    throw new AppError("validation", `${label} is a list of text lines.`);
+  }
+  return (lines as string[]).map((line) => line.trim()).filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
+// Plans
+// ---------------------------------------------------------------------------
+
+/**
+ * `github_work_mode` and `github_work_branch` on a new plan. The branch only
+ * means something for `new` and `existing`; `base` works straight on the base.
+ */
+export function parseWorkTarget(
+  body: Body,
+  base: string | null,
+): { github_work_mode: WorkMode | null; github_work_branch: string | null } {
+  const mode = body.github_work_mode ?? null;
+  const branch = optionalString(body.github_work_branch);
+  if (mode !== null && !isWorkMode(mode)) {
+    throw new AppError(
+      "validation",
+      '`github_work_mode` is "new" (a branch of its own), "existing" or "base" (straight on the base branch).',
+    );
+  }
+  if (mode === null) {
+    if (branch) {
+      throw new AppError("validation", "`github_work_branch` needs a `github_work_mode`.");
+    }
+    return { github_work_mode: null, github_work_branch: null };
+  }
+  const problem = workBranchProblem(mode, branch, base);
+  if (problem) throw new AppError("validation", problem);
+  return { github_work_mode: mode, github_work_branch: mode === "base" ? null : branch };
+}
+
+// ---------------------------------------------------------------------------
+// Sections
+// ---------------------------------------------------------------------------
+
+export interface SectionFields {
+  title?: string;
+  description?: string | null;
+  goals?: string | null;
+  intentions?: string | null;
+  color?: string | null;
+  tags?: string[];
+}
+
+function sectionFields(body: Body): SectionFields {
+  const fields: SectionFields = {};
+  if (body.title !== undefined) fields.title = requireText(body.title, "`title`", 100);
+  const description = textField(body.description, "`description`", 10000);
+  if (description !== undefined) fields.description = description;
+  const goals = textField(body.goals, "`goals`", 5000);
+  if (goals !== undefined) fields.goals = goals;
+  const intentions = textField(body.intentions, "`intentions`", 5000);
+  if (intentions !== undefined) fields.intentions = intentions;
+  const color = colorField(body.color);
+  if (color !== undefined) fields.color = color;
+  const tags = tagsField(body);
+  if (tags !== undefined) fields.tags = tags;
+  return fields;
+}
+
+export function parseSectionCreate(body: Body): SectionFields & { title: string } {
+  const fields = sectionFields(body);
+  if (!fields.title) throw new AppError("validation", "A section needs a `title`.");
+  return { ...fields, title: fields.title };
+}
+
+export function parseSectionUpdate(body: Body): SectionFields {
+  const fields = sectionFields(body);
+  if (Object.keys(fields).length === 0) {
+    throw new AppError(
+      "validation",
+      "Send at least one of title, description, goals, intentions, color, tags.",
+    );
+  }
+  return fields;
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+/** A task's editable columns, named as the database names them. */
+export interface TaskFields {
+  title?: string;
+  description?: string | null;
+  priority?: TaskPriority;
+  complexity?: TaskComplexity | null;
+  labels?: string[];
+  color?: string | null;
+  acceptance_criteria?: string | null;
+  branch_name?: string | null;
+}
+
+function taskFields(body: Body): TaskFields {
+  const fields: TaskFields = {};
+  if (body.title !== undefined) fields.title = requireText(body.title, "`title`", 200);
+  const description = textField(body.description, "`description`", 50000);
+  if (description !== undefined) fields.description = description;
+  const priority = enumField(body.priority, TASK_PRIORITIES, "`priority`");
+  if (priority !== undefined) fields.priority = priority as TaskPriority;
+  if (body.complexity === null) fields.complexity = null;
+  else {
+    const complexity = enumField(body.complexity, TASK_COMPLEXITIES, "`complexity`");
+    if (complexity !== undefined) fields.complexity = complexity as TaskComplexity;
+  }
+  const tags = tagsField(body);
+  if (tags !== undefined) fields.labels = tags;
+  const color = colorField(body.color);
+  if (color !== undefined) fields.color = color;
+  const criteria = lineList(body.acceptance_criteria, "`acceptance_criteria`");
+  if (criteria !== undefined) {
+    fields.acceptance_criteria = criteria.length ? criteria.join("\n").slice(0, 20000) : null;
+  }
+  if (body.branch_name !== undefined) {
+    const branch = textField(body.branch_name, "`branch_name`", 200);
+    if (branch && !isValidBranchName(branch)) {
+      throw new AppError("validation", `"${branch}" is not a valid branch name.`);
+    }
+    fields.branch_name = branch;
+  }
+  return fields;
+}
+
+export interface TaskCreate {
+  sectionId: string;
+  fields: TaskFields & { title: string };
+  status: (typeof CREATE_STATUSES)[number];
+  dependsOn: string[];
+  features: string[];
+}
+
+export function parseTaskCreate(body: Body): TaskCreate {
+  const fields = taskFields(body);
+  if (!fields.title) throw new AppError("validation", "A task needs a `title`.");
+  const sectionId = optionalUuid(body.section_id, "`section_id`");
+  if (!sectionId) throw new AppError("validation", "`section_id` says which section it goes in.");
+  const status = enumField(body.status, CREATE_STATUSES, "`status`") ?? "available";
+
+  const features = lineList(body.features, "`features`") ?? [];
+  if (features.length > MAX_FEATURES) {
+    throw new AppError("validation", `At most ${MAX_FEATURES} features per task.`);
+  }
+  if (features.some((feature) => feature.length > FEATURE_TEXT_MAX)) {
+    throw new AppError("validation", `A feature is at most ${FEATURE_TEXT_MAX} characters.`);
+  }
+  return {
+    sectionId,
+    fields: { ...fields, title: fields.title },
+    status: status as TaskCreate["status"],
+    dependsOn: uuidList(body.depends_on, "`depends_on`", 50),
+    features,
+  };
+}
+
+export function parseTaskUpdate(body: Body): TaskFields {
+  const fields = taskFields(body);
+  if (Object.keys(fields).length === 0) {
+    throw new AppError(
+      "validation",
+      "Send at least one of title, description, priority, complexity, tags, color, acceptance_criteria, branch_name.",
+    );
+  }
+  return fields;
+}
+
+// ---------------------------------------------------------------------------
+// Questions
+// ---------------------------------------------------------------------------
+
+export function parseQuestionInput(body: Body): {
+  body: string;
+  blocking: boolean;
+  agentId: string | null;
+} {
+  return {
+    body: requireText(body.body, "`body` (the question)", QUESTION_BODY_MAX),
+    blocking: body.blocking === true,
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+  };
+}
+
+export function parseAnswerInput(body: Body): { answer: string; agentId: string | null } {
+  return {
+    answer: requireText(body.answer, "`answer`", QUESTION_ANSWER_MAX),
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+  };
+}
+
+export const QUESTION_STATUS_FILTERS = ["open", "answered", "dismissed", "all"] as const;
+export type QuestionStatusFilter = (typeof QUESTION_STATUS_FILTERS)[number];
+
+export function parseQuestionFilter(raw: string | null, fallback: QuestionStatusFilter) {
+  if (!raw) return fallback;
+  if (!(QUESTION_STATUS_FILTERS as readonly string[]).includes(raw)) {
+    throw new AppError("validation", `\`status\` is ${QUESTION_STATUS_FILTERS.join(", ")}.`);
+  }
+  return raw as QuestionStatusFilter;
+}
+
+/** A blocking reason becomes the question a person sees, so it has to fit one. */
+export function parseBlockInput(body: Body): { reason: string | null; agentId: string | null } {
+  return {
+    reason: optionalString(body.reason)?.slice(0, QUESTION_BODY_MAX) ?? null,
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Features
+// ---------------------------------------------------------------------------
+
+/** `text` may be a pasted block of bullets; `items` is one feature per entry. */
+export function parseFeaturesInput(body: Body): {
+  features: ParsedFeature[];
+  agentId: string | null;
+} {
+  const features: ParsedFeature[] = [];
+  if (body.text !== undefined) {
+    if (typeof body.text !== "string") throw new AppError("validation", "`text` must be text.");
+    features.push(...parseFeatureList(body.text.slice(0, 20000)));
+  }
+  if (body.items !== undefined) {
+    if (!Array.isArray(body.items) || !body.items.every((item) => typeof item === "string")) {
+      throw new AppError("validation", "`items` is a list of feature texts.");
+    }
+    for (const item of body.items as string[]) {
+      features.push(...parseFeatureList(item));
+    }
+  }
+  if (features.length === 0) throw new AppError("validation", "Send at least one feature.");
+  if (features.length > MAX_FEATURES) {
+    throw new AppError("validation", `At most ${MAX_FEATURES} features per call.`);
+  }
+  return { features, agentId: optionalUuid(body.agent_id, "`agent_id`") };
+}
+
+export function parseFeatureUpdate(body: Body): { met?: boolean; text?: string } {
+  const patch: { met?: boolean; text?: string } = {};
+  if (body.met !== undefined) {
+    if (typeof body.met !== "boolean") throw new AppError("validation", "`met` is true or false.");
+    patch.met = body.met;
+  }
+  if (body.text !== undefined) {
+    patch.text = requireText(body.text, "`text`", FEATURE_TEXT_MAX).replace(/\s+/g, " ");
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new AppError("validation", "Send `met` and/or `text`.");
+  }
+  return patch;
+}
+
+// ---------------------------------------------------------------------------
+// Steps
+// ---------------------------------------------------------------------------
+
+export interface StepLine {
+  text: string;
+  depth: number;
+  done: boolean;
+}
+
+/**
+ * One step per line. Leading `-`, `1.` and `[ ]` / `[x]` markers are dropped
+ * (a ticked box means the step is already done) and two spaces of indentation
+ * make a step one level deeper.
+ */
+export function parseStepLines(text: string): StepLine[] {
+  const lines: StepLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const indent = /^[ \t]*/.exec(raw)?.[0] ?? "";
+    const depth = Math.min(MAX_STEP_DEPTH, Math.floor(indent.replace(/\t/g, "  ").length / 2));
+    let rest = raw.trim().replace(/^(?:[-*•]+|\d+(?:\.\d+)*[.)]?)\s+/, "");
+    let done = false;
+    const check = /^\[([ xX])\]\s*/.exec(rest);
+    if (check) {
+      done = check[1].toLowerCase() === "x";
+      rest = rest.slice(check[0].length);
+    }
+    rest = rest.replace(/\s+/g, " ").trim().slice(0, STEP_TEXT_MAX);
+    if (rest) lines.push({ text: rest, depth, done });
+  }
+  return lines;
+}
+
+/** A step is at most one level deeper than the one above it. */
+export function clampStepDepths(lines: readonly StepLine[], previousDepth: number): StepLine[] {
+  let above = previousDepth;
+  return lines.map((line) => {
+    const depth = Math.max(0, Math.min(line.depth, above + 1));
+    above = depth;
+    return { ...line, depth };
+  });
+}
+
+/**
+ * Steps to add: `text` (one or many lines), `items` (a text, or `{ text, depth,
+ * done }`), or both. `feature_id` points them all at one feature, `depth` is the
+ * indent of a lone step.
+ */
+export function parseStepsInput(body: Body): {
+  lines: StepLine[];
+  featureId: string | null;
+  agentId: string | null;
+} {
+  const lines: StepLine[] = [];
+  const baseDepth = Math.min(Math.max(Math.trunc(Number(body.depth)) || 0, 0), MAX_STEP_DEPTH);
+  if (body.text !== undefined) {
+    if (typeof body.text !== "string") throw new AppError("validation", "`text` must be text.");
+    for (const line of parseStepLines(body.text.slice(0, 20000))) {
+      lines.push({ ...line, depth: Math.min(line.depth + baseDepth, MAX_STEP_DEPTH) });
+    }
+  }
+  if (body.items !== undefined) {
+    if (!Array.isArray(body.items)) {
+      throw new AppError("validation", "`items` is a list of steps.");
+    }
+    for (const item of body.items as unknown[]) {
+      if (typeof item === "string") {
+        lines.push(...parseStepLines(item));
+      } else if (item && typeof item === "object" && typeof (item as Body).text === "string") {
+        const entry = item as Body;
+        const [first] = parseStepLines(entry.text as string);
+        if (!first) continue;
+        const depth = Math.min(Math.max(Math.trunc(Number(entry.depth)) || 0, 0), MAX_STEP_DEPTH);
+        lines.push({ ...first, depth, done: entry.done === true || first.done });
+      } else {
+        throw new AppError("validation", "Each item is a text or { text, depth?, done? }.");
+      }
+    }
+  }
+  if (body.done === true && lines.length === 1) lines[0].done = true;
+  if (lines.length === 0) throw new AppError("validation", "Send at least one step in `text`.");
+  if (lines.length > MAX_STEPS_PER_CALL) {
+    throw new AppError("validation", `At most ${MAX_STEPS_PER_CALL} steps per call.`);
+  }
+  return {
+    lines,
+    featureId: optionalUuid(body.feature_id, "`feature_id`"),
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+  };
+}
+
+export function parseStepPatch(body: Body): {
+  done?: boolean;
+  text?: string;
+  feature_id?: string | null;
+} {
+  const patch: { done?: boolean; text?: string; feature_id?: string | null } = {};
+  if (body.done !== undefined) {
+    if (typeof body.done !== "boolean")
+      throw new AppError("validation", "`done` is true or false.");
+    patch.done = body.done;
+  }
+  if (body.text !== undefined) {
+    patch.text = requireText(body.text, "`text`", STEP_TEXT_MAX).replace(/\s+/g, " ");
+  }
+  if (body.feature_id !== undefined)
+    patch.feature_id = optionalUuid(body.feature_id, "`feature_id`");
+  if (Object.keys(patch).length === 0) {
+    throw new AppError("validation", "Send `done`, `text` and/or `feature_id`.");
+  }
+  return patch;
+}
+
+// ---------------------------------------------------------------------------
+// Progress
+// ---------------------------------------------------------------------------
+
+export interface ProgressInput {
+  agentId: string | null;
+  status: ProgressStatus | null;
+  /** A comment is posted only when this is not empty. */
+  note: string | null;
+  stepsDone: string[];
+  featuresMet: string[];
+}
+
+/**
+ * The "Progresser": status, ticks and an optional note in one call. A note is
+ * the only thing that becomes a comment, so an update with nothing to say adds
+ * no noise to the discussion.
+ */
+export function parseProgressInput(body: Body): ProgressInput {
+  if (body.status === "blocked") {
+    throw new AppError(
+      "validation",
+      "Do not set `blocked` here: ask a question with blocking true (ask_question) or call block with a reason.",
+    );
+  }
+  const status = enumField(body.status, PROGRESS_STATUSES, "`status`");
+  let note: string | null = null;
+  if (body.note !== undefined && body.note !== null) {
+    if (typeof body.note !== "string") throw new AppError("validation", "`note` must be text.");
+    note = body.note.trim() || null;
+    if (note && note.length > MAX_PROGRESS_NOTE) {
+      throw new AppError("validation", `\`note\` is over ${MAX_PROGRESS_NOTE} characters.`);
+    }
+  }
+  const input: ProgressInput = {
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+    status: (status as ProgressStatus | undefined) ?? null,
+    note,
+    stepsDone: uuidList(body.steps_done, "`steps_done`", 100),
+    featuresMet: uuidList(body.features_met, "`features_met`", 100),
+  };
+  if (!input.status && !input.note && !input.stepsDone.length && !input.featuresMet.length) {
+    throw new AppError(
+      "validation",
+      "Send at least one of status, note, steps_done, features_met.",
+    );
+  }
+  return input;
+}

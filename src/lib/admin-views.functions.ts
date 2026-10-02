@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard } from "@/lib/server-errors";
 import { getErrorTracker, getPaymentsProvider } from "@/lib/providers";
-import { getAiProvider, getEmailProvider } from "@/lib/providers/server";
+import { getAiProvider, getAiProviderFor, getEmailProvider } from "@/lib/providers/server";
 
 /**
  * What is actually configured, and what the placeholders have been doing.
@@ -13,18 +13,21 @@ import { getAiProvider, getEmailProvider } from "@/lib/providers/server";
  */
 export const getIntegrationStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(() =>
+  .handler(({ context }) =>
     guard("admin.integrationStatus", async () => {
       const email = await getEmailProvider();
       const payments = getPaymentsProvider();
       const errors = getErrorTracker();
       const ai = await getAiProvider();
+      // The person's own connected subscription counts: it pays for their calls.
+      const aiForYou = await getAiProviderFor(context.userId);
 
       return {
         email: { name: email.name, enabled: email.enabled },
         payments: { name: payments.name, enabled: payments.enabled },
         errors: { name: errors.name, enabled: errors.enabled },
         ai: { name: ai.name, enabled: ai.enabled, model: ai.model },
+        aiForYou: { name: aiForYou.name, enabled: aiForYou.enabled },
       };
     }),
   );

@@ -24,6 +24,7 @@ import { useTheme, type Theme } from "@/components/theme-provider";
 import { useDataMutation, useServerAction } from "@/lib/use-server-action";
 import { saveNotificationPreferences } from "@/lib/notifications.functions";
 import { AntigravityAccountCard, ClaudeAccountCard } from "@/features/settings/ai-accounts";
+import { AiAutomationCard } from "@/features/settings/ai-automation-card";
 import { getGitHubStatus } from "@/lib/github.functions";
 import { GitHubAccountCard } from "@/features/settings/github-account";
 
@@ -127,6 +128,9 @@ function SettingsPage() {
                 <SectionBoundary label="antigravity-account">
                   <AntigravityAccountCard />
                 </SectionBoundary>
+                <SectionBoundary label="ai-automation">
+                  <AiAutomationCard />
+                </SectionBoundary>
               </>
             )}
             <AppearanceCard />
@@ -162,6 +166,9 @@ function SettingsPage() {
             </SectionBoundary>
             <SectionBoundary label="antigravity-account">
               <AntigravityAccountCard />
+            </SectionBoundary>
+            <SectionBoundary label="ai-automation">
+              <AiAutomationCard />
             </SectionBoundary>
           </div>
         )}

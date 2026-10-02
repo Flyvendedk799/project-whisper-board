@@ -24,6 +24,7 @@ import { useServerAction } from "@/lib/use-server-action";
 import { importPlanMarkdown } from "@/lib/planner.functions";
 import {
   parsePlanMarkdown,
+  planMarkdownCounts,
   planMarkdownPreview,
   planMarkdownStats,
   planMarkdownStepCount,
@@ -44,7 +45,24 @@ function PreviewTree({ nodes, depth = 0 }: { nodes: PlanMdPreviewNode[]; depth?:
     <ul className={depth === 0 ? "flex flex-col gap-2.5" : "mt-0.5 flex flex-col gap-0.5 pl-2.5"}>
       {nodes.map((node, index) => (
         <li key={`${depth}-${index}-${node.title}`}>
-          {node.step ? (
+          {node.feature ? (
+            <span className="flex items-baseline gap-1.5 text-xs text-muted-foreground">
+              <span aria-hidden="true">{node.feature.met ? "◆" : "◇"}</span>
+              <span className="sr-only">Feature: </span>
+              <span className={node.feature.met ? "line-through" : undefined}>{node.title}</span>
+            </span>
+          ) : node.question ? (
+            <span className="flex items-baseline gap-1.5 text-xs text-muted-foreground">
+              <span aria-hidden="true">?</span>
+              <span className="sr-only">Question: </span>
+              <span className={node.question.status === "open" ? undefined : "line-through"}>
+                {node.title}
+              </span>
+              {node.question.blocking && node.question.status === "open" ? (
+                <span className="text-destructive">blocking</span>
+              ) : null}
+            </span>
+          ) : node.step ? (
             <span className="flex items-baseline gap-1.5 text-xs text-muted-foreground">
               <span aria-hidden="true">{node.step.done ? "☑" : "☐"}</span>
               <span className={node.step.done ? "line-through" : undefined}>{node.title}</span>
@@ -95,8 +113,24 @@ export function ImportMarkdownDialog({
   const doc: PlanMdDocument = useMemo(() => parsePlanMarkdown(markdown), [markdown]);
   const stats = planMarkdownStats(doc);
   const steps = planMarkdownStepCount(doc);
+  const counts = useMemo(() => planMarkdownCounts(doc), [doc]);
   const preview = useMemo(() => planMarkdownPreview(doc), [doc]);
   const empty = stats.sections === 0;
+
+  const summary = [
+    pluralize(stats.sections, "section"),
+    pluralize(stats.tasks, "task"),
+    steps ? pluralize(steps, "sub-step") : "",
+    counts.features ? pluralize(counts.features, "feature") : "",
+    counts.questions
+      ? `${pluralize(counts.questions, "question")}${
+          counts.blockingQuestions ? ` (${counts.blockingQuestions} blocking)` : ""
+        }`
+      : "",
+    counts.tags ? pluralize(counts.tags, "tag") : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const reset = () => {
     setMarkdown("");
@@ -108,8 +142,13 @@ export function ImportMarkdownDialog({
   const importMd = useServerAction(useServerFn(importPlanMarkdown), {
     label: "plans.importMarkdown",
     success: (result) => {
+      const extras = [
+        result.steps ? pluralize(result.steps, "sub-step") : "",
+        result.features ? pluralize(result.features, "feature") : "",
+        result.questions ? pluralize(result.questions, "question") : "",
+      ].filter(Boolean);
       const parts = `${pluralize(result.sections, "section")}, ${pluralize(result.tasks, "task")}${
-        result.steps ? ` and ${pluralize(result.steps, "sub-step")}` : ""
+        extras.length ? ` and ${extras.join(", ")}` : ""
       }`;
       const lost = result.coverage.missing
         ? `. ${pluralize(result.coverage.missing, "line")} of your document could not be placed.`
@@ -140,7 +179,7 @@ export function ImportMarkdownDialog({
   };
 
   const hint = markdown.trim()
-    ? "No sections found. Use headings (# / ##), a numbered outline (1 / 1.1), or a nested list."
+    ? "No sections found. Use headings (# / ##), a numbered outline (1 / 1.1), a nested list, or a file exported from this board."
     : "A preview of sections and tasks appears here.";
 
   return (
@@ -157,7 +196,8 @@ export function ImportMarkdownDialog({
             <DialogTitle className={DIALOG_TITLE}>Import Markdown</DialogTitle>
             <DialogDescription>
               Headings become sections, list items become tasks, and <code>- [ ]</code> lines become
-              sub-steps.
+              sub-steps. A file exported from this board comes back with its features, questions,
+              tags and colours.
             </DialogDescription>
           </DialogHeader>
 
@@ -222,9 +262,7 @@ export function ImportMarkdownDialog({
             <p className="min-w-[200px] flex-1 text-xs leading-snug text-muted-foreground">
               {empty
                 ? "Sync adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first."
-                : `${pluralize(stats.sections, "section")}, ${pluralize(stats.tasks, "task")}${
-                    steps ? `, ${pluralize(steps, "sub-step")}` : ""
-                  }. Sync matches by title, adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first.`}
+                : `${summary}. Sync matches by id or title, adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first.`}
             </p>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

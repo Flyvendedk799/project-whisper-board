@@ -18,6 +18,17 @@ import { updatePlan } from "@/lib/planner.functions";
 import { projectListQuery } from "@/data/projects";
 import { useAuth } from "@/components/auth-provider";
 import { GitHubRepoField } from "@/features/github/repo-field";
+import { useGitHubRepos } from "@/features/github/use-github";
+import { BranchField } from "@/features/github/branch-field";
+import { createGitHubBranch } from "@/lib/github.functions";
+import {
+  isWorkMode,
+  suggestBranchName,
+  WORK_MODE_LABEL,
+  workBranchProblem,
+  type WorkMode,
+} from "@/lib/plan-fields";
+import { toast } from "sonner";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
 import type { PlanStatus, PlanWithSections } from "@/data";
 import { cn } from "@/lib/utils";
@@ -39,6 +50,12 @@ export function PlanSettingsForm({
   const [projectId, setProjectId] = useState<string | null>(plan.project_id);
   const [githubRepo, setGithubRepo] = useState(plan.github_repo ?? "");
   const [githubBase, setGithubBase] = useState(plan.github_base ?? "");
+  const [workMode, setWorkMode] = useState<WorkMode | null>(
+    isWorkMode(plan.github_work_mode) ? plan.github_work_mode : null,
+  );
+  const [workBranch, setWorkBranch] = useState(plan.github_work_branch ?? "");
+  const [createOnGitHub, setCreateOnGitHub] = useState(true);
+  const githubReachable = !useGitHubRepos().isError;
 
   const projectsQuery = useQuery(projectListQuery(workspaceId));
   const selectedProject = projectsQuery.data?.find((project) => project.id === projectId);
@@ -47,21 +64,50 @@ export function PlanSettingsForm({
     label: "plans.update",
     success: "Plan settings saved",
     invalidate: [qk.plan(plan.id), qk.planList(), qk.planEvents(plan.id)],
-    onSuccess: onClose,
+  });
+  const makeBranch = useServerAction(useServerFn(createGitHubBranch), {
+    label: "github.createBranch",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const repoSlug = githubRepo.trim();
+  const baseName = githubBase.trim();
+  const problem = workBranchProblem(workMode, workBranch, baseName);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    save.fire({
-      planId: plan.id,
-      title: title.trim(),
-      description,
-      status,
-      projectId,
-      githubRepo: githubRepo.trim() || null,
-      githubBase: githubBase.trim() || null,
-    });
+    if (!title.trim() || problem) return;
+    const branch = workMode === "new" || workMode === "existing" ? workBranch.trim() : null;
+    try {
+      await save.run({
+        planId: plan.id,
+        title: title.trim(),
+        description,
+        status,
+        projectId,
+        githubRepo: repoSlug || null,
+        githubBase: baseName || null,
+        githubWorkMode: repoSlug ? workMode : null,
+        githubWorkBranch: repoSlug ? branch : null,
+      });
+    } catch {
+      return; // The action already told the user why.
+    }
+    // The settings are saved either way; a branch that could not be made is reported, not fatal.
+    if (repoSlug && workMode === "new" && branch && createOnGitHub && githubReachable) {
+      try {
+        const result = await makeBranch.run({
+          repo: repoSlug,
+          name: branch,
+          from: baseName || "main",
+        });
+        toast.success(
+          result.created ? `Created ${branch} on GitHub` : `${branch} already exists on GitHub`,
+        );
+      } catch {
+        // The action already told the user why; the plan keeps the branch name.
+      }
+    }
+    onClose();
   };
 
   return (
@@ -144,11 +190,12 @@ export function PlanSettingsForm({
           <Label htmlFor="githubBase" className="text-xs text-muted-foreground">
             Base branch
           </Label>
-          <Input
+          <BranchField
             id="githubBase"
-            placeholder="main"
+            ariaLabel="Base branch"
+            repo={githubRepo}
             value={githubBase}
-            onChange={(e) => setGithubBase(e.target.value)}
+            onChange={setGithubBase}
           />
         </div>
       </div>
@@ -167,12 +214,115 @@ export function PlanSettingsForm({
         </button>
       ) : null}
 
+      {repoSlug ? (
+        <fieldset className="flex flex-col gap-2.5 rounded-xl border p-3.5">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">
+            Where the work happens
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            The base branch is what work branches off. The working branch is where people and agents
+            commit.
+          </p>
+          <div role="radiogroup" aria-label="Working branch" className="flex flex-col gap-1.5">
+            {(
+              [
+                [null, "Decide per task", "No shared branch: each task names its own."],
+                ["new", WORK_MODE_LABEL.new, `A fresh branch, cut from ${baseName || "the base"}.`],
+                [
+                  "existing",
+                  WORK_MODE_LABEL.existing,
+                  "Keep working on a branch that is already there.",
+                ],
+                [
+                  "base",
+                  WORK_MODE_LABEL.base,
+                  `Commit straight to ${baseName || "main"}. No pull request.`,
+                ],
+              ] as const
+            ).map(([mode, label, hint]) => (
+              <label
+                key={label}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-[13px]",
+                  workMode === mode ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="work-mode"
+                  checked={workMode === mode}
+                  onChange={() => {
+                    setWorkMode(mode);
+                    if (mode === "new" && !workBranch.trim()) {
+                      setWorkBranch(suggestBranchName(title));
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-xs text-muted-foreground">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {workMode === "new" ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="workBranch" className="text-xs text-muted-foreground">
+                New branch name
+              </Label>
+              <Input
+                id="workBranch"
+                value={workBranch}
+                onChange={(e) => setWorkBranch(e.target.value)}
+                placeholder="plan/my-plan"
+                className="font-mono text-[13px]"
+                autoComplete="off"
+              />
+              {githubReachable ? (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={createOnGitHub}
+                    onChange={(e) => setCreateOnGitHub(e.target.checked)}
+                  />
+                  Create it on GitHub when I save
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+          {workMode === "existing" ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="workBranchExisting" className="text-xs text-muted-foreground">
+                Branch
+              </Label>
+              <BranchField
+                id="workBranchExisting"
+                ariaLabel="Working branch"
+                repo={githubRepo}
+                value={workBranch}
+                onChange={setWorkBranch}
+                placeholder="Choose a branch"
+              />
+            </div>
+          ) : null}
+          {problem && workMode ? (
+            <p role="alert" className="text-xs text-destructive">
+              {problem}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : null}
+
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="outline" type="button" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={save.busy || !title.trim()}>
-          {save.busy ? "Saving…" : "Save changes"}
+        <Button
+          type="submit"
+          disabled={save.busy || makeBranch.busy || !title.trim() || Boolean(problem)}
+        >
+          {save.busy || makeBranch.busy ? "Saving…" : "Save changes"}
         </Button>
       </div>
     </form>
