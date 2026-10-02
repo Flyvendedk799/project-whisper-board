@@ -8,6 +8,7 @@ import { matchAccountRoute } from "@/lib/account-route";
 import { parseRepoSlug } from "@/lib/github-url";
 import { decoratePlanForAgents } from "@/features/planner/agent-media";
 import {
+  linkedTaskRow,
   taskDescriptionFromTicket,
   taskTitleFromTicket,
   ticketPriorityToTask,
@@ -415,16 +416,18 @@ async function insertLinkedTask(
   const position = await nextPosition(admin, sectionId);
   const { data, error } = await admin
     .from("plan_tasks")
-    .insert({
-      plan_id: input.planId,
-      section_id: sectionId,
-      title: input.title,
-      description: input.description,
-      position,
-      ...(input.priority ? { priority: input.priority } : {}),
-      ...(input.ticketId ? { ticket_id: input.ticketId } : {}),
-      ...(input.labels ? { labels: input.labels } : {}),
-    })
+    .insert(
+      linkedTaskRow({
+        planId: input.planId,
+        sectionId,
+        position,
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+        ticketId: input.ticketId,
+        labels: input.labels,
+      }),
+    )
     .select("id, title, status, plan_id, section_id, ticket_id, priority")
     .single();
   if (error) throw error;
