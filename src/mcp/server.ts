@@ -483,58 +483,36 @@ server.tool(
 
 server.tool(
   "create_pull_request",
-  "Create GitHub PR (Requires GITHUB_PAT env var)",
+  "Open a GitHub pull request for a task and mark the task done with it. Uses the GitHub token of the person who made your API key (connected in Boared under Settings), so no GitHub token is needed here. The repository and base branch come from the plan unless given.",
   {
     task_id: z.string(),
     head_branch: z.string(),
     title: z.string(),
     body: z.string().optional(),
+    repo: z.string().optional().describe("owner/name; defaults to the plan's repository"),
+    base_branch: z
+      .string()
+      .optional()
+      .describe("defaults to the plan's base, else the repository's default branch"),
   },
-  async ({ task_id, head_branch, title, body }) => {
-    if (!process.env.GITHUB_PAT || !process.env.GITHUB_REPO) {
-      return {
-        content: [{ type: "text", text: `Missing GITHUB_PAT or GITHUB_REPO env var.` }],
-        isError: true,
-      };
-    }
-
+  async ({ task_id, head_branch, title, body, repo, base_branch }) => {
     try {
-      const response = await fetch(
-        `https://api.github.com/repos/${process.env.GITHUB_REPO}/pulls`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.GITHUB_PAT}`,
-            Accept: "application/vnd.github.v3+json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title,
-            head: head_branch,
-            base: "main",
-            body: body || `PR for task ${task_id}`,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          content: [{ type: "text", text: `GitHub API Error: ${errorText}` }],
-          isError: true,
-        };
-      }
-
-      const pr = (await response.json()) as { html_url: string; number: number };
+      const pr = (await fetchApi(`tasks/${task_id}/pull-request`, {
+        method: "POST",
+        body: JSON.stringify({ head_branch, title, body, repo, base: base_branch }),
+      })) as { pr_url: string; pr_number: number };
 
       await fetchApi(`tasks/${task_id}/complete`, {
         method: "POST",
-        body: JSON.stringify({ pr_url: pr.html_url }),
+        body: JSON.stringify({ pr_url: pr.pr_url }),
       }).catch(console.error);
 
       return {
         content: [
-          { type: "text", text: JSON.stringify({ url: pr.html_url, number: pr.number }, null, 2) },
+          {
+            type: "text",
+            text: JSON.stringify({ url: pr.pr_url, number: pr.pr_number }, null, 2),
+          },
         ],
       };
     } catch (error: unknown) {
@@ -548,28 +526,13 @@ server.tool(
 
 server.tool(
   "check_pr_status",
-  "Check PR status",
+  "Read a task's pull request from GitHub now (state, merged, draft, base and head, mergeability) and record it on the task. Uses the GitHub token of the person who made your API key; without one it returns what the task already records and says GitHub is not connected.",
   {
     task_id: z.string(),
   },
   async ({ task_id }) => {
     try {
-      const task = (await fetchApi(`tasks/${task_id}`)) as { pr_url?: string };
-
-      if (!task?.pr_url)
-        return {
-          content: [{ type: "text", text: `Task has no PR URL or error fetching task.` }],
-          isError: true,
-        };
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `PR URL is: ${task.pr_url}. Use GitHub tools to check further details.`,
-          },
-        ],
-      };
+      return asText(await fetchApi(`tasks/${task_id}/pull-request`));
     } catch (error: unknown) {
       return {
         content: [{ type: "text", text: `Error: ${(error as Error).message}` }],

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ExternalLink, GitMerge, GitPullRequest, Loader2, RefreshCw } from "lucide-react";
 import { QueryState } from "@/components/query-state";
 import { Segmented, StatusPill, type Tone } from "@/components/status-pill";
@@ -120,11 +121,25 @@ export function PlanPullRequests({ planId }: { planId: string }) {
               </div>
 
               {!data.configured ? (
-                <p className="rounded-lg bg-warning/15 p-3 text-sm" role="status">
-                  GitHub is not connected on this deployment, so the state of these pull requests
-                  cannot be read and nothing can be merged from here. Open each one on GitHub, in
-                  the order shown.
-                </p>
+                <div
+                  className="flex flex-col gap-3 rounded-lg bg-warning/15 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                  role="status"
+                  data-testid="connect-github"
+                >
+                  <p>
+                    GitHub is not connected, so the state of these pull requests cannot be read and
+                    nothing can be merged from here. Connect your own GitHub token to read them and
+                    merge in order.
+                  </p>
+                  <Button asChild size="sm" className="shrink-0">
+                    <Link
+                      to="/app/settings"
+                      search={{ tab: data.isAdmin ? "integrations" : "you" }}
+                    >
+                      Connect GitHub
+                    </Link>
+                  </Button>
+                </div>
               ) : !data.isAdmin ? (
                 <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground" role="status">
                   Only workspace admins can merge from here. You can still follow the order and open
@@ -132,15 +147,30 @@ export function PlanPullRequests({ planId }: { planId: string }) {
                 </p>
               ) : !data.tokenCanMerge ? (
                 <p className="rounded-lg bg-warning/15 p-3 text-sm" role="status">
-                  The GitHub token on this deployment cannot write to the repository, so it cannot
-                  merge. Open each pull request on GitHub, in the order shown.
+                  Your token cannot merge: it needs write access to {data.repo ?? "the repository"}{" "}
+                  (Contents and Pull requests).{" "}
+                  <Link
+                    to="/app/settings"
+                    search={{ tab: "integrations" }}
+                    className="underline underline-offset-4"
+                  >
+                    Reconnect with a token that has it
+                  </Link>
+                  , or open each pull request on GitHub, in the order shown.
+                </p>
+              ) : data.tokenSource === "workspace" ? (
+                <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground" role="status">
+                  Using the shared token this server has. Connect your own in Settings and merges
+                  are done as you.
                 </p>
               ) : null}
 
               {data.orderIsGuess ? (
                 <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground" role="status">
                   Some branches could not be read, so this order is a guess, by pull request number.
-                  It is worked out from the branches once GitHub can be reached.
+                  {data.configured
+                    ? " It is worked out from the branches once GitHub can be reached."
+                    : " Connect GitHub to work it out from the branches."}
                 </p>
               ) : null}
 

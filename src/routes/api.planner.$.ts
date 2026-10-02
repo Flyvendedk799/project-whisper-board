@@ -10,7 +10,8 @@ import {
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import { applyPlanMarkdown } from "@/lib/plan-import";
 import { parsePullRequestUrl } from "@/lib/plan-refs";
-import { githubConfigured, octokitPort } from "@/lib/github-port";
+import { parseRepoSlug } from "@/lib/github-url";
+import { describeGitHubError, NOT_CONNECTED_MESSAGE } from "@/lib/github-port";
 import { loadPlanPulls, mergePlanPulls } from "@/lib/plan-pulls";
 import { AppError } from "@/lib/errors";
 import { Constants, type Database } from "@/integrations/supabase/types";
@@ -139,6 +140,10 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
     const admin = getAdminClient();
     const { workspaceId } = auth;
 
+    // GitHub calls made with an API key act as the person who made the key: their own token, else the
+    // shared one on the server. Imported here because the token module needs node:crypto.
+    const githubAccess = async () => (await import("@/lib/github-token")).githubFor(auth.userId);
+
     if (method === "GET") {
       if (path === "plans" || path === "plans/") {
         const statuses = statusesFromQuery(new URL(request.url).searchParams.get("status"));
@@ -206,14 +211,93 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
       // The plan's pull requests in merge order, read from GitHub now.
       const pullsMatch = path.match(/^plans\/([^/]+)\/pull-requests$/);
       if (pullsMatch) {
+        const access = await githubAccess();
         return Response.json(
           await loadPlanPulls({
             db: admin,
-            github: githubConfigured() ? octokitPort() : null,
+            github: access.port,
+            source: access.source,
             planId: pullsMatch[1],
             workspaceId,
           }),
         );
+      }
+
+      // Whether GitHub is connected for the person this key acts as: never the token, only the facts.
+      if (path === "github") {
+        const { githubTokens } = await import("@/lib/github-token");
+        if (!auth.userId) {
+          const access = await githubAccess();
+          return Response.json({
+            connected: access.source !== "none",
+            source: access.source,
+            login: null,
+            problem:
+              access.source === "none"
+                ? "This key has no owner, so there is no personal GitHub token to use."
+                : null,
+          });
+        }
+        const status = await githubTokens().status(auth.userId);
+        return Response.json({
+          connected: status.connected,
+          source: status.source,
+          login: status.login,
+          problem: status.problem,
+        });
+      }
+
+      // A task's pull request, read from GitHub now and written back onto the task.
+      const taskPrMatch = path.match(new RegExp("^tasks/([^/]+)/pull-request$"));
+      if (taskPrMatch) {
+        const task = await taskInWorkspace(admin, taskPrMatch[1], workspaceId);
+        if (!task) return notFound();
+        const { data: row } = await admin
+          .from("plan_tasks")
+          .select("pr_url, pr_number, pr_status")
+          .eq("id", task.id)
+          .single();
+        const parsed = row?.pr_url ? parsePullRequestUrl(row.pr_url) : null;
+        if (!row?.pr_url || !parsed) {
+          throw new AppError("validation", "This task has no pull request yet.");
+        }
+        const access = await githubAccess();
+        if (!access.port) {
+          return Response.json({
+            pr_url: row.pr_url,
+            pr_number: row.pr_number,
+            pr_status: row.pr_status,
+            live: false,
+            problem: NOT_CONNECTED_MESSAGE,
+          });
+        }
+        try {
+          const pull = await access.port.getPull(parsed.repo, parsed.number);
+          const status = pull.merged ? "merged" : pull.state;
+          await admin
+            .from("plan_tasks")
+            .update({ pr_number: pull.number, pr_status: status })
+            .eq("id", task.id);
+          return Response.json({
+            pr_url: pull.url,
+            pr_number: pull.number,
+            pr_status: status,
+            title: pull.title,
+            draft: pull.draft,
+            merged: pull.merged,
+            base: pull.base,
+            head: pull.head,
+            mergeable: pull.mergeable,
+            mergeable_state: pull.mergeableState,
+            live: true,
+          });
+        } catch (error) {
+          throw new AppError(
+            "github_error",
+            describeGitHubError(error, `read #${parsed.number}`, parsed.repo),
+            { status: 502 },
+          );
+        }
       }
 
       const taskMatch = path.match(/^tasks\/([^/]+)$/);
@@ -379,11 +463,13 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         if (max !== undefined && (!Number.isInteger(max) || max < 1 || max > 50)) {
           throw new AppError("validation", "`max` is a whole number from 1 to 50.");
         }
+        const access = await githubAccess();
         return Response.json(
           await mergePlanPulls(
             {
               db: admin,
-              github: githubConfigured() ? octokitPort() : null,
+              github: access.port,
+              source: access.source,
               planId: mergePullsMatch[1],
               workspaceId,
             },
@@ -396,6 +482,57 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
             },
           ),
         );
+      }
+
+      // Open a pull request for a task with the key owner's GitHub token, and record it on the task.
+      const openPrMatch = path.match(new RegExp("^tasks/([^/]+)/pull-request$"));
+      if (openPrMatch) {
+        const body = await readJson(request);
+        const task = await taskInWorkspace(admin, openPrMatch[1], workspaceId);
+        if (!task) return notFound();
+        const head = optionalString(body.head_branch);
+        const title = optionalString(body.title);
+        if (!head || !title) {
+          throw new AppError("validation", "`head_branch` and `title` are required.");
+        }
+        const { data: plan } = await admin
+          .from("plans")
+          .select("github_repo, github_base")
+          .eq("id", task.plan_id)
+          .single();
+        const repo = optionalString(body.repo) ?? plan?.github_repo ?? null;
+        if (!repo || !parseRepoSlug(repo)) {
+          throw new AppError(
+            "validation",
+            "No repository: pass `repo` (owner/name) or set one on the plan.",
+          );
+        }
+        const access = await githubAccess();
+        if (!access.port)
+          throw new AppError("github_not_configured", NOT_CONNECTED_MESSAGE, { status: 409 });
+        try {
+          const info = await access.port.repoInfo(repo);
+          const base = optionalString(body.base) ?? plan?.github_base ?? info.defaultBranch;
+          const pr = await access.port.openPull(repo, {
+            head,
+            base,
+            title,
+            body: optionalString(body.body) ?? `PR for task ${task.id}`,
+          });
+          await admin
+            .from("plan_tasks")
+            .update({ pr_number: pr.number, pr_url: pr.url, pr_status: "open" })
+            .eq("id", task.id);
+          return Response.json({ pr_url: pr.url, pr_number: pr.number, base });
+        } catch (error) {
+          throw new AppError(
+            "github_error",
+            describeGitHubError(error, "open the pull request", repo),
+            {
+              status: 502,
+            },
+          );
+        }
       }
 
       const claimMatch = path.match(/^tasks\/([^/]+)\/claim$/);

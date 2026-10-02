@@ -5,42 +5,57 @@ import { AppError } from "@/lib/errors";
 import { guard, requireFound } from "@/lib/server-errors";
 import { parsePullRequestUrl, parseRepoSlug } from "@/lib/github-url";
 import { Octokit } from "octokit";
+import { NOT_CONNECTED_MESSAGE } from "@/lib/github-port";
+import type { GitHubConnection } from "@/lib/github-token";
 
-function getOctokit() {
-  const pat = process.env.GITHUB_PAT;
-  if (!pat) {
-    throw new Error("GITHUB_PAT environment variable is not set.");
-  }
-  return new Octokit({ auth: pat });
+/**
+ * An Octokit for the person acting: their own GitHub token, else the shared one on the server. The token
+ * module is imported here, inside the handlers' reach, because it needs `node:crypto`, which a top-level
+ * import would drag into the browser build.
+ */
+async function octokitFor(userId: string) {
+  const { githubFor } = await import("@/lib/github-token");
+  const access = await githubFor(userId);
+  if (!access.token)
+    throw new AppError("github_not_configured", NOT_CONNECTED_MESSAGE, { status: 409 });
+  return new Octokit({ auth: access.token });
 }
 
 /**
- * Whether this deployment can reach GitHub, for the Integrations tab. Never
- * throws: a missing token or a rejected one is a status, not an error page.
+ * Whether you can reach GitHub, for Settings and the repository picker. Never throws: a missing or
+ * rejected token is a status, not an error page.
  */
 export const getGitHubStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(
-    async (): Promise<{ configured: boolean; login: string | null; problem: string | null }> => {
-      if (!process.env.GITHUB_PAT) return { configured: false, login: null, problem: null };
-      try {
-        const { data } = await getOctokit().rest.users.getAuthenticated();
-        return { configured: true, login: data.login, problem: null };
-      } catch {
-        return {
-          configured: true,
-          login: null,
-          problem: "GitHub rejected the token. Check GITHUB_PAT.",
-        };
-      }
-    },
-  );
+  .handler(async ({ context }): Promise<GitHubConnection> => {
+    const { githubTokens } = await import("@/lib/github-token");
+    return guard("github.status", () => githubTokens().status(context.userId));
+  });
+
+/** Check a pasted token with GitHub and keep it, sealed, for this person. */
+export const connectGitHub = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z.object({ token: z.string().trim().min(1, "Paste your GitHub token.").max(255) }).parse(input),
+  )
+  .handler(async ({ context, data }): Promise<GitHubConnection> => {
+    const { githubTokens } = await import("@/lib/github-token");
+    return guard("github.connect", () => githubTokens().save(context.userId, data.token));
+  });
+
+/** Forget this person's own token. The shared server token, if there is one, is untouched. */
+export const disconnectGitHub = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<GitHubConnection> => {
+    const { githubTokens } = await import("@/lib/github-token");
+    return guard("github.disconnect", () => githubTokens().forget(context.userId));
+  });
 
 export const testGitHubConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(() =>
+  .handler(({ context }) =>
     guard("github.testConnection", async () => {
-      const octokit = getOctokit();
+      const octokit = await octokitFor(context.userId);
       const { data } = await octokit.rest.users.getAuthenticated();
 
       return {
@@ -61,9 +76,9 @@ export const listGitHubRepos = createServerFn({ method: "GET" })
       })
       .parse(input),
   )
-  .handler(({ data }) =>
+  .handler(({ data, context }) =>
     guard("github.listRepos", async () => {
-      const octokit = getOctokit();
+      const octokit = await octokitFor(context.userId);
       const response = await octokit.rest.repos.listForAuthenticatedUser({
         sort: "updated",
         per_page: data.perPage,
@@ -98,7 +113,7 @@ export const createPullRequest = createServerFn({ method: "POST" })
   .handler(({ data, context }) =>
     guard("github.createPullRequest", async () => {
       const { supabase, userId } = context;
-      const octokit = getOctokit();
+      const octokit = await octokitFor(userId);
 
       const [owner, repo] = data.repo.split("/");
       if (!owner || !repo) {
@@ -154,9 +169,9 @@ export const getPullRequestStatus = createServerFn({ method: "GET" })
       })
       .parse(input),
   )
-  .handler(({ data }) =>
+  .handler(({ data, context }) =>
     guard("github.getPullRequestStatus", async () => {
-      const octokit = getOctokit();
+      const octokit = await octokitFor(context.userId);
       const [owner, repo] = data.repo.split("/");
       if (!owner || !repo) {
         throw new Error("Invalid repo format. Expected owner/repo.");
@@ -189,9 +204,9 @@ export const listGitHubIssues = createServerFn({ method: "GET" })
       })
       .parse(input),
   )
-  .handler(({ data }) =>
+  .handler(({ data, context }) =>
     guard("github.listIssues", async () => {
-      const octokit = getOctokit();
+      const octokit = await octokitFor(context.userId);
 
       const [owner, repo] = data.repo.split("/");
       if (!owner || !repo) {
@@ -321,7 +336,7 @@ export const refreshTaskPullRequest = createServerFn({ method: "POST" })
         throw new AppError("github_pr", "That pull request link is not a GitHub URL.");
       }
 
-      const octokit = getOctokit();
+      const octokit = await octokitFor(context.userId);
       const { data: pr } = await octokit.rest.pulls.get({
         owner: parsed.owner,
         repo: parsed.repo,

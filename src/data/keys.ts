@@ -82,6 +82,8 @@ export const qk = {
   // re-sign every file on it.
   planAttachments: (id: string) => [...qk.plans(), "attachments", id] as const,
   // Also not nested: reading it asks GitHub about every pull request.
+  /** Whether GitHub is connected for the signed-in person: shared by Settings and the plan screen. */
+  githubStatus: () => [...qk.all, "integrations", "github"] as const,
   planPulls: (id: string) => [...qk.plans(), "pulls", id] as const,
   taskComments: (id: string) => [...qk.all, "task-comments", id] as const,
   apiKeys: () => [...qk.all, "api-keys"] as const,

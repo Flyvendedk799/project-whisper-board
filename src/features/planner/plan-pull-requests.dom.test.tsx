@@ -5,6 +5,23 @@ import { renderWithQuery } from "@/test/render";
 import { buildStack, pullKey, type PullInfo, type StackTask } from "@/lib/pr-stack";
 import { PlanPullRequests } from "./plan-pull-requests";
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    to,
+    search,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    to: string;
+    search?: Record<string, string>;
+  }) => (
+    <a href={`${to}${search?.tab ? `?tab=${search.tab}` : ""}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock("@tanstack/react-start", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-start")>()),
   useServerFn: (fn: unknown) => fn,
@@ -141,11 +158,61 @@ describe("PlanPullRequests", () => {
       }),
     );
     renderWithQuery(<PlanPullRequests planId="plan-1" />);
-    expect(await screen.findByText(/GitHub is not connected on this deployment/)).toBeTruthy();
+    expect(await screen.findByText(/GitHub is not connected, so the state/)).toBeTruthy();
     expect(screen.getByText(/this order is a guess, by pull request number/)).toBeTruthy();
+    expect(screen.getByText(/Connect GitHub to work it out from the branches/)).toBeTruthy();
     expect((screen.getByTestId("merge-all") as HTMLButtonElement).disabled).toBe(true);
     // still a way to follow the order on GitHub
     expect(screen.getAllByLabelText("Open on GitHub").length).toBeGreaterThan(0);
+  });
+
+  it("sends you to connect your own GitHub, to the tab you can see, when there is no token", async () => {
+    const none = {
+      configured: false,
+      tokenSource: "none",
+      canMerge: false,
+      tokenCanMerge: false,
+      orderIsGuess: true,
+      stack: buildStack({ tasks: TASKS, pulls: new Map(), baseBranchOf: () => "master" }),
+    };
+    fns.getPlanPullRequests.mockResolvedValue(data(STACK, { ...none, isAdmin: true }));
+    const view = renderWithQuery(<PlanPullRequests planId="plan-1" />);
+    const cta = within(await screen.findByTestId("connect-github")).getByRole("link", {
+      name: "Connect GitHub",
+    });
+    expect(cta.getAttribute("href")).toBe("/app/settings?tab=integrations");
+    view.unmount();
+
+    fns.getPlanPullRequests.mockResolvedValue(data(STACK, { ...none, isAdmin: false }));
+    renderWithQuery(<PlanPullRequests planId="plan-1" />);
+    const member = within(await screen.findByTestId("connect-github")).getByRole("link", {
+      name: "Connect GitHub",
+    });
+    expect(member.getAttribute("href")).toBe("/app/settings?tab=you");
+  });
+
+  it("does not ask you to connect when GitHub is connected", async () => {
+    fns.getPlanPullRequests.mockResolvedValue(data(STACK, { tokenSource: "user" }));
+    renderWithQuery(<PlanPullRequests planId="plan-1" />);
+    await screen.findByTestId("pr-row-36");
+    expect(screen.queryByTestId("connect-github")).toBeNull();
+  });
+
+  it("tells you what your token lacks when it cannot merge, and how to fix it", async () => {
+    fns.getPlanPullRequests.mockResolvedValue(
+      data(STACK, { tokenSource: "user", tokenCanMerge: false, canMerge: false }),
+    );
+    renderWithQuery(<PlanPullRequests planId="plan-1" />);
+    expect(
+      await screen.findByText(/Your token cannot merge: it needs write access to o\/openbot/),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Reconnect with a token that has it" })).toBeTruthy();
+  });
+
+  it("says when the shared server token is the one in use", async () => {
+    fns.getPlanPullRequests.mockResolvedValue(data(STACK, { tokenSource: "workspace" }));
+    renderWithQuery(<PlanPullRequests planId="plan-1" />);
+    expect(await screen.findByText(/Using the shared token this server has/)).toBeTruthy();
   });
 
   it("does not offer merging to someone who is not an admin", async () => {

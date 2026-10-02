@@ -5,11 +5,8 @@ import {
   type AntigravityAccountStatus,
 } from "@flyvendedk799/ai-auth";
 import { AppError } from "@/lib/errors";
+import { sealingSecret } from "./secret";
 import { SupabaseCredentialStore } from "./store";
-
-function sealingSecret(): string | null {
-  return process.env.AI_AUTH_SECRET ?? process.env.SUPABASE_AUTH_JWT_SECRET ?? null;
-}
 
 let cached: AntigravityAccountStore | null | undefined;
 

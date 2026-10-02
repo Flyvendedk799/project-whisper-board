@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { AppError } from "@/lib/errors";
 import { guard, requireFound } from "@/lib/server-errors";
-import { githubConfigured, octokitPort } from "@/lib/github-port";
 import { loadPlanPulls, mergePlanPulls } from "@/lib/plan-pulls";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -29,7 +28,15 @@ async function isWorkspaceAdmin(
   return member?.role === "admin";
 }
 
-const github = () => (githubConfigured() ? octokitPort() : null);
+/**
+ * The GitHub access for the person acting: their own token, else the shared one on the server.
+ * Imported here, inside the handlers' reach, because the token module needs `node:crypto`, which a
+ * top-level import would drag into the browser build.
+ */
+async function githubAccess(userId: string) {
+  const { githubFor } = await import("@/lib/github-token");
+  return githubFor(userId);
+}
 
 /** The plan's pull requests in merge order, read from GitHub just now. */
 export const getPlanPullRequests = createServerFn({ method: "GET" })
@@ -38,7 +45,13 @@ export const getPlanPullRequests = createServerFn({ method: "GET" })
   .handler(({ data, context }) =>
     guard("plans.pullRequests", async () => {
       const { supabase, userId } = context;
-      const pulls = await loadPlanPulls({ db: supabase, github: github(), planId: data.planId });
+      const access = await githubAccess(userId);
+      const pulls = await loadPlanPulls({
+        db: supabase,
+        github: access.port,
+        source: access.source,
+        planId: data.planId,
+      });
       const admin = await isWorkspaceAdmin(supabase, userId, data.planId);
       return { ...pulls, canMerge: admin && pulls.tokenCanMerge, isAdmin: admin };
     }),
@@ -71,6 +84,10 @@ export const mergePlanPullRequests = createServerFn({ method: "POST" })
         });
       }
       const { planId, ...options } = data;
-      return mergePlanPulls({ db: supabase, github: github(), planId, actorId: userId }, options);
+      const access = await githubAccess(userId);
+      return mergePlanPulls(
+        { db: supabase, github: access.port, source: access.source, planId, actorId: userId },
+        options,
+      );
     }),
   );

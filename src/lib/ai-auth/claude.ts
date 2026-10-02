@@ -7,6 +7,7 @@ import {
   type ClaudeAccountStatus,
 } from "@flyvendedk799/ai-auth";
 import { AppError } from "@/lib/errors";
+import { sealingSecret } from "./secret";
 import { SupabaseCredentialStore } from "./store";
 
 /**
@@ -19,19 +20,6 @@ import { SupabaseCredentialStore } from "./store";
  *
  * SERVER ONLY: this reaches for `node:crypto` through the account store.
  */
-
-/**
- * The key the stored credential is sealed with.
- *
- * A dedicated secret is preferred. The platform already injects the stack's JWT
- * secret and that works, but it is worth knowing the consequence: rotating it
- * makes every stored credential unreadable, and everyone has to reconnect. That
- * is a recoverable state — `status` simply reports disconnected — not a broken
- * one.
- */
-function sealingSecret(): string | null {
-  return process.env.AI_AUTH_SECRET ?? process.env.SUPABASE_AUTH_JWT_SECRET ?? null;
-}
 
 let cached: ClaudeAccountStore | null | undefined;
 

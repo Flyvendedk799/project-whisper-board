@@ -6,6 +6,8 @@ export interface ApiKeyContext {
   keyId: string;
   workspaceId: string;
   scopes: string[];
+  /** Who made the key. Calls made with it act as this person, e.g. for their GitHub token. */
+  userId: string | null;
 }
 
 export async function verifyApiKey(authHeader: string | null): Promise<ApiKeyContext | null> {
@@ -32,7 +34,7 @@ export async function verifyApiKey(authHeader: string | null): Promise<ApiKeyCon
 
   const { data: apiKey, error } = await supabase
     .from("api_keys")
-    .select("id, workspace_id, scopes, revoked_at")
+    .select("id, workspace_id, scopes, revoked_at, created_by")
     .eq("key_hash", hashedKey)
     .single();
 
@@ -55,5 +57,6 @@ export async function verifyApiKey(authHeader: string | null): Promise<ApiKeyCon
     keyId: apiKey.id,
     workspaceId: apiKey.workspace_id,
     scopes: apiKey.scopes || [],
+    userId: apiKey.created_by ?? null,
   };
 }

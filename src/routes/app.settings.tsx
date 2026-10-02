@@ -25,6 +25,7 @@ import { useDataMutation, useServerAction } from "@/lib/use-server-action";
 import { saveNotificationPreferences } from "@/lib/notifications.functions";
 import { AntigravityAccountCard, ClaudeAccountCard } from "@/features/settings/ai-accounts";
 import { getGitHubStatus } from "@/lib/github.functions";
+import { GitHubAccountCard } from "@/features/settings/github-account";
 
 import { getIntegrationStatus, listAppErrors, listOutbox } from "@/lib/admin-views.functions";
 import { updateWorkspace } from "@/lib/workspace.functions";
@@ -117,6 +118,9 @@ function SettingsPage() {
             )}
             {!isAdmin && (
               <>
+                <SectionBoundary label="github-account">
+                  <GitHubAccountCard />
+                </SectionBoundary>
                 <SectionBoundary label="claude-account">
                   <ClaudeAccountCard />
                 </SectionBoundary>
@@ -149,6 +153,9 @@ function SettingsPage() {
           <div className="space-y-6">
             <SectionBoundary label="integrations">
               <IntegrationsCard />
+            </SectionBoundary>
+            <SectionBoundary label="github-account">
+              <GitHubAccountCard />
             </SectionBoundary>
             <SectionBoundary label="claude-account">
               <ClaudeAccountCard />
@@ -558,7 +565,7 @@ function IntegrationsCard() {
   });
 
   const github = useQuery({
-    queryKey: [...qk.all, "integrations", "github"] as const,
+    queryKey: qk.githubStatus(),
     queryFn: () => getGitHubStatus(),
   });
 
@@ -579,14 +586,18 @@ function IntegrationsCard() {
               name="GitHub"
               provider={{
                 name: github.data?.login ? `@${github.data.login}` : "GitHub",
-                enabled: Boolean(github.data?.configured && !github.data.problem),
+                enabled: Boolean(github.data?.connected),
               }}
-              onWhen="Repositories and pull requests link to projects and plan tasks."
+              onWhen={
+                github.data?.source === "workspace"
+                  ? "Using the shared token on this server. Connect your own in the GitHub card below and it is used for you instead."
+                  : "Using your own token: repositories and pull requests link to projects and plan tasks."
+              }
               offWhen={
                 github.data?.problem ??
                 "Repository pickers and pull request status stay empty. Plans and tickets work without it."
               }
-              key_="GITHUB_PAT"
+              key_="your own token in the GitHub card below"
             />
             <Integration
               name="Email"

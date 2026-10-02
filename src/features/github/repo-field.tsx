@@ -50,6 +50,11 @@ export function GitHubRepoField({
         placeholder="owner/repo"
         autoComplete="off"
       />
+      {repos.isError && (
+        <p className="text-xs text-muted-foreground">
+          Connect GitHub in Settings to pick from your repositories.
+        </p>
+      )}
     </div>
   );
 }

@@ -11,6 +11,10 @@ export interface GitHubPort {
   getPull(repo: string, number: number): Promise<PullInfo>;
   checksFor(repo: string, sha: string): Promise<ChecksState>;
   setBase(repo: string, number: number, base: string): Promise<void>;
+  openPull(
+    repo: string,
+    pull: { head: string; base: string; title: string; body: string },
+  ): Promise<{ number: number; url: string }>;
   merge(
     repo: string,
     number: number,
@@ -24,10 +28,9 @@ function split(repo: string): { owner: string; repo: string } {
   return { owner, repo: name };
 }
 
-/** Whether this deployment has a GitHub token at all. The token itself is never read elsewhere. */
-export function githubConfigured(): boolean {
-  return Boolean(process.env.GITHUB_PAT);
-}
+/** What every "no token" path says, so the person is always told the same, actionable thing. */
+export const NOT_CONNECTED_MESSAGE =
+  "GitHub is not connected: connect it in Settings (your own GitHub token).";
 
 const FAILED_CONCLUSIONS = new Set([
   "failure",
@@ -37,15 +40,12 @@ const FAILED_CONCLUSIONS = new Set([
   "startup_failure",
 ]);
 
-export function octokitPort(): GitHubPort {
-  const pat = process.env.GITHUB_PAT;
-  if (!pat) {
-    throw new AppError(
-      "github_not_configured",
-      "GitHub is not connected: this deployment has no GITHUB_PAT.",
-    );
-  }
-  const octokit = new Octokit({ auth: pat });
+/**
+ * The port for one token. Which token (yours, or the shared one) is decided in `github-token.ts`; this
+ * file only ever receives it, so it never reads the environment.
+ */
+export function octokitPort(token: string): GitHubPort {
+  const octokit = new Octokit({ auth: token });
 
   return {
     async repoInfo(repo) {
@@ -97,6 +97,11 @@ export function octokitPort(): GitHubPort {
       return "success";
     },
 
+    async openPull(repo, pull) {
+      const { data } = await octokit.rest.pulls.create({ ...split(repo), ...pull });
+      return { number: data.number, url: data.html_url };
+    },
+
     async setBase(repo, number, base) {
       await octokit.rest.pulls.update({ ...split(repo), pull_number: number, base });
     },
@@ -116,12 +121,14 @@ export function octokitPort(): GitHubPort {
  * Turn a GitHub failure into a sentence a person can act on. Tokens and response bodies are never
  * included; only what GitHub's own message says about the pull request.
  */
-export function describeGitHubError(error: unknown, doing: string): string {
+export function describeGitHubError(error: unknown, doing: string, repo?: string): string {
   const status = (error as { status?: number })?.status;
   const message = String((error as { message?: string })?.message ?? "").split("\n")[0];
-  if (status === 401) return `GitHub rejected the token while ${doing}. Check GITHUB_PAT.`;
+  if (status === 401) {
+    return `GitHub rejected your token while ${doing}. Reconnect GitHub in Settings with a fresh token.`;
+  }
   if (status === 403 || status === 404) {
-    return `The GitHub token is not allowed to ${doing} (it needs write access to the repository's pull requests and contents). Use Open on GitHub instead. GitHub said: ${message}`;
+    return `Your token is not allowed to ${doing}: it needs write access to ${repo ?? "the repository"} (pull requests and contents). Use Open on GitHub instead. GitHub said: ${message}`;
   }
   if (status === 405) return `GitHub would not merge it: ${message}`;
   if (status === 409) return `The branch changed while merging; try again. ${message}`;

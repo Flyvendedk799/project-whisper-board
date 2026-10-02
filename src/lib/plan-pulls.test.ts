@@ -31,6 +31,10 @@ function fakeGitHub(
     async checksFor(_repo, sha) {
       return pulls.get(Number(sha.replace("sha", "")))?.checks ?? "none";
     },
+    async openPull(_repo, pull) {
+      calls.push(`openPull ${pull.head} -> ${pull.base}`);
+      return { number: 99, url: `https://github.com/${REPO}/pull/99` };
+    },
     async setBase(_repo, number, base) {
       calls.push(`setBase #${number} -> ${base}`);
       const p = pulls.get(number)!;
@@ -79,6 +83,7 @@ const stack = () => [
 function fakeDb(tasks: Array<{ id: string; title: string; position: number; pr: number }>) {
   const state = {
     taskStatus: new Map<string, string>(),
+    taskNumber: new Map<string, number>(),
     events: [] as Array<Record<string, unknown>>,
   };
   const rows = tasks.map((t) => ({
@@ -86,6 +91,8 @@ function fakeDb(tasks: Array<{ id: string; title: string; position: number; pr: 
     title: t.title,
     position: t.position,
     pr_url: `https://github.com/${REPO}/pull/${t.pr}`,
+    pr_number: t.pr,
+    pr_status: "open",
     section: { position: 1 },
   }));
   const db = {
@@ -105,9 +112,13 @@ function fakeDb(tasks: Array<{ id: string; title: string; position: number; pr: 
           select: () => chain,
           eq: () => chain,
           not: async () => ({ data: rows, error: null }),
-          update: (patch: { pr_status?: string }) => ({
+          update: (patch: { pr_status?: string; pr_number?: number }) => ({
             in: async (_col: string, ids: string[]) => {
               for (const id of ids) state.taskStatus.set(id, patch.pr_status ?? "");
+              return { error: null };
+            },
+            eq: async (_col: string, id: string) => {
+              if (patch.pr_number !== undefined) state.taskNumber.set(id, patch.pr_number);
               return { error: null };
             },
           }),
@@ -159,12 +170,38 @@ describe("loadPlanPulls", () => {
     expect(loaded.configured).toBe(true);
   });
 
+  it("says whose token it read with", async () => {
+    const { deps } = setup();
+    expect((await loadPlanPulls({ ...deps, source: "workspace" })).tokenSource).toBe("workspace");
+    expect((await loadPlanPulls({ ...deps, source: "user" })).tokenSource).toBe("user");
+  });
+
+  it("writes what GitHub says back onto the tasks, so the board stops showing a merged PR as open", async () => {
+    const { deps, database } = setup([
+      pull(36, "phase-0", "master", { merged: true, state: "closed" }),
+      pull(37, "phase-1", "master", { state: "closed" }),
+      pull(38, "phase-2", "master"),
+    ]);
+    await loadPlanPulls(deps);
+    expect(database.state.taskStatus.get("t36")).toBe("merged");
+    expect(database.state.taskStatus.get("t37")).toBe("closed");
+    // Already recorded as open and still open: not rewritten.
+    expect(database.state.taskStatus.has("t38")).toBe(false);
+  });
+
+  it("does not touch the tasks when GitHub could not be read", async () => {
+    const { deps, database } = setup();
+    await loadPlanPulls({ ...deps, github: null });
+    expect(database.state.taskStatus.size).toBe(0);
+  });
+
   it("says so instead of failing when GitHub is not connected", async () => {
     const { deps } = setup();
     const loaded = await loadPlanPulls({ ...deps, github: null });
     expect(loaded.configured).toBe(false);
     expect(loaded.stack.every((e) => e.status === "unknown")).toBe(true);
     expect(loaded.stack[0].problems[0].message).toContain("not connected");
+    expect(loaded.tokenSource).toBe("none");
     expect(loaded.orderIsGuess).toBe(true);
     expect(loaded.stack.map((e) => e.number)).toEqual([36, 37, 38]);
   });
@@ -310,7 +347,9 @@ describe("mergePlanPulls", () => {
 
   it("will not merge with a token that cannot write, and says why", async () => {
     const { deps } = setup(stack(), { canPush: false });
-    await expect(mergePlanPulls(deps, {})).rejects.toThrow("cannot write");
+    await expect(mergePlanPulls(deps, {})).rejects.toThrow(
+      "Your token cannot merge: needs write access to o/openbot",
+    );
     // but a dry run still tells you what would happen
     await expect(mergePlanPulls(deps, { dryRun: true })).resolves.toBeTruthy();
   });
@@ -331,6 +370,8 @@ describe("mergePlanPulls", () => {
 
   it("needs a connected GitHub", async () => {
     const { deps } = setup();
-    await expect(mergePlanPulls({ ...deps, github: null }, {})).rejects.toThrow("not connected");
+    await expect(mergePlanPulls({ ...deps, github: null }, {})).rejects.toThrow(
+      "GitHub is not connected: connect it in Settings",
+    );
   });
 });

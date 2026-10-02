@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import { describeGitHubError, type GitHubPort } from "@/lib/github-port";
+import type { GitHubTokenSource } from "@/lib/github-token";
 import { parsePullRequestUrl } from "@/lib/plan-refs";
 import {
   buildStack,
@@ -20,8 +21,10 @@ type Db = SupabaseClient<Database>;
 
 export type PlanPullsDeps = {
   db: Db;
-  /** Null when this deployment has no GitHub token. */
+  /** Null when there is no GitHub token to use (neither the person's own nor the shared one). */
   github: GitHubPort | null;
+  /** Whose token `github` carries, for the screen to say so. */
+  source?: GitHubTokenSource | "none";
   planId: string;
   /** When set, the plan must belong to this workspace (the API-key path). */
   workspaceId?: string;
@@ -33,9 +36,11 @@ export type PlanPullsDeps = {
 export type PlanPulls = {
   planId: string;
   repo: string | null;
-  /** Whether this deployment can reach GitHub at all. */
+  /** Whether there is a GitHub token to read with: yours, or the shared one on the server. */
   configured: boolean;
-  /** Whether the GitHub token may merge into the plan's repository. */
+  /** Whose token is in use: your own, the shared one, or none. */
+  tokenSource: GitHubTokenSource | "none";
+  /** Whether the token in use may merge into the plan's repository. */
   tokenCanMerge: boolean;
   baseBranches: Record<string, string>;
   stack: StackEntry[];
@@ -61,17 +66,25 @@ async function loadPlan(deps: PlanPullsDeps) {
 }
 
 /** Tasks of the plan that point at a GitHub pull request, with where they sit in the plan. */
-async function loadTasks(db: Db, planId: string): Promise<StackTask[]> {
+async function loadTasks(
+  db: Db,
+  planId: string,
+): Promise<{
+  tasks: StackTask[];
+  recorded: Map<string, { status: string | null; number: number | null }>;
+}> {
   const { data, error } = await db
     .from("plan_tasks")
-    .select("id, title, position, pr_url, section:plan_sections(position)")
+    .select("id, title, position, pr_url, pr_number, pr_status, section:plan_sections(position)")
     .eq("plan_id", planId)
     .not("pr_url", "is", null);
   if (error) throw error;
   const tasks: StackTask[] = [];
+  const recorded = new Map<string, { status: string | null; number: number | null }>();
   for (const row of data ?? []) {
     const parsed = parsePullRequestUrl(row.pr_url);
     if (!parsed) continue;
+    recorded.set(row.id, { status: row.pr_status ?? null, number: row.pr_number ?? null });
     const section = Array.isArray(row.section) ? row.section[0] : row.section;
     tasks.push({
       id: row.id,
@@ -83,7 +96,40 @@ async function loadTasks(db: Db, planId: string): Promise<StackTask[]> {
       position: row.position ?? 0,
     });
   }
-  return tasks;
+  return { tasks, recorded };
+}
+
+/**
+ * What GitHub says about a task's pull request, written back onto the task, so the board stops showing
+ * "open" for something that was merged. Best effort: a viewer who cannot edit the plan simply changes
+ * nothing, and a failure here never costs anyone the list they asked for.
+ */
+async function recordPullState(
+  db: Db,
+  tasks: StackTask[],
+  pulls: Map<string, PullLookup>,
+  recorded: Map<string, { status: string | null; number: number | null }>,
+) {
+  const byStatus = new Map<string, string[]>();
+  const byNumber: Array<{ id: string; number: number }> = [];
+  for (const task of tasks) {
+    const lookup = pulls.get(pullKey(task.repo, task.prNumber));
+    if (!lookup || "error" in lookup) continue;
+    const status = lookup.merged ? "merged" : lookup.state;
+    const known = recorded.get(task.id);
+    if (known?.status !== status) byStatus.set(status, [...(byStatus.get(status) ?? []), task.id]);
+    if (known?.number !== task.prNumber) byNumber.push({ id: task.id, number: task.prNumber });
+  }
+  try {
+    for (const [status, ids] of byStatus) {
+      await db.from("plan_tasks").update({ pr_status: status }).in("id", ids);
+    }
+    for (const { id, number } of byNumber) {
+      await db.from("plan_tasks").update({ pr_number: number }).eq("id", id);
+    }
+  } catch {
+    // Not worth failing the list over.
+  }
 }
 
 /** A pull request as GitHub has it now, checks included. */
@@ -113,7 +159,7 @@ async function readSettled(
 /** The plan's pull requests, in the order they have to be merged, as GitHub has them right now. */
 export async function loadPlanPulls(deps: PlanPullsDeps): Promise<PlanPulls> {
   const plan = await loadPlan(deps);
-  const tasks = await loadTasks(deps.db, deps.planId);
+  const { tasks, recorded } = await loadTasks(deps.db, deps.planId);
   const repos = [...new Set(tasks.map((t) => t.repo))];
 
   const pulls = new Map<string, PullLookup>();
@@ -123,7 +169,7 @@ export async function loadPlanPulls(deps: PlanPullsDeps): Promise<PlanPulls> {
   if (!deps.github) {
     for (const task of tasks) {
       pulls.set(pullKey(task.repo, task.prNumber), {
-        error: "GitHub is not connected on this deployment, so its state cannot be read.",
+        error: "GitHub is not connected, so its state cannot be read.",
       });
     }
   } else {
@@ -149,11 +195,15 @@ export async function loadPlanPulls(deps: PlanPullsDeps): Promise<PlanPulls> {
         try {
           pulls.set(key, await readPull(github, task.repo, task.prNumber));
         } catch (error) {
-          pulls.set(key, { error: describeGitHubError(error, `reading #${task.prNumber}`) });
+          pulls.set(key, {
+            error: describeGitHubError(error, `read #${task.prNumber}`, task.repo),
+          });
         }
       }),
     );
   }
+
+  if (deps.github) await recordPullState(deps.db, tasks, pulls, recorded);
 
   const baseBranchOf = (repo: string) => baseBranches[repo] ?? plan.github_base ?? "main";
   const stack = buildStack({ tasks, pulls, baseBranchOf });
@@ -161,6 +211,7 @@ export async function loadPlanPulls(deps: PlanPullsDeps): Promise<PlanPulls> {
     planId: deps.planId,
     repo: plan.github_repo,
     configured: Boolean(deps.github),
+    tokenSource: deps.github ? (deps.source ?? "user") : "none",
     tokenCanMerge,
     baseBranches,
     stack,
@@ -216,7 +267,7 @@ export async function mergePlanPulls(
   if (!deps.github || !loaded.configured) {
     throw new AppError(
       "github_not_configured",
-      "GitHub is not connected on this deployment, so nothing can be merged from here.",
+      "GitHub is not connected: connect it in Settings (your own GitHub token), then merge from here.",
     );
   }
   const github = deps.github;
@@ -243,9 +294,10 @@ export async function mergePlanPulls(
   }
 
   if (!loaded.tokenCanMerge) {
+    const target = loaded.repo ?? loaded.stack[0]?.repo ?? "the repository";
     throw new AppError(
       "github_forbidden",
-      "The GitHub token on this deployment cannot write to the repository, so it cannot merge. Use Open on GitHub.",
+      `Your token cannot merge: needs write access to ${target} (contents and pull requests). Use Open on GitHub, or reconnect with a token that has it.`,
       { status: 403 },
     );
   }
