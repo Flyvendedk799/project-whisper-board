@@ -11,6 +11,7 @@ import {
   listTasksByTicket,
 } from "@/lib/planner.functions";
 import { getPlanPullRequests } from "@/lib/plan-pulls.functions";
+import { getAiSettings } from "@/lib/ai-planner.functions";
 
 export const planListQuery = (workspaceId?: string | null, projectId?: string) =>
   queryOptions({
@@ -86,4 +87,12 @@ export const planAttachmentsQuery = (planId: string) =>
     enabled: Boolean(planId),
     staleTime: 20 * 60_000,
     refetchInterval: 40 * 60_000,
+  });
+
+/** The signed-in person's own AI switches. Off until they turn something on. */
+export const userAiSettingsQuery = () =>
+  queryOptions({
+    queryKey: qk.aiSettings(),
+    queryFn: () => getAiSettings(),
+    staleTime: 5 * 60_000,
   });
