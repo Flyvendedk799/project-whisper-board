@@ -21,10 +21,23 @@ import {
   SECTION_PALETTE,
   STATUS_STYLE,
 } from "@/features/planner/plan-model";
+import {
+  FEATURE_TEXT_MAX,
+  isValidColor,
+  isWorkMode,
+  normalizeTags,
+  workBranchProblem,
+} from "@/lib/plan-fields";
 import { createClient } from "@supabase/supabase-js";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
 const workspaceIdField = z.string().uuid().optional();
+const colorField = z.string().refine(isValidColor, "Pick a colour from the palette.");
+const tagsField = z
+  .array(z.string().max(80))
+  .max(40)
+  .transform((tags) => normalizeTags(tags));
+const workModeField = z.enum(["new", "existing", "base"]);
 const planStatusEnum = z.enum(Constants.public.Enums.plan_status);
 const planTaskStatusEnum = z.enum(Constants.public.Enums.plan_task_status);
 const planTaskPriorityEnum = z.enum(Constants.public.Enums.plan_task_priority);
@@ -192,6 +205,8 @@ export const createPlan = createServerFn({ method: "POST" })
         projectId: z.string().uuid().optional(),
         githubRepo: z.string().optional(),
         githubBase: z.string().optional(),
+        githubWorkMode: workModeField.optional(),
+        githubWorkBranch: z.string().max(200).optional(),
         workspaceId: workspaceIdField,
       })
       .parse(input),
@@ -223,6 +238,8 @@ export const createPlan = createServerFn({ method: "POST" })
           project_id: data.projectId ?? null,
           github_repo: githubRepo,
           github_base: githubBase,
+          github_work_mode: data.githubWorkMode ?? null,
+          github_work_branch: data.githubWorkBranch?.trim() || null,
           created_by: userId,
         })
         .select("id")
@@ -251,6 +268,8 @@ export const updatePlan = createServerFn({ method: "POST" })
         projectId: z.string().uuid().nullable().optional(),
         githubRepo: z.string().max(200).nullable().optional(),
         githubBase: z.string().max(200).nullable().optional(),
+        githubWorkMode: workModeField.nullable().optional(),
+        githubWorkBranch: z.string().max(200).nullable().optional(),
       })
       .parse(input),
   )
@@ -272,7 +291,30 @@ export const updatePlan = createServerFn({ method: "POST" })
         ...(fields.projectId !== undefined && { project_id: fields.projectId }),
         ...(fields.githubRepo !== undefined && { github_repo: fields.githubRepo }),
         ...(fields.githubBase !== undefined && { github_base: fields.githubBase }),
+        ...(fields.githubWorkMode !== undefined && { github_work_mode: fields.githubWorkMode }),
+        ...(fields.githubWorkBranch !== undefined && {
+          github_work_branch: fields.githubWorkBranch?.trim() || null,
+        }),
       };
+
+      if (fields.githubWorkMode !== undefined || fields.githubWorkBranch !== undefined) {
+        const { data: current } = await supabase
+          .from("plans")
+          .select("github_base, github_work_mode, github_work_branch")
+          .eq("id", planId)
+          .single();
+        const mode =
+          fields.githubWorkMode !== undefined ? fields.githubWorkMode : current?.github_work_mode;
+        const branch =
+          fields.githubWorkBranch !== undefined
+            ? fields.githubWorkBranch
+            : current?.github_work_branch;
+        const base = fields.githubBase !== undefined ? fields.githubBase : current?.github_base;
+        const problem = workBranchProblem(isWorkMode(mode) ? mode : null, branch, base);
+        if (problem) throw new AppError("validation", problem);
+        // The branch only means something for a mode that names one.
+        if (mode === "base" || mode === null) patch.github_work_branch = null;
+      }
 
       if (Object.keys(patch).length > 0) {
         const { error } = await supabase.from("plans").update(patch).eq("id", planId);
@@ -431,6 +473,14 @@ export const getPlan = createServerFn({ method: "GET" })
               assigned_user:profiles(id, full_name, email, avatar_url),
               ticket:tickets(id, ticket_number, title, status),
               steps:plan_task_steps(*),
+              features:plan_task_features(*),
+              questions:plan_task_questions(
+                *,
+                asked_by_user:profiles!plan_task_questions_asked_by_user_id_fkey(id, full_name, email, avatar_url),
+                asked_by_agent:plan_agents!plan_task_questions_asked_by_agent_id_fkey(id, name, provider, model),
+                answered_by_user:profiles!plan_task_questions_answered_by_user_id_fkey(id, full_name, email, avatar_url),
+                answered_by_agent:plan_agents!plan_task_questions_answered_by_agent_id_fkey(id, name, provider, model)
+              ),
               comment_count:plan_task_comments(count)
             )
           )
@@ -456,6 +506,10 @@ export const getPlan = createServerFn({ method: "GET" })
         tasks: [...(section.tasks ?? [])].sort(byPosition).map((task) => ({
           ...task,
           steps: [...(task.steps ?? [])].sort(byPosition),
+          features: [...(task.features ?? [])].sort(byPosition),
+          questions: [...(task.questions ?? [])].sort((a, b) =>
+            a.created_at.localeCompare(b.created_at),
+          ),
         })),
       }));
       return { plan: found };
@@ -469,8 +523,11 @@ export const createSection = createServerFn({ method: "POST" })
       .object({
         planId: z.string().uuid(),
         title: z.string().min(1).max(100),
-        description: z.string().optional(),
-        color: z.string().optional(),
+        description: z.string().max(10000).optional(),
+        goals: z.string().max(5000).optional(),
+        intentions: z.string().max(5000).optional(),
+        color: colorField.optional(),
+        tags: tagsField.optional(),
       })
       .parse(input),
   )
@@ -496,6 +553,9 @@ export const createSection = createServerFn({ method: "POST" })
           plan_id: data.planId,
           title: data.title,
           description: data.description ?? null,
+          goals: data.goals?.trim() || null,
+          intentions: data.intentions?.trim() || null,
+          tags: data.tags ?? [],
           color,
           position,
         })
@@ -520,8 +580,11 @@ export const updateSection = createServerFn({ method: "POST" })
       .object({
         sectionId: z.string().uuid(),
         title: z.string().min(1).max(100).optional(),
-        description: z.string().optional(),
-        color: z.string().optional(),
+        description: z.string().max(10000).nullable().optional(),
+        goals: z.string().max(5000).nullable().optional(),
+        intentions: z.string().max(5000).nullable().optional(),
+        color: colorField.nullable().optional(),
+        tags: tagsField.optional(),
       })
       .parse(input),
   )
@@ -539,8 +602,13 @@ export const updateSection = createServerFn({ method: "POST" })
 
       const patch: PlanSectionUpdate = {
         ...(fields.title !== undefined && { title: fields.title }),
-        ...(fields.description !== undefined && { description: fields.description }),
+        ...(fields.description !== undefined && {
+          description: fields.description?.trim() || null,
+        }),
+        ...(fields.goals !== undefined && { goals: fields.goals?.trim() || null }),
+        ...(fields.intentions !== undefined && { intentions: fields.intentions?.trim() || null }),
         ...(fields.color !== undefined && { color: fields.color }),
+        ...(fields.tags !== undefined && { tags: fields.tags }),
       };
 
       if (Object.keys(patch).length > 0) {
@@ -596,11 +664,25 @@ export const reorderSections = createServerFn({ method: "POST" })
     guard("sections.reorder", async () => {
       const { supabase } = context;
 
-      for (let i = 0; i < data.order.length; i++) {
+      const { data: existing, error: existingError } = await supabase
+        .from("plan_sections")
+        .select("id, position")
+        .eq("plan_id", data.planId)
+        .order("position", { ascending: true });
+      if (existingError) throw existingError;
+      // Sections not named keep their relative order after the named ones.
+      const known = new Set((existing ?? []).map((row) => row.id));
+      const named = data.order.filter((id) => known.has(id));
+      const rest = (existing ?? []).map((row) => row.id).filter((id) => !named.includes(id));
+      const current = new Map((existing ?? []).map((row) => [row.id, row.position]));
+
+      const order = [...named, ...rest];
+      for (let i = 0; i < order.length; i++) {
+        if (current.get(order[i]) === i + 1) continue;
         const { error } = await supabase
           .from("plan_sections")
           .update({ position: i + 1 })
-          .eq("id", data.order[i])
+          .eq("id", order[i])
           .eq("plan_id", data.planId);
         if (error) throw error;
       }
@@ -620,7 +702,9 @@ export const createTask = createServerFn({ method: "POST" })
         description: z.string().optional(),
         priority: planTaskPriorityEnum.optional(),
         complexity: planTaskComplexityEnum.optional(),
-        labels: z.array(z.string()).optional(),
+        labels: tagsField.optional(),
+        color: colorField.optional(),
+        features: z.array(z.string().min(1).max(FEATURE_TEXT_MAX)).max(50).optional(),
         dependsOn: z.array(z.string().uuid()).optional(),
         preferredProviders: z.array(z.string()).optional(),
         preferredModels: z.array(z.string()).optional(),
@@ -657,6 +741,7 @@ export const createTask = createServerFn({ method: "POST" })
           ...(data.priority !== undefined && { priority: data.priority }),
           ...(data.complexity !== undefined && { complexity: data.complexity }),
           labels: data.labels ?? [],
+          ...(data.color ? { color: data.color } : {}),
           depends_on: data.dependsOn ?? [],
           preferred_providers: data.preferredProviders ?? [],
           preferred_models: data.preferredModels ?? [],
@@ -673,6 +758,17 @@ export const createTask = createServerFn({ method: "POST" })
         .select("id")
         .single();
       if (error) throw error;
+
+      if (data.features?.length) {
+        const { error: featureError } = await supabase.from("plan_task_features").insert(
+          data.features.map((text, index) => ({
+            task_id: task.id,
+            text: text.trim(),
+            position: index + 1,
+          })),
+        );
+        if (featureError) throw featureError;
+      }
 
       await logPlanEvent(supabase, userId, {
         planId: data.planId,
@@ -700,7 +796,9 @@ export const updateTask = createServerFn({ method: "POST" })
         status: planTaskStatusEnum.optional(),
         priority: planTaskPriorityEnum.optional(),
         complexity: planTaskComplexityEnum.nullable().optional(),
-        labels: z.array(z.string()).optional(),
+        labels: tagsField.optional(),
+        color: colorField.nullable().optional(),
+        aiContext: z.string().max(20000).nullable().optional(),
         dependsOn: z.array(z.string().uuid()).optional(),
         preferredProviders: z.array(z.string()).optional(),
         preferredModels: z.array(z.string()).optional(),
@@ -732,6 +830,8 @@ export const updateTask = createServerFn({ method: "POST" })
       if (fields.priority !== undefined) patch.priority = fields.priority;
       if (fields.complexity !== undefined) patch.complexity = fields.complexity;
       if (fields.labels !== undefined) patch.labels = fields.labels;
+      if (fields.color !== undefined) patch.color = fields.color;
+      if (fields.aiContext !== undefined) patch.ai_context = fields.aiContext;
       if (fields.dependsOn !== undefined) patch.depends_on = fields.dependsOn;
       if (fields.preferredProviders !== undefined)
         patch.preferred_providers = fields.preferredProviders;
@@ -1535,6 +1635,7 @@ export const createTaskStep = createServerFn({ method: "POST" })
         taskId: z.string().uuid(),
         text: stepText,
         depth: z.number().int().min(0).max(MAX_STEP_DEPTH).optional(),
+        featureId: z.string().uuid().nullable().optional(),
       })
       .parse(input),
   )
@@ -1556,6 +1657,7 @@ export const createTaskStep = createServerFn({ method: "POST" })
           text: data.text,
           depth: Math.min(data.depth ?? 0, last ? last.depth + 1 : 0),
           position: (last?.position ?? 0) + 1,
+          feature_id: data.featureId ?? null,
         })
         .select("id")
         .single();

@@ -54,6 +54,8 @@ export type PlanAgent = Row<"plan_agents">;
 export type PlanEvent = Row<"plan_events">;
 export type PlanTaskComment = Row<"plan_task_comments">;
 export type PlanTaskStep = Row<"plan_task_steps">;
+export type PlanTaskFeature = Row<"plan_task_features">;
+export type PlanTaskQuestion = Row<"plan_task_questions">;
 export type PlanTaskAttachment = Row<"plan_task_attachments">;
 export type ApiKey = Row<"api_keys">;
 
@@ -137,12 +139,23 @@ export type PlanWithSections = Plan & {
   project?: PlanProjectRef;
   sections: (PlanSection & { tasks: TaskWithAgent[] })[];
 };
+/** A question with the people (or agents) who asked and answered it. */
+export type QuestionWithPeople = PlanTaskQuestion & {
+  asked_by_user?: PersonRef | null;
+  asked_by_agent?: PlanAgentRef | null;
+  answered_by_user?: PersonRef | null;
+  answered_by_agent?: PlanAgentRef | null;
+};
 export type TaskWithAgent = PlanTask & {
   assigned_agent: PlanAgentRef | null;
   assigned_user?: PersonRef | null;
   ticket?: Pick<Ticket, "id" | "ticket_number" | "title" | "status"> | null;
   /** Checklist under the task, ordered by position. */
   steps?: PlanTaskStep[];
+  /** What the task must satisfy, ordered by position. */
+  features?: PlanTaskFeature[];
+  /** Questions on the task, oldest first. */
+  questions?: QuestionWithPeople[];
   /** PostgREST aggregate: `[{ count }]`. */
   comment_count?: Array<{ count: number }>;
 };

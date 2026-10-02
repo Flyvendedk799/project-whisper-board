@@ -14,6 +14,7 @@ import type {
 import type { PlanAttachmentKind } from "@/lib/upload";
 import { attachmentKindOf } from "@/lib/upload";
 import { cardFace } from "@/lib/board-view";
+import { matchesIdQuery, questionCounts } from "@/lib/plan-fields";
 
 // ---------------------------------------------------------------------------
 // Statuses, priorities, sizes
@@ -138,6 +139,11 @@ export function sectionColor(color: string | null | undefined, index: number): s
   return color?.trim() ? color : SECTION_PALETTE[index % SECTION_PALETTE.length];
 }
 
+/** A task's own colour, or null: it then shows no stripe at all. */
+export function taskColor(color: string | null | undefined): string | null {
+  return color?.trim() ? color : null;
+}
+
 // ---------------------------------------------------------------------------
 // Counting
 // ---------------------------------------------------------------------------
@@ -170,7 +176,22 @@ export function countByStatus(
   return counts;
 }
 
-/** "Needs you": the two states where a person has to act. */
+/** Open questions on the plan, and how many of them hold a task up. */
+export function planQuestionCounts(tasks: ReadonlyArray<Pick<TaskWithAgent, "questions">>): {
+  open: number;
+  blocking: number;
+} {
+  let open = 0;
+  let blocking = 0;
+  for (const task of tasks) {
+    const counts = questionCounts(task.questions);
+    open += counts.open;
+    blocking += counts.blocking;
+  }
+  return { open, blocking };
+}
+
+/** "Needs you": the states where a person has to act. */
 export function attentionChips(
   tasks: ReadonlyArray<Pick<TaskWithAgent, "status">>,
 ): Array<{ status: PlanTaskStatus; label: string; count: number }> {
@@ -209,9 +230,20 @@ export interface TaskFilters {
   status: PlanTaskStatus | null;
   who: WhoFilter;
   priority: PlanTaskPriority | null;
+  /** Only tasks (or tasks in sections) carrying this tag. */
+  tag: string | null;
+  /** Only tasks with an open question. */
+  questions: boolean;
 }
 
-export const NO_FILTERS: TaskFilters = { q: "", status: null, who: "all", priority: null };
+export const NO_FILTERS: TaskFilters = {
+  q: "",
+  status: null,
+  who: "all",
+  priority: null,
+  tag: null,
+  questions: false,
+};
 
 export const WHO_LABEL: Record<WhoFilter, string> = {
   all: "Everyone",
@@ -221,18 +253,51 @@ export const WHO_LABEL: Record<WhoFilter, string> = {
 };
 
 export function hasActiveFilters(filters: TaskFilters): boolean {
-  return Boolean(filters.status || filters.q.trim() || filters.who !== "all" || filters.priority);
+  return Boolean(
+    filters.status ||
+    filters.q.trim() ||
+    filters.who !== "all" ||
+    filters.priority ||
+    filters.tag ||
+    filters.questions,
+  );
+}
+
+/**
+ * Search looks at the title, the tags, the description and the id (paste one
+ * from a chat or an agent and it finds the task).
+ */
+export function matchesSearch(
+  task: Pick<TaskWithAgent, "id" | "title" | "description" | "labels">,
+  query: string,
+  extraTags: readonly string[] = [],
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (task.title.toLowerCase().includes(q)) return true;
+  if ((task.description ?? "").toLowerCase().includes(q)) return true;
+  const bare = q.replace(/^#/, "");
+  if ([...(task.labels ?? []), ...extraTags].some((tag) => tag.includes(bare))) return true;
+  return matchesIdQuery(task.id, q);
 }
 
 export function matchesFilters(
   task: TaskWithAgent,
   filters: TaskFilters,
   meId: string | null | undefined,
+  sectionTags: readonly string[] = [],
 ): boolean {
   if (filters.status && task.status !== filters.status) return false;
   if (filters.priority && task.priority !== filters.priority) return false;
-  const q = filters.q.trim().toLowerCase();
-  if (q && !task.title.toLowerCase().includes(q)) return false;
+  if (
+    filters.tag &&
+    !(task.labels ?? []).includes(filters.tag) &&
+    !sectionTags.includes(filters.tag)
+  ) {
+    return false;
+  }
+  if (filters.questions && questionCounts(task.questions).open === 0) return false;
+  if (!matchesSearch(task, filters.q, sectionTags)) return false;
   switch (filters.who) {
     case "me":
       return Boolean(meId) && task.assigned_user_id === meId;
@@ -254,7 +319,7 @@ export function boardOrder(
   const ids: string[] = [];
   for (const section of plan?.sections ?? []) {
     for (const task of sortedTasks(section.tasks ?? [])) {
-      if (matchesFilters(task, filters, meId)) ids.push(task.id);
+      if (matchesFilters(task, filters, meId, section.tags ?? [])) ids.push(task.id);
     }
   }
   return ids;
@@ -338,6 +403,48 @@ export function applyTaskMove(
       }
       return { ...section, tasks: (section.tasks ?? []).filter((task) => task.id !== taskId) };
     }),
+  };
+}
+
+/** The section ids after dropping `sectionId` before `beforeId` (or last). */
+export function placeSection(
+  order: readonly string[],
+  sectionId: string,
+  beforeId?: string | null,
+): string[] {
+  return placeTask(order, sectionId, beforeId);
+}
+
+/** Optimistic version of the server's section reorder. */
+export function applySectionMove(
+  plan: PlanWithSections,
+  sectionId: string,
+  beforeId?: string | null,
+): PlanWithSections {
+  const sections = [...plan.sections].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  if (!sections.some((section) => section.id === sectionId)) return plan;
+  const order = placeSection(
+    sections.map((section) => section.id),
+    sectionId,
+    beforeId,
+  );
+  const byId = new Map(sections.map((section) => [section.id, section] as const));
+  return {
+    ...plan,
+    sections: order.map((id, index) => ({ ...byId.get(id)!, position: index + 1 })),
+  };
+}
+
+export function patchSectionInPlan(
+  plan: PlanWithSections,
+  sectionId: string,
+  patch: Partial<PlanWithSections["sections"][number]>,
+): PlanWithSections {
+  return {
+    ...plan,
+    sections: plan.sections.map((section) =>
+      section.id === sectionId ? { ...section, ...patch } : section,
+    ),
   };
 }
 
@@ -460,6 +567,8 @@ export const EVENT_VERB: Record<string, string> = {
   attachment_added: "attached a file to",
   attachment_removed: "removed a file from",
   task_deleted: "deleted a task",
+  question_asked: "asked a question on",
+  question_answered: "answered a question on",
   section_created: "added a section",
   section_updated: "updated a section",
   plan_created: "created this plan",

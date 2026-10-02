@@ -38,6 +38,12 @@ function task(
 ): TaskWithAgent {
   return {
     acceptance_criteria: null,
+    ai_assessed_at: null,
+    ai_assessment: null,
+    ai_context: null,
+    ai_context_at: null,
+    blocked_from: null,
+    color: null,
     actual_minutes: null,
     assigned_agent_id: null,
     assigned_user_id: null,
