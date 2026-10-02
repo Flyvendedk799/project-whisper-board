@@ -21,6 +21,16 @@ describe("ToolsTab", () => {
     expect(screen.getByText("report_progress")).toBeTruthy();
   });
 
+  it("shows the workspace tools under /api/v1 and says they need an account key", () => {
+    const { container } = render(<ToolsTab />);
+    const ticketList = container.querySelector('[data-tool="list_tickets"]');
+    expect(ticketList?.textContent).toContain("/api/v1/tickets");
+    expect(ticketList?.textContent).toContain("needs an account key");
+    const planList = container.querySelector('[data-tool="list_plans"]');
+    expect(planList?.textContent).toContain("/api/planner/plans");
+    expect(planList?.textContent).not.toContain("needs an account key");
+  });
+
   it("narrows to what matches the search, and says when nothing does", async () => {
     const user = userEvent.setup();
     const { container } = render(<ToolsTab />);
