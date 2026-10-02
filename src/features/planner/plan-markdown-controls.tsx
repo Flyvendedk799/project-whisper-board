@@ -114,6 +114,12 @@ export function ImportMarkdownDialog({
       const lost = result.coverage.missing
         ? `. ${pluralize(result.coverage.missing, "line")} of your document could not be placed.`
         : "";
+      if (result.mode === "sync") {
+        const kept = result.sync
+          ? `, ${pluralize(result.sync.matchedTasks, "existing task")} kept as they were`
+          : "";
+        return `Synced: added ${parts}${kept}${lost}`;
+      }
       return `${result.mode === "replace" ? "Replaced plan with" : "Merged"} ${parts}${lost}`;
     },
     invalidate: [qk.plan(planId), qk.planEvents(planId), qk.planAttachments(planId)],
@@ -215,13 +221,20 @@ export function ImportMarkdownDialog({
           <div className="flex flex-wrap items-center gap-2">
             <p className="min-w-[200px] flex-1 text-xs leading-snug text-muted-foreground">
               {empty
-                ? "Merge adds new sections at the end. Replace deletes all current sections and tasks first."
+                ? "Sync adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first."
                 : `${pluralize(stats.sections, "section")}, ${pluralize(stats.tasks, "task")}${
                     steps ? `, ${pluralize(steps, "sub-step")}` : ""
-                  }. Merge adds new sections at the end. Replace deletes all current sections and tasks first.`}
+                  }. Sync matches by title, adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first.`}
             </p>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={empty || importMd.busy}
+              onClick={() => importMd.fire({ planId, markdown, mode: "sync" })}
+            >
+              {importMd.busy ? "Importing…" : "Sync"}
             </Button>
             <Button
               type="button"
@@ -229,7 +242,7 @@ export function ImportMarkdownDialog({
               disabled={empty || importMd.busy}
               onClick={() => importMd.fire({ planId, markdown, mode: "merge" })}
             >
-              {importMd.busy ? "Importing…" : "Merge"}
+              Merge
             </Button>
             <Button
               type="button"

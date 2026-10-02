@@ -1465,7 +1465,7 @@ export const importPlanMarkdown = createServerFn({ method: "POST" })
       .object({
         planId: z.string().uuid(),
         markdown: z.string().min(1).max(500_000),
-        mode: z.enum(["replace", "merge"]),
+        mode: z.enum(["replace", "merge", "sync"]),
       })
       .parse(input),
   )

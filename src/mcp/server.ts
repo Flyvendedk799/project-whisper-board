@@ -114,11 +114,11 @@ server.tool(
 
 server.tool(
   "import_plan_markdown",
-  'Import a markdown document into an existing plan. mode "merge" adds sections; "replace" removes the plan\'s sections and tasks first. The result reports coverage: how many source lines were checked and which ones are missing.',
+  'Import a markdown document into an existing plan. mode "sync" matches sections and tasks by title and only adds what is missing (and fills empty descriptions or acceptance criteria), so status, claims, PRs and ticked steps are kept: use it to bring a plan up to date after the document changed. "merge" adds every section as new; "replace" removes the plan\'s sections and tasks first. A section with a bold-labelled list ("**Plan**", "**Implementation**") gets one task per entry, and "**Acceptance:**" becomes the tasks\' acceptance criteria. The result reports coverage: how many source lines were checked and which ones are missing.',
   {
     plan_id: z.string().describe("The ID of the plan"),
     markdown: z.string().describe("The plan document, as markdown"),
-    mode: z.enum(["merge", "replace"]).optional().describe("Defaults to merge"),
+    mode: z.enum(["sync", "merge", "replace"]).optional().describe("Defaults to merge"),
   },
   async ({ plan_id, markdown, mode }) => {
     try {

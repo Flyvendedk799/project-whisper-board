@@ -299,8 +299,16 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         if (body.markdown.length > 500_000) {
           throw new AppError("validation", "That document is over 500,000 characters.");
         }
-        if (body.mode !== undefined && body.mode !== "merge" && body.mode !== "replace") {
-          throw new AppError("validation", '`mode` is "merge" (add) or "replace".');
+        if (
+          body.mode !== undefined &&
+          body.mode !== "merge" &&
+          body.mode !== "replace" &&
+          body.mode !== "sync"
+        ) {
+          throw new AppError(
+            "validation",
+            '`mode` is "sync" (match by title, add what is missing, keep progress), "merge" (add everything as new) or "replace".',
+          );
         }
         const planId = planImportMatch[1];
         const { data: plan } = await admin

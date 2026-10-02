@@ -7,6 +7,7 @@ import {
   planMarkdownStats,
   STEP_TEXT_MAX,
 } from "@/lib/plan-markdown";
+import { syncSections, type ExistingSection, type SyncStore } from "@/lib/plan-sync";
 import { requireFound } from "@/lib/server-errors";
 import { PLAN_ATTACHMENT_BUCKET } from "@/lib/upload";
 import { SECTION_PALETTE } from "@/features/planner/plan-model";
@@ -46,11 +47,21 @@ export async function attachmentPathsWhere(
   return (data ?? []).map((row) => row.storage_path);
 }
 
+export type PlanImportMode = "replace" | "merge" | "sync";
+
 export type PlanImportResult = {
-  mode: "replace" | "merge";
+  mode: PlanImportMode;
+  /** Created by this import. */
   sections: number;
   tasks: number;
   steps: number;
+  /** `sync` only: what already existed and was matched, and what was filled in. */
+  sync?: {
+    matchedSections: number;
+    matchedTasks: number;
+    updatedSections: number;
+    updatedTasks: number;
+  };
   /** Source lines checked, and the ones that did not make it into the plan. */
   coverage: { lines: number; missing: number; missingLines: string[] };
 };
@@ -67,7 +78,11 @@ export async function applyPlanMarkdown(
   input: {
     planId: string;
     markdown: string;
-    mode: "replace" | "merge";
+    /**
+     * `replace` deletes the plan's sections first; `merge` adds every section as new;
+     * `sync` matches by title and only adds what is missing, keeping all progress.
+     */
+    mode: PlanImportMode;
     /** The signed-in user, or null when an API key did the import. */
     actorId: string | null;
   },
@@ -87,6 +102,40 @@ export async function applyPlanMarkdown(
       "No sections found in that markdown. Use numbered outlines, headings, or nested lists.",
       { status: 400 },
     );
+  }
+
+  // What sat above the first section (a title's intro, a status table) is
+  // kept as a section of its own, so it is on the board and not in the header.
+  const sections = doc.preamble
+    ? [{ title: OVERVIEW_TITLE, description: doc.preamble, tasks: [] }, ...doc.sections]
+    : doc.sections;
+
+  if (input.mode === "sync") {
+    const outcome = await syncSections(supabaseSyncStore(supabase, plan.id), sections, {
+      maxStepDepth: MAX_STEP_DEPTH,
+      maxStepText: STEP_TEXT_MAX,
+    });
+    const { error: syncEventError } = await supabase.from("plan_events").insert({
+      plan_id: plan.id,
+      actor_id: input.actorId,
+      kind: "section_created",
+      new_value: `synced: ${outcome.createdSections} sections, ${outcome.createdTasks} tasks added; ${outcome.matchedTasks} tasks matched`,
+      metadata: {},
+    });
+    if (syncEventError) console.error("[planner] plan event", syncEventError.message);
+    return {
+      mode: "sync",
+      sections: outcome.createdSections,
+      tasks: outcome.createdTasks,
+      steps: outcome.createdSteps,
+      sync: {
+        matchedSections: outcome.matchedSections,
+        matchedTasks: outcome.matchedTasks,
+        updatedSections: outcome.updatedSections,
+        updatedTasks: outcome.updatedTasks,
+      },
+      coverage: coverageOf(input.markdown, doc),
+    };
   }
 
   if (input.mode === "replace") {
@@ -111,12 +160,6 @@ export async function applyPlanMarkdown(
   let createdSections = 0;
   let createdTasks = 0;
   let createdSteps = 0;
-
-  // What sat above the first section (a title's intro, a status table) is
-  // kept as a section of its own, so it is on the board and not in the header.
-  const sections = doc.preamble
-    ? [{ title: OVERVIEW_TITLE, description: doc.preamble, tasks: [] }, ...doc.sections]
-    : doc.sections;
 
   for (const section of sections) {
     const { data: createdSection, error: sectionError } = await supabase
@@ -145,7 +188,9 @@ export async function applyPlanMarkdown(
           section_id: createdSection.id,
           title: task.title,
           description: task.description || null,
-          status: "available" as const,
+          acceptance_criteria: task.acceptance || null,
+          status: task.done ? ("done" as const) : ("available" as const),
+          ...(task.done && { completed_at: new Date().toISOString() }),
           position: index + 1,
         })),
       )
@@ -179,16 +224,89 @@ export async function applyPlanMarkdown(
   });
   if (eventError) console.error("[planner] plan event", eventError.message);
 
-  const coverage = planMarkdownCoverage(input.markdown, doc);
   return {
     mode: input.mode,
     sections: createdSections,
     tasks: createdTasks,
     steps: createdSteps,
-    coverage: {
-      lines: coverage.lines,
-      missing: coverage.missing.length,
-      missingLines: coverage.missing.slice(0, MAX_REPORTED_LINES),
+    coverage: coverageOf(input.markdown, doc),
+  };
+}
+
+function coverageOf(markdown: string, doc: ReturnType<typeof parsePlanMarkdown>) {
+  const coverage = planMarkdownCoverage(markdown, doc);
+  return {
+    lines: coverage.lines,
+    missing: coverage.missing.length,
+    missingLines: coverage.missing.slice(0, MAX_REPORTED_LINES),
+  };
+}
+
+/** The sync's view of a plan in the database. */
+function supabaseSyncStore(supabase: Client, planId: string): SyncStore {
+  return {
+    async load() {
+      const { data, error } = await supabase
+        .from("plan_sections")
+        .select(
+          "id, title, description, position, tasks:plan_tasks(id, title, description, acceptance_criteria, position, steps:plan_task_steps(id, text, position))",
+        )
+        .eq("plan_id", planId)
+        .order("position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ExistingSection[];
+    },
+    async createSection({ title, description, position }) {
+      const { data, error } = await supabase
+        .from("plan_sections")
+        .insert({
+          plan_id: planId,
+          title,
+          description,
+          color: SECTION_PALETTE[(position - 1) % SECTION_PALETTE.length],
+          position,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async updateSection(id, patch) {
+      const { error } = await supabase.from("plan_sections").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    async createTasks(sectionId, tasks) {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("plan_tasks")
+        .insert(
+          tasks.map((task) => ({
+            plan_id: planId,
+            section_id: sectionId,
+            ...task,
+            ...(task.status === "done" && { completed_at: now }),
+          })),
+        )
+        .select("id, position")
+        .order("position", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    async updateTask(id, patch) {
+      const { error } = await supabase.from("plan_tasks").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    async createSteps(steps) {
+      const { error } = await supabase.from("plan_task_steps").insert(
+        steps.map((step) => ({
+          task_id: step.taskId,
+          text: step.text,
+          done: step.done,
+          depth: step.depth,
+          position: step.position,
+        })),
+      );
+      if (error) throw error;
     },
   };
 }
