@@ -662,8 +662,8 @@ Do the parser.
     expect(evidence.tasks).toEqual([]);
     expect(evidence.description).toContain("All of this was read from the live server.");
     expect(evidence.description).toContain("| 23:05 | queued |");
-    expect(evidence.description).toContain("- First finding, a bullet and not a task.");
-    expect(evidence.description).toContain("- Second finding.");
+    expect(evidence.description).toContain("* First finding, a bullet and not a task.");
+    expect(evidence.description).toContain("* Second finding.");
   });
 
   it("keeps the title intro as the document preamble", () => {

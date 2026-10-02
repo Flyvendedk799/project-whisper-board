@@ -11,6 +11,8 @@ export function planToMarkdown(plan: PlanWithSections): string {
       tasks: sortedTasks(section.tasks ?? []).map((task) => ({
         title: task.title,
         description: task.description ?? "",
+        ...(task.acceptance_criteria?.trim() && { acceptance: task.acceptance_criteria.trim() }),
+        ...(task.status === "done" && { done: true }),
         steps: [...(task.steps ?? [])]
           .sort((a, b) => a.position - b.position)
           .map((step) => ({ text: step.text, done: step.done, depth: step.depth })),

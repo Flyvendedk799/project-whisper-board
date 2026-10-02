@@ -314,7 +314,7 @@ export function PlanBoard({
             />
           </span>
           {section.description ? (
-            <details className="text-muted-foreground">
+            <details className="text-muted-foreground" open={mine.length === 0}>
               <summary className="cursor-pointer select-none text-xs hover:text-foreground">
                 Section notes
               </summary>

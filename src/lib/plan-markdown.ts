@@ -40,6 +40,10 @@ export type PlanMdTask = {
   description: string;
   /** `- [ ]` / `- [x]` lines under the task. Stored as plan_task_steps. */
   steps?: PlanMdStep[];
+  /** What "done" means, from an `**Acceptance:**` block. Stored as acceptance_criteria. */
+  acceptance?: string;
+  /** The source marked it finished (a leading ✅ or `[x]`). */
+  done?: boolean;
 };
 
 export type PlanMdSection = {
@@ -73,6 +77,8 @@ type ItemKind = "outline" | "list";
 type OutlineNode = {
   title: string;
   body: string;
+  /** Every line under the heading, lists included, in source order. */
+  raw?: string;
   children: OutlineNode[];
   check?: CheckState;
   kind?: ItemKind;
@@ -82,6 +88,7 @@ type FlatItem = {
   depth: number;
   title: string;
   bodyLines: string[];
+  rawLines?: string[];
   check?: CheckState;
   kind: ItemKind;
 };
@@ -302,18 +309,48 @@ function parseFlatItems(source: string): FlatDocument {
     return { items, preamble: joinBody(preambleLines) };
   }
 
+  /** The heading whose raw text the next line belongs to. */
+  let heading: FlatItem | null = null;
+  /** True while an `**Acceptance:**` paragraph that follows a list is being read. */
+  let acceptanceOpen = false;
+  const pushRaw = (line: string) => {
+    if (heading?.rawLines && (!blankLine(line) || heading.rawLines.length > 0))
+      heading.rawLines.push(line);
+  };
+
   for (const [index, line] of lines.entries()) {
     if (fenced[index]) {
       pushBody(line);
+      pushRaw(line);
       continue;
     }
     const outline = classifyOutlineLine(line, { atxOnly });
     if (outline) {
-      current = { depth: outline.depth, title: outline.title, bodyLines: [], kind: "outline" };
+      current = {
+        depth: outline.depth,
+        title: outline.title,
+        bodyLines: [],
+        rawLines: [],
+        kind: "outline",
+      };
       items.push(current);
+      heading = current;
       lastStructuralDepth = outline.depth;
       continue;
     }
+    pushRaw(line);
+
+    // An `**Acceptance:**` paragraph right after a list is the heading's, not the last bullet's.
+    if (
+      heading &&
+      (/^\*\*acceptance/i.test(line) ||
+        (acceptanceOpen && !blankLine(line) && !LIST_ITEM.test(line)))
+    ) {
+      heading.bodyLines.push(line);
+      acceptanceOpen = true;
+      continue;
+    }
+    acceptanceOpen = false;
 
     // List items under a structural outline become deeper nodes.
     const list = line.match(LIST_ITEM);
@@ -337,6 +374,7 @@ function buildTree(items: FlatItem[]): OutlineNode[] {
     const node: OutlineNode = {
       title: item.title,
       body: joinBody(item.bodyLines),
+      ...(item.rawLines && { raw: joinBody(item.rawLines) }),
       children: [],
       kind: item.kind,
       ...(item.check && { check: item.check }),
@@ -429,6 +467,251 @@ function withOverflow(overflow: string, description: string): string {
   return [overflow, description].filter(Boolean).join("\n\n");
 }
 
+// ─── Prose sections: bold labels, action lists and acceptance blocks ────────────
+
+/**
+ * Bold labels that introduce a to-do list (`**Plan**`, `**Implementation**`,
+ * `**Still open here:**`). Labels such as `**Rules**` or `**Target:**` describe
+ * rather than ask for work, so a list under them stays text.
+ */
+const ACTION_LABEL =
+  /^(?:plan|implementation|implement|steps?|next steps?|tasks?|to-?do|do|fix(?:es)?|work|action items?|deliverables?|still open(?: here)?|open items?|remaining(?: work)?|left to do)$/i;
+const ACCEPTANCE_LABEL = /^acceptance(?: criteria)?$/i;
+const RULE_LINE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/;
+const LIST_LINE = /^(?<indent>[ \t]*)(?<marker>[-*+]|\d+[.)])[ \t]+(?<text>\S.*)$/;
+/** A leading finished-marker on a task title: a ticked box or a check emoji. */
+const STATUS_MARK = /^(?:\[(?<box>[xX ])\][ \t]+|(?<emoji>[✅☑✔]️?)[ \t]*)(?<rest>\S.*)$/u;
+
+/** Drops the `---` rules and blank lines a section ends with; they only separate sections. */
+function trimTrailingRules(text: string): string {
+  const lines = text.split("\n");
+  while (
+    lines.length > 0 &&
+    (blankLine(lines[lines.length - 1]) || RULE_LINE.test(lines[lines.length - 1]))
+  ) {
+    lines.pop();
+  }
+  return lines.join("\n");
+}
+
+/** `**Label**` or `**Label:** text` at the start of a line. */
+function boldLabel(line: string): { label: string; tail: string } | null {
+  const match = line.match(/^\*\*(?<label>[^*]{2,80}?)\*\*(?<tail>.*)$/);
+  if (!match?.groups) return null;
+  return {
+    label: match.groups.label
+      .trim()
+      .replace(/[:.]+$/, "")
+      .trim(),
+    tail: match.groups.tail.replace(/^\s*[:.]?\s*/, "").trim(),
+  };
+}
+
+function readStatus(title: string): { title: string; done: boolean } {
+  const match = title.trim().match(STATUS_MARK);
+  if (!match?.groups) return { title: title.trim(), done: false };
+  const done = match.groups.emoji !== undefined || (match.groups.box ?? " ") !== " ";
+  return { title: match.groups.rest.trim(), done };
+}
+
+function indentWidth(indent: string): number {
+  return indent.replace(/\t/g, "  ").length;
+}
+
+/** An `**Acceptance:**` block: the label's own text plus the lines that follow it. */
+function acceptanceBlock(
+  lines: readonly string[],
+  fenced: readonly boolean[],
+  start: number,
+): { text: string; end: number } {
+  const first = boldLabel(lines[start]);
+  const parts = first?.tail ? [first.tail] : [];
+  let j = start + 1;
+  // A label alone on its line may be followed by one blank line, then a list.
+  if (!first?.tail && j + 1 < lines.length && blankLine(lines[j]) && LIST_LINE.test(lines[j + 1]))
+    j += 1;
+  while (
+    j < lines.length &&
+    !blankLine(lines[j]) &&
+    !fenced[j] &&
+    !boldLabel(lines[j]) &&
+    !RULE_LINE.test(lines[j]) &&
+    !ATX_HEADING.test(lines[j])
+  ) {
+    parts.push(lines[j].trimEnd());
+    j += 1;
+  }
+  return { text: parts.join("\n").trim(), end: j };
+}
+
+/** Moves `**Acceptance:**` blocks out of a task body. */
+function pullAcceptance(body: string): { body: string; acceptance: string } {
+  if (!body) return { body, acceptance: "" };
+  const lines = body.split("\n");
+  const fenced = fencedLines(lines);
+  const kept: string[] = [];
+  const found: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const label = fenced[i] ? null : boldLabel(lines[i]);
+    if (label && ACCEPTANCE_LABEL.test(label.label)) {
+      const block = acceptanceBlock(lines, fenced, i);
+      if (block.text) {
+        found.push(block.text);
+        i = block.end;
+        continue;
+      }
+    }
+    kept.push(lines[i]);
+    i += 1;
+  }
+  return found.length === 0
+    ? { body, acceptance: "" }
+    : { body: joinBody(kept), acceptance: found.join("\n\n") };
+}
+
+type ListItem = { text: string; rest: string[] };
+
+/** Reads one list starting at `start`; items are the entries at its first indent. */
+function readList(
+  lines: readonly string[],
+  fenced: readonly boolean[],
+  start: number,
+): { items: ListItem[]; end: number } {
+  const first = lines[start].match(LIST_LINE)!.groups!;
+  const base = indentWidth(first.indent);
+  const items: ListItem[] = [];
+  let contentIndent = base + 2;
+  let j = start;
+
+  const nextContent = (from: number) => {
+    let k = from;
+    while (k < lines.length && blankLine(lines[k])) k += 1;
+    return k;
+  };
+
+  while (j < lines.length) {
+    const line = lines[j];
+    if (blankLine(line)) {
+      const k = nextContent(j);
+      if (k >= lines.length) break;
+      const next = lines[k].match(LIST_LINE)?.groups;
+      const width = indentWidth(lines[k].match(/^[ \t]*/)![0]);
+      const continues = next ? indentWidth(next.indent) >= base : width > base;
+      if (!continues || (fenced[k] && width <= base)) break;
+      items[items.length - 1]?.rest.push("");
+      j += 1;
+      continue;
+    }
+    const width = indentWidth(line.match(/^[ \t]*/)![0]);
+    if (fenced[j]) {
+      const opens = j === 0 || !fenced[j - 1];
+      if (items.length === 0 || (opens && width <= base)) break;
+      items[items.length - 1].rest.push(line.slice(Math.min(width, contentIndent)));
+      j += 1;
+      continue;
+    }
+    const entry = line.match(LIST_LINE)?.groups;
+    if (entry && indentWidth(entry.indent) === base) {
+      items.push({ text: entry.text.trim(), rest: [] });
+      contentIndent = base + entry.marker.length + 1;
+      j += 1;
+      continue;
+    }
+    if (entry && indentWidth(entry.indent) < base) break;
+    if (width > base && items.length > 0) {
+      items[items.length - 1].rest.push(line.slice(Math.min(width, contentIndent)).trimEnd());
+      j += 1;
+      continue;
+    }
+    break;
+  }
+  // Blank lines at the end belong to whatever follows the list.
+  while (items.length > 0 && items[items.length - 1].rest.at(-1) === "")
+    items[items.length - 1].rest.pop();
+  return { items, end: j };
+}
+
+/**
+ * One list entry becomes one task. Its title is the bold lead when there is a
+ * real one, else the whole first line if it fits, else its first clause. The
+ * full first line goes back into the description whenever the title is shorter.
+ */
+function listItemToTask(item: ListItem): PlanMdTask {
+  const status = readStatus(item.text);
+  const text = status.title;
+  const lead = text.match(/^(?:\*\*|__)(?<lead>.+?)(?:\*\*|__)/)?.groups?.lead;
+  let source = text;
+  if (lead && stripInlineMarkdown(lead).length >= 12) {
+    source = lead.replace(/[\s:.,;—–-]+$/, "");
+  } else if (text.length > TASK_TITLE_MAX) {
+    const cut = [...text.matchAll(/: |\. | — |; /g)].find(
+      (m) => m.index! >= 20 && m.index! <= TASK_TITLE_MAX,
+    );
+    if (cut) source = text.slice(0, cut.index);
+  }
+  const fitted = fitTitle(source, "Untitled task", TASK_TITLE_MAX);
+  const firstLine = source === text ? fitted.overflow : text;
+  const { description, steps } = splitDescriptionSteps(
+    withOverflow(firstLine, joinBody(item.rest)),
+  );
+  return {
+    title: fitted.title,
+    description,
+    steps,
+    ...(status.done && { done: true }),
+  };
+}
+
+/**
+ * A section with prose and no sub-headings can still hold a to-do list: a bold
+ * label such as `**Plan**` or `**Implementation**` with a list under it. Each
+ * entry becomes a task, `**Acceptance:**` becomes their acceptance criteria,
+ * and every other line stays in the note, in its original order. Returns null
+ * when the section has no such list, so reference sections stay plain notes.
+ */
+function structureProse(raw: string): { note: string; tasks: PlanMdTask[] } | null {
+  const lines = raw.split("\n");
+  const fenced = fencedLines(lines);
+  const consumed = lines.map(() => false);
+  const tasks: PlanMdTask[] = [];
+  const criteria: string[] = [];
+
+  for (let i = 0; i < lines.length; ) {
+    const label = fenced[i] ? null : boldLabel(lines[i]);
+    if (!label) {
+      i += 1;
+      continue;
+    }
+    if (ACCEPTANCE_LABEL.test(label.label)) {
+      const block = acceptanceBlock(lines, fenced, i);
+      if (block.text) {
+        criteria.push(block.text);
+        for (let k = i; k < block.end; k += 1) consumed[k] = true;
+        i = block.end;
+        continue;
+      }
+    } else if (!label.tail && ACTION_LABEL.test(label.label)) {
+      let k = i + 1;
+      while (k < lines.length && blankLine(lines[k])) k += 1;
+      if (k < lines.length && !fenced[k] && LIST_LINE.test(lines[k])) {
+        const list = readList(lines, fenced, k);
+        tasks.push(...list.items.map(listItemToTask));
+        for (let m = i + 1; m < list.end; m += 1) consumed[m] = true;
+        i = list.end;
+        continue;
+      }
+    }
+    i += 1;
+  }
+  if (tasks.length === 0) return null;
+
+  const acceptance = criteria.join("\n\n");
+  return {
+    note: trimTrailingRules(joinBody(lines.filter((_, index) => !consumed[index]))),
+    tasks: acceptance ? tasks.map((task) => ({ ...task, acceptance })) : tasks,
+  };
+}
+
 function sectionToDocument(section: OutlineNode): PlanMdSection {
   const headings = section.children.filter((child) => child.kind !== "list");
   const bullets = section.children.filter((child) => child.kind === "list");
@@ -439,18 +722,36 @@ function sectionToDocument(section: OutlineNode): PlanMdSection {
   const textNodes = onlyList ? [] : bullets;
 
   const { title, overflow } = fitTitle(section.title, "Untitled section", SECTION_TITLE_MAX);
-  const description = withOverflow(overflow, foldTaskDescription(section.body, textNodes));
+
+  // Prose with a bold-labelled to-do list ("**Plan**", "**Implementation**") has tasks of its own.
+  const structured =
+    onlyList || headings.length > 0 || !section.raw ? null : structureProse(section.raw);
+  if (structured) {
+    const note = withOverflow(overflow, structured.note);
+    return { title, ...(note && { description: note }), tasks: structured.tasks };
+  }
+
+  // The note is the section's own text in source order: bullets, tables and labels stay where they were.
+  const note =
+    section.raw !== undefined && !onlyList
+      ? trimTrailingRules(section.raw)
+      : foldTaskDescription(section.body, textNodes);
+  const description = withOverflow(overflow, note);
 
   return {
     title,
     ...(description && { description }),
     tasks: taskNodes.map((task) => {
       const { steps, rest } = collectSteps(task.children);
-      const fitted = fitTitle(task.title, "Untitled task", TASK_TITLE_MAX);
+      const status = readStatus(task.title);
+      const fitted = fitTitle(status.title, "Untitled task", TASK_TITLE_MAX);
+      const pulled = pullAcceptance(task.body);
       return {
         title: fitted.title,
-        description: withOverflow(fitted.overflow, foldTaskDescription(task.body, rest)),
+        description: withOverflow(fitted.overflow, foldTaskDescription(pulled.body, rest)),
         steps,
+        ...(pulled.acceptance && { acceptance: pulled.acceptance }),
+        ...((status.done || task.check === "done") && { done: true }),
       };
     }),
   };
@@ -654,10 +955,12 @@ export function serializePlanMarkdown(doc: PlanMdDocument): string {
     children: section.tasks.map((task) => {
       const { body, nested } = unfoldDescription(task.description ?? "");
       const checklist = stepsToMarkdown(task.steps ?? []);
+      const acceptance = task.acceptance?.trim() ? `**Acceptance:** ${task.acceptance.trim()}` : "";
       return {
         title: task.title,
-        body: [body, checklist].filter(Boolean).join("\n"),
+        body: [body, checklist, acceptance].filter(Boolean).join("\n"),
         children: nested,
+        ...(task.done && { check: "done" as const }),
       };
     }),
   }));
@@ -820,7 +1123,9 @@ function plainText(text: string): string {
   return text
     .replace(/^[ \t]*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?/, "")
     .replace(/^#+\s+/, "")
-    .replace(/[*_`|>~\\#]/g, " ")
+    .replace(/[✅☑✔]\uFE0F?/gu, "")
+    .replace(/[*_`~\\]/g, "")
+    .replace(/[|>#]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -846,6 +1151,7 @@ export function planMarkdownCoverage(
         ...section.tasks.flatMap((task) => [
           task.title,
           task.description,
+          task.acceptance ? `Acceptance: ${task.acceptance}` : "",
           ...(task.steps ?? []).map((step) => step.text),
         ]),
       ]),
