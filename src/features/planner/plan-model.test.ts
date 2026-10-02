@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanWithSections, TaskWithAgent } from "@/data";
 import {
   advanceTip,
+  applySectionMove,
   applyTaskMove,
   attentionChips,
   boardOrder,
@@ -14,9 +15,11 @@ import {
   locateTask,
   matchesFileKind,
   matchesFilters,
+  matchesSearch,
   nextStatus,
   NO_FILTERS,
   placeTask,
+  planQuestionCounts,
   progressOf,
   sectionColor,
   SECTION_PALETTE,
@@ -270,5 +273,74 @@ describe("words", () => {
     expect(taskLink("https://app.test", "p1", "t1")).toBe(
       "https://app.test/app/planner/p1?task=t1",
     );
+  });
+});
+
+describe("tags, questions and ids in filters", () => {
+  const tagged = task("a1b2c3d4-0000-0000-0000-000000000000", "s1", 1, {
+    labels: ["bug", "backend"],
+    description: "Rate limiting on the API",
+    questions: [
+      { status: "open", blocking: true },
+      { status: "answered", blocking: false },
+    ] as TaskWithAgent["questions"],
+  });
+  const plain = task("t2", "s1", 2);
+
+  it("filters by tag, on the task or on its section", () => {
+    const filters = { ...NO_FILTERS, tag: "bug" };
+    expect(matchesFilters(tagged, filters, null)).toBe(true);
+    expect(matchesFilters(plain, filters, null)).toBe(false);
+    expect(matchesFilters(plain, filters, null, ["bug"])).toBe(true);
+  });
+
+  it("filters to tasks with an open question", () => {
+    const filters = { ...NO_FILTERS, questions: true };
+    expect(matchesFilters(tagged, filters, null)).toBe(true);
+    expect(matchesFilters(plain, filters, null)).toBe(false);
+    expect(hasActiveFilters(filters)).toBe(true);
+  });
+
+  it("searches title, description, tags and ids", () => {
+    expect(matchesSearch(tagged, "rate limiting")).toBe(true);
+    expect(matchesSearch(tagged, "#backend")).toBe(true);
+    expect(matchesSearch(tagged, "a1b2c3")).toBe(true);
+    expect(matchesSearch(tagged, "T-a1b2c3d4")).toBe(true);
+    expect(matchesSearch(plain, "backend")).toBe(false);
+    expect(matchesSearch(plain, "backend", ["backend"])).toBe(true);
+    expect(matchesSearch(plain, "")).toBe(true);
+  });
+
+  it("counts open and blocking questions across a plan", () => {
+    expect(planQuestionCounts([tagged, plain])).toEqual({ open: 1, blocking: 1 });
+  });
+});
+
+describe("moving sections", () => {
+  const sections = ["s1", "s2", "s3"].map((id, i) => ({
+    id,
+    plan_id: "p",
+    title: id,
+    position: i + 1,
+    tasks: [],
+  })) as unknown as PlanWithSections["sections"];
+  const plan = { id: "p", sections } as unknown as PlanWithSections;
+
+  it("drops a section before another and renumbers", () => {
+    const next = applySectionMove(plan, "s3", "s1");
+    expect(next.sections.map((s) => s.id)).toEqual(["s3", "s1", "s2"]);
+    expect(next.sections.map((s) => s.position)).toEqual([1, 2, 3]);
+  });
+
+  it("drops a section last when there is no target", () => {
+    expect(applySectionMove(plan, "s1", null).sections.map((s) => s.id)).toEqual([
+      "s2",
+      "s3",
+      "s1",
+    ]);
+  });
+
+  it("ignores a section that is not on the plan", () => {
+    expect(applySectionMove(plan, "nope", "s1")).toBe(plan);
   });
 });

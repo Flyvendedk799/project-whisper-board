@@ -29,6 +29,7 @@ import {
   TASK_STATUSES,
   timeAgo,
 } from "./plan-model";
+import type { WorkTarget } from "@/lib/plan-fields";
 import { ColorPicker } from "./color-picker";
 import { CopyIdButton } from "./copy-id-button";
 import { TagEditor } from "./tag-editor";
@@ -67,6 +68,7 @@ export function TaskProperties({
   actions,
   createdBy,
   tagSuggestions = [],
+  work,
 }: {
   task: TaskWithAgent;
   planId: string;
@@ -74,6 +76,8 @@ export function TaskProperties({
   createdBy?: string | null;
   /** Tags already used on the plan, offered while typing. */
   tagSuggestions?: readonly string[];
+  /** Where the plan says work happens, so the branch field can say so. */
+  work?: WorkTarget;
 }) {
   const { workspaceId } = useAuth();
   const people = useQuery(workspacePeopleQuery(workspaceId));
@@ -322,10 +326,15 @@ export function TaskProperties({
       <Field label="GitHub">
         <Input
           {...branch.bind}
-          placeholder="Branch: feat/…"
+          placeholder={work?.workOn ? `Plan branch: ${work.workOn}` : "Branch: feat/…"}
           aria-label="Branch"
           className="h-9 bg-card font-mono text-xs"
         />
+        {work?.repo ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {work.summary} Leave the branch empty to use it.
+          </p>
+        ) : null}
         <div className="flex items-center gap-2 text-xs">
           {livePr ? (
             <a

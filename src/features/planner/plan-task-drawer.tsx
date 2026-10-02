@@ -21,7 +21,7 @@ import type { EventWithRefs, PlanWithSections, TaskWithAgent } from "@/data";
 import { AttachmentLightbox } from "./attachment-lightbox";
 import { usePlanMedia } from "./plan-media";
 import { taskHeadline, taskLink } from "./plan-model";
-import { collectTags, questionCounts } from "@/lib/plan-fields";
+import { collectTags, questionCounts, workTargetOf } from "@/lib/plan-fields";
 import { CopyIdButton } from "./copy-id-button";
 import { TaskAttachments } from "./task-attachments";
 import { TaskDiscussion } from "./task-discussion";
@@ -275,6 +275,7 @@ function DrawerBody({
             actions={actions}
             createdBy={createdBy}
             tagSuggestions={tagSuggestions}
+            work={workTargetOf(plan)}
           />
         </div>
       </div>

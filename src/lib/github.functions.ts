@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { AppError } from "@/lib/errors";
 import { guard, requireFound } from "@/lib/server-errors";
 import { parsePullRequestUrl, parseRepoSlug } from "@/lib/github-url";
+import { isValidBranchName } from "@/lib/plan-fields";
 import { Octokit } from "octokit";
 import { NOT_CONNECTED_MESSAGE } from "@/lib/github-port";
 import type { GitHubConnection } from "@/lib/github-token";
@@ -93,6 +94,141 @@ export const listGitHubRepos = createServerFn({ method: "GET" })
       }));
 
       return { repos };
+    }),
+  );
+
+/**
+ * Every repository the person can see, up to 500, so the picker can search the
+ * whole list instead of only the 50 most recently updated.
+ */
+export const listAllGitHubRepos = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(({ context }) =>
+    guard("github.listAllRepos", async () => {
+      const octokit = await octokitFor(context.userId);
+      const repos: Array<{
+        fullName: string;
+        defaultBranch: string;
+        private: boolean;
+        description: string | null;
+      }> = [];
+      for (let page = 1; page <= 5; page++) {
+        const response = await octokit.rest.repos.listForAuthenticatedUser({
+          sort: "updated",
+          per_page: 100,
+          page,
+        });
+        for (const repo of response.data) {
+          repos.push({
+            fullName: repo.full_name,
+            defaultBranch: repo.default_branch,
+            private: repo.private,
+            description: repo.description,
+          });
+        }
+        if (response.data.length < 100) break;
+      }
+      return { repos, truncated: repos.length >= 500 };
+    }),
+  );
+
+const repoField = z
+  .string()
+  .trim()
+  .refine((value) => parseRepoSlug(value) !== null, "The repository must be owner/name.");
+
+/** Branches of a repository, default branch first, for the base and working branch pickers. */
+export const listGitHubBranches = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ repo: repoField }).parse(input))
+  .handler(({ data, context }) =>
+    guard("github.listBranches", async () => {
+      const octokit = await octokitFor(context.userId);
+      const { owner, repo } = parseRepoSlug(data.repo)!;
+      let defaultBranch: string | null = null;
+      try {
+        defaultBranch = (await octokit.rest.repos.get({ owner, repo })).data.default_branch;
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status === 404 || status === 403) {
+          throw new AppError(
+            "github_repo",
+            `Your GitHub token can't see ${data.repo}. Check the name, or connect a token that can read it.`,
+            { status: 404 },
+          );
+        }
+        throw error;
+      }
+      const branches: Array<{ name: string; protected: boolean }> = [];
+      for (let page = 1; page <= 3; page++) {
+        const response = await octokit.rest.repos.listBranches({
+          owner,
+          repo,
+          per_page: 100,
+          page,
+        });
+        for (const branch of response.data) {
+          branches.push({ name: branch.name, protected: branch.protected });
+        }
+        if (response.data.length < 100) break;
+      }
+      branches.sort(
+        (a, b) =>
+          Number(b.name === defaultBranch) - Number(a.name === defaultBranch) ||
+          a.name.localeCompare(b.name),
+      );
+      return { defaultBranch, branches };
+    }),
+  );
+
+/**
+ * Creates `name` on GitHub from the tip of `from`. Safe to repeat: a branch that is
+ * already there is reported as such, not as a failure.
+ */
+export const createGitHubBranch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        repo: repoField,
+        name: z.string().trim().refine(isValidBranchName, "That is not a valid branch name."),
+        from: z.string().trim().refine(isValidBranchName, "That is not a valid base branch."),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("github.createBranch", async () => {
+      const octokit = await octokitFor(context.userId);
+      const { owner, repo } = parseRepoSlug(data.repo)!;
+      try {
+        const base = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${data.from}` });
+        await octokit.rest.git.createRef({
+          owner,
+          repo,
+          ref: `refs/heads/${data.name}`,
+          sha: base.data.object.sha,
+        });
+        return { created: true as const };
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        const message = String((error as { message?: string }).message ?? "");
+        if (status === 422 && /already exists/i.test(message)) return { created: false as const };
+        if (status === 404) {
+          throw new AppError(
+            "github_branch",
+            `Could not find ${data.from} in ${data.repo}, so ${data.name} was not created.`,
+            { status: 404 },
+          );
+        }
+        if (status === 403) {
+          throw new AppError(
+            "github_forbidden",
+            `Your token is not allowed to create branches in ${data.repo}. It needs write access to contents.`,
+            { status: 403 },
+          );
+        }
+        throw error;
+      }
     }),
   );
 
