@@ -25,12 +25,19 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState, ProgressBar, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
-import { useDataMutation } from "@/lib/use-server-action";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { CardActionsMenu } from "@/components/card-actions-menu";
+import { ProjectDeleteDialog } from "@/features/projects/project-delete-dialog";
+import { setProjectStatus } from "@/lib/tickets.functions";
+import { useDataMutation, useServerAction } from "@/lib/use-server-action";
 import { organizationsQuery, projectListQuery } from "@/data/projects";
 import { createOrganization, createProject } from "@/data/mutations";
 import { qk } from "@/data/keys";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
+import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils-format";
+import type { ProjectWithOrg } from "@/data/types";
 
 export const Route = createFileRoute("/app/projects/")({
   component: ProjectsPage,
@@ -40,6 +47,22 @@ function ProjectsPage() {
   const { isAdmin, workspaceId } = useAuth();
   const projects = useQuery(projectListQuery(workspaceId));
   const [showArchived, setShowArchived] = useState(false);
+  const [deleting, setDeleting] = useState<ProjectWithOrg | null>(null);
+  const setStatus = useServerAction(useServerFn(setProjectStatus), {
+    label: "projects.setStatus",
+    invalidate: [qk.projects()],
+  });
+  const archive = (projectId: string, status: "archived" | "in_progress") =>
+    setStatus
+      .run({ projectId, status })
+      .then(() =>
+        toast.success(
+          status === "archived" ? "Project archived" : "Project restored as In progress",
+        ),
+      )
+      .catch(() => {
+        // The action already told the user why.
+      });
 
   return (
     <>
@@ -108,51 +131,74 @@ function ProjectsPage() {
             return (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {visible.map((project) => (
-                  <Link
-                    key={project.id}
-                    to="/app/projects/$projectId"
-                    params={{ projectId: project.id }}
-                    search={{ tab: undefined, paid: undefined }}
-                    className="rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
-                      <div className="flex items-center justify-between gap-2">
-                        <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
-                          {PROJECT_STATUS_LABEL[project.status]}
-                        </StatusPill>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {project.progress}%
-                        </span>
-                      </div>
+                  <div key={project.id} className="relative">
+                    <Link
+                      to="/app/projects/$projectId"
+                      params={{ projectId: project.id }}
+                      search={{ tab: undefined, paid: undefined }}
+                      className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
+                        <div
+                          className={cn(
+                            "flex items-center justify-between gap-2",
+                            isAdmin && "pr-8",
+                          )}
+                        >
+                          <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
+                            {PROJECT_STATUS_LABEL[project.status]}
+                          </StatusPill>
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {project.progress}%
+                          </span>
+                        </div>
 
-                      <h2 className="font-display text-2xl leading-tight">{project.title}</h2>
-                      <p className="text-xs text-muted-foreground">
-                        {project.organization?.name ?? "Internal"}
-                      </p>
-                      {project.description && (
-                        <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
-                          {project.description}
-                        </p>
-                      )}
-
-                      <ProgressBar
-                        value={project.progress}
-                        label={`${project.title} progress`}
-                        className="mt-1.5"
-                      />
-                      {project.end_date && (
+                        <h2 className="font-display text-2xl leading-tight">{project.title}</h2>
                         <p className="text-xs text-muted-foreground">
-                          Target {formatDate(project.end_date)}
+                          {project.organization?.name ?? "Internal"}
                         </p>
-                      )}
-                    </article>
-                  </Link>
+                        {project.description && (
+                          <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
+                            {project.description}
+                          </p>
+                        )}
+
+                        <ProgressBar
+                          value={project.progress}
+                          label={`${project.title} progress`}
+                          className="mt-1.5"
+                        />
+                        {project.end_date && (
+                          <p className="text-xs text-muted-foreground">
+                            Target {formatDate(project.end_date)}
+                          </p>
+                        )}
+                      </article>
+                    </Link>
+                    {isAdmin ? (
+                      <CardActionsMenu
+                        label={project.title}
+                        archived={project.status === "archived"}
+                        busy={setStatus.busy}
+                        onArchive={() => void archive(project.id, "archived")}
+                        onRestore={() => void archive(project.id, "in_progress")}
+                        onDelete={() => setDeleting(project)}
+                      />
+                    ) : null}
+                  </div>
                 ))}
               </div>
             );
           }}
         </QueryState>
       </div>
+      {deleting ? (
+        <ProjectDeleteDialog
+          project={deleting}
+          open
+          onOpenChange={(open) => !open && setDeleting(null)}
+        />
+      ) : null}
     </>
   );
 }

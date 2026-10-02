@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataError } from "@/lib/errors";
+import { getProjectDeletionImpact } from "@/lib/projects.functions";
 import { qk } from "./keys";
 import type { AppRole } from "./enums";
 import {
@@ -46,6 +47,16 @@ export function projectQuery(projectId: string) {
       if (!data) throw new DataError("projects.get", { message: "Not found", code: "PGRST116" });
       return data;
     },
+  });
+}
+
+/** What deleting the project would take with it. Only asked for when the dialog is open. */
+export function projectDeletionImpactQuery(projectId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: qk.projectImpact(projectId),
+    enabled,
+    gcTime: 0,
+    queryFn: () => getProjectDeletionImpact({ data: { projectId } }),
   });
 }
 

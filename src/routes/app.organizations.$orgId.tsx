@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { ProgressBar, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
@@ -51,6 +52,7 @@ function OrganizationPage() {
   const [notes, setNotes] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [mergeInto, setMergeInto] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!org) return;
@@ -80,6 +82,7 @@ function OrganizationPage() {
     success: "Client removed",
     invalidate: [qk.organizations(workspaceId ?? undefined), qk.projects()],
     onSuccess: () => {
+      setConfirmDelete(false);
       void navigate({ to: "/app/organizations" });
     },
   });
@@ -319,10 +322,10 @@ function OrganizationPage() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={remove.busy}
-                    onClick={() => remove.fire({ id: org.id })}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmDelete(true)}
                   >
-                    Delete client
+                    Delete client…
                   </Button>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Projects stay. They just lose this client link.
@@ -330,6 +333,24 @@ function OrganizationPage() {
                 </div>
               </Card>
             </div>
+            <ConfirmDeleteDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title={`Delete ${org.name}?`}
+              confirmLabel="Delete client"
+              busy={remove.busy}
+              onConfirm={() => remove.fire({ id: org.id })}
+            >
+              <p>
+                {owned.length > 0
+                  ? `Its ${owned.length} project${owned.length === 1 ? "" : "s"} stay, but lose this client link.`
+                  : "Nothing is filed under this client."}{" "}
+                {here.length > 0
+                  ? "The people linked to it stay in the workspace, unassigned. "
+                  : ""}
+                This can’t be undone.
+              </p>
+            </ConfirmDeleteDialog>
           </>
         );
       }}

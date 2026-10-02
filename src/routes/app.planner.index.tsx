@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,11 +27,13 @@ import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/ap
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
+import { CardActionsMenu } from "@/components/card-actions-menu";
+import { PlanDeleteDialog } from "@/features/planner/plan-delete-dialog";
 import { qk } from "@/data/keys";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
 import { planListQuery } from "@/data/planner";
 import { projectListQuery } from "@/data/projects";
-import { createPlan } from "@/lib/planner.functions";
+import { createPlan, updatePlan } from "@/lib/planner.functions";
 import { pluralize } from "@/features/planner/plan-model";
 import { cn } from "@/lib/utils";
 import type { PlanListItem, PlanStatus } from "@/data";
@@ -63,6 +66,8 @@ function PlannerIndexPage() {
   const plans = useQuery(planListQuery(workspaceId, filterProjectId));
   const projects = useQuery(projectListQuery(workspaceId));
   const [isCreating, setIsCreating] = useState(Boolean(openCreate));
+  const [showArchived, setShowArchived] = useState(false);
+  const [deleting, setDeleting] = useState<PlanListItem | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -108,6 +113,20 @@ function PlannerIndexPage() {
     },
   });
 
+  const setStatus = useServerAction(useServerFn(updatePlan), {
+    label: "plans.update",
+    invalidate: [qk.plans()],
+  });
+  const changeStatus = (planId: string, status: "archived" | "paused") =>
+    setStatus
+      .run({ planId, status })
+      .then(() =>
+        toast.success(status === "archived" ? "Plan archived" : "Plan restored as paused"),
+      )
+      .catch(() => {
+        // The action already told the user why.
+      });
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !workspaceId) return;
@@ -129,7 +148,9 @@ function PlannerIndexPage() {
     }
   };
 
-  const rows = plans.data?.plans ?? [];
+  const allRows = plans.data?.plans ?? [];
+  const archivedCount = allRows.filter((plan) => plan.status === "archived").length;
+  const rows = showArchived ? allRows : allRows.filter((plan) => plan.status !== "archived");
   const setProjectFilter = (project: string | undefined) =>
     void navigate({ search: (prev: PlannerSearch) => ({ ...prev, project }) });
 
@@ -142,7 +163,16 @@ function PlannerIndexPage() {
             ? `${pluralize(rows.length, "plan")} for ${filterProjectName} · tasks your team and agents work through together`
             : `${pluralize(rows.length, "plan")} · tasks your team and agents work through together`
         }
-        action={<Button onClick={() => setIsCreating(true)}>New plan</Button>}
+        action={
+          <>
+            {archivedCount > 0 ? (
+              <Button variant="outline" onClick={() => setShowArchived((value) => !value)}>
+                {showArchived ? "Hide archived" : `Show archived (${archivedCount})`}
+              </Button>
+            ) : null}
+            <Button onClick={() => setIsCreating(true)}>New plan</Button>
+          </>
+        }
       />
 
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
@@ -186,61 +216,98 @@ function PlannerIndexPage() {
             </div>
           }
         >
-          {() => (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {rows.map((plan: PlanListItem) => {
-                const total = plan.task_count ?? 0;
-                const done = plan.done_task_count ?? 0;
-                const percent = total ? (done / total) * 100 : 0;
-                const projectTitle =
-                  plan.project?.title ??
-                  (plan.project_id ? projectById.get(plan.project_id) : null);
-                const status = (plan.status ?? "draft") as PlanStatus;
+          {() =>
+            rows.length === 0 ? (
+              <div className="rounded-[14px] border bg-card">
+                <EmptyState
+                  title="No active plans"
+                  description="Archived plans are hidden. Choose “Show archived” to find them."
+                  action={
+                    <Button variant="outline" onClick={() => setShowArchived(true)}>
+                      Show archived
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {rows.map((plan: PlanListItem) => {
+                  const total = plan.task_count ?? 0;
+                  const done = plan.done_task_count ?? 0;
+                  const percent = total ? (done / total) * 100 : 0;
+                  const projectTitle =
+                    plan.project?.title ??
+                    (plan.project_id ? projectById.get(plan.project_id) : null);
+                  const status = (plan.status ?? "draft") as PlanStatus;
 
-                return (
-                  <Link
-                    key={plan.id}
-                    to="/app/planner/$planId"
-                    params={{ planId: plan.id }}
-                    search={{}}
-                    className="group rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md">
-                      <div className="flex items-center justify-between gap-2">
-                        <StatusPill tone={PLAN_TONE[status]}>
-                          {PLAN_STATUS_LABEL[status]}
-                        </StatusPill>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {Math.round(percent)}%
-                        </span>
-                      </div>
-                      <h2 className="font-display text-2xl leading-tight">{plan.title}</h2>
-                      <p className="text-xs text-muted-foreground">
-                        {projectTitle ?? "No project"}
-                      </p>
-                      {plan.description ? (
-                        <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
-                          {plan.description}
-                        </p>
-                      ) : (
-                        <span className="flex-1" />
-                      )}
-                      <ProgressBar
-                        value={percent}
-                        label={`${plan.title} progress`}
-                        className="mt-1.5"
+                  return (
+                    <div key={plan.id} className="relative">
+                      <Link
+                        to="/app/planner/$planId"
+                        params={{ planId: plan.id }}
+                        search={{}}
+                        className="group block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md">
+                          <div className="flex items-center justify-between gap-2 pr-8">
+                            <StatusPill tone={PLAN_TONE[status]}>
+                              {PLAN_STATUS_LABEL[status]}
+                            </StatusPill>
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              {Math.round(percent)}%
+                            </span>
+                          </div>
+                          <h2 className="font-display text-2xl leading-tight">{plan.title}</h2>
+                          <p className="text-xs text-muted-foreground">
+                            {projectTitle ?? "No project"}
+                          </p>
+                          {plan.description ? (
+                            <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
+                              {plan.description}
+                            </p>
+                          ) : (
+                            <span className="flex-1" />
+                          )}
+                          <ProgressBar
+                            value={percent}
+                            label={`${plan.title} progress`}
+                            className="mt-1.5"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {pluralize(plan.section_count ?? 0, "section")} · {done}/{total} tasks
+                          </p>
+                        </article>
+                      </Link>
+                      <CardActionsMenu
+                        label={plan.title}
+                        archived={status === "archived"}
+                        busy={setStatus.busy}
+                        onArchive={() => void changeStatus(plan.id, "archived")}
+                        onRestore={() => void changeStatus(plan.id, "paused")}
+                        onDelete={() => setDeleting(plan)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {pluralize(plan.section_count ?? 0, "section")} · {done}/{total} tasks
-                      </p>
-                    </article>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          }
         </QueryState>
       </div>
+
+      {deleting ? (
+        <PlanDeleteDialog
+          plan={{
+            id: deleting.id,
+            title: deleting.title,
+            status: deleting.status ?? "draft",
+            sections: deleting.section_count ?? 0,
+            tasks: deleting.task_count ?? 0,
+          }}
+          open
+          onOpenChange={(open) => !open && setDeleting(null)}
+        />
+      ) : null}
 
       <Dialog open={isCreating} onOpenChange={closeCreate}>
         <DialogContent className="sm:rounded-2xl">
