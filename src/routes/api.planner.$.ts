@@ -9,6 +9,7 @@ import {
 } from "@/features/planner/agent-media";
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import { applyPlanMarkdown } from "@/lib/plan-import";
+import { parsePullRequestUrl } from "@/lib/plan-refs";
 import { AppError } from "@/lib/errors";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
@@ -381,11 +382,29 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
       if (completeMatch) {
         const body = await request.json().catch(() => ({}));
         if (!(await taskInWorkspace(admin, completeMatch[1], workspaceId))) return notFound();
-        const updateData: { status: "done"; completed_at: string; pr_url?: string } = {
+        const updateData: {
+          status: "done";
+          completed_at: string;
+          pr_url?: string;
+          pr_number?: number;
+          pr_status?: string;
+          branch_name?: string;
+        } = {
           status: "done",
           completed_at: new Date().toISOString(),
         };
-        if (body.pr_url) updateData.pr_url = body.pr_url;
+        if (body.pr_url) {
+          updateData.pr_url = body.pr_url;
+          // The board shows "PR #36 · open" only when it has the number as well as the link.
+          const pr = parsePullRequestUrl(body.pr_url);
+          if (pr) {
+            updateData.pr_number = pr.number;
+            updateData.pr_status = "open";
+          }
+        }
+        if (typeof body.branch_name === "string" && body.branch_name.trim()) {
+          updateData.branch_name = body.branch_name.trim();
+        }
 
         const { data: task, error } = await admin
           .from("plan_tasks")

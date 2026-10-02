@@ -3,6 +3,7 @@ import {
   hasLivePullRequest,
   isOrphanPullRequestRef,
   isOrphanTicketRef,
+  parsePullRequestUrl,
   scrubCommentIfUnlinked,
   scrubStalePlanRefs,
 } from "./plan-refs";
@@ -68,5 +69,26 @@ describe("scrubCommentIfUnlinked", () => {
         pr_url: null,
       }),
     ).toBe(body);
+  });
+});
+
+describe("parsePullRequestUrl", () => {
+  it("reads the repo and number from a GitHub pull request URL", () => {
+    expect(parsePullRequestUrl("https://github.com/Flyvendedk799/openbot/pull/36")).toEqual({
+      repo: "Flyvendedk799/openbot",
+      number: 36,
+    });
+    expect(parsePullRequestUrl("https://github.com/o/r/pull/7/files#diff")).toEqual({
+      repo: "o/r",
+      number: 7,
+    });
+  });
+
+  it("is null for anything that is not a pull request", () => {
+    expect(parsePullRequestUrl("https://github.com/o/r/issues/7")).toBeNull();
+    expect(parsePullRequestUrl("https://gitlab.com/o/r/pull/7")).toBeNull();
+    expect(parsePullRequestUrl("not a url")).toBeNull();
+    expect(parsePullRequestUrl(null)).toBeNull();
+    expect(parsePullRequestUrl("")).toBeNull();
   });
 });

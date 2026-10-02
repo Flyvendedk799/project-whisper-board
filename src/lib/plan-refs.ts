@@ -46,3 +46,17 @@ export function scrubCommentIfUnlinked(body: string, task: PlanRefTask): string 
   if (task.ticket?.id || hasLivePullRequest(task)) return body;
   return scrubStalePlanRefs(body);
 }
+
+/**
+ * `https://github.com/owner/repo/pull/123` -> `{ repo: "owner/repo", number: 123 }`.
+ * Anything else (an issue, a compare view, a non-GitHub host) is not a pull request.
+ */
+export function parsePullRequestUrl(
+  url: string | null | undefined,
+): { repo: string; number: number } | null {
+  const match = url
+    ?.trim()
+    .match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/i);
+  if (!match) return null;
+  return { repo: match[1], number: Number(match[2]) };
+}

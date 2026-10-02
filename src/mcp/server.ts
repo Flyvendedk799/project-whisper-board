@@ -272,9 +272,13 @@ server.tool(
   {
     task_id: z.string(),
     summary: z.string().optional(),
-    pr_url: z.string().optional(),
+    pr_url: z
+      .string()
+      .optional()
+      .describe("Pull request URL; its number is read from it so the board shows PR #n"),
+    branch_name: z.string().optional(),
   },
-  async ({ task_id, summary, pr_url }) => {
+  async ({ task_id, summary, pr_url, branch_name }) => {
     try {
       if (summary) {
         await fetchApi(`tasks/${task_id}/comment`, {
@@ -285,7 +289,7 @@ server.tool(
 
       const task = await fetchApi(`tasks/${task_id}/complete`, {
         method: "POST",
-        body: JSON.stringify({ pr_url }),
+        body: JSON.stringify({ pr_url, branch_name }),
       });
       return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
     } catch (error: unknown) {
