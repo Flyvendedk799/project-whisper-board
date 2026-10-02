@@ -534,6 +534,28 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
       if (path === "agents/register") {
         const body = await request.json();
+        // Claiming registers the agent every time. The same agent coming back is the same agent,
+        // not a new row per task (a plan of 25 tasks left 25 identical "Claude Code" agents).
+        let existing = admin
+          .from("plan_agents")
+          .select()
+          .eq("workspace_id", workspaceId)
+          .eq("name", body.name)
+          .eq("provider", body.provider);
+        existing = body.model ? existing.eq("model", body.model) : existing.is("model", null);
+        const { data: known } = await existing
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (known) {
+          const { data: seen } = await admin
+            .from("plan_agents")
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq("id", known.id)
+            .select()
+            .single();
+          return Response.json(seen ?? known);
+        }
         const { data: agent, error } = await admin
           .from("plan_agents")
           .insert({
