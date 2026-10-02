@@ -23,6 +23,7 @@ import { qk } from "@/data/keys";
 import { ApiKeyManager } from "@/features/settings/api-key-manager";
 import { useImportOpenTickets } from "./import-tickets-button";
 import { PlanActivityPanel } from "./plan-activity-panel";
+import { PlanAiMenu, TaskAiMenu, useAutoEnrich } from "./ai-plan-actions";
 import { PlanBoard } from "./plan-board";
 import { PlanDeleteDialog } from "./plan-delete-dialog";
 import { NewTaskDialog, SectionDialog, DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
@@ -39,6 +40,7 @@ import { PlanMediaProvider, usePlanMedia } from "./plan-media";
 import {
   boardOrder,
   countByStatus,
+  hasActiveFilters,
   NO_FILTERS,
   planQuestionCounts,
   removeTaskFromPlan,
@@ -183,6 +185,8 @@ function PlanScreenBody({
   });
 
   const order = useMemo(() => boardOrder(plan, filters, meId), [plan, filters, meId]);
+  // Runs only when the person turned it on in Settings and AI is configured.
+  useAutoEnrich(plan);
   const empty = plan.sections.length === 0;
   const modalOpen = modal !== null;
 
@@ -244,6 +248,7 @@ function PlanScreenBody({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <PlanHeader
         plan={plan}
+        aiMenu={<PlanAiMenu plan={plan} selectedTaskIds={hasActiveFilters(filters) ? order : []} />}
         actions={{
           onNewTask: openNewTask,
           onAddSection: () => {
@@ -357,6 +362,7 @@ function PlanScreenBody({
         order={order}
         actions={actions}
         onSelect={onTaskChange}
+        renderAiMenu={(task) => <TaskAiMenu plan={plan} task={task} />}
       />
 
       <NewTaskDialog

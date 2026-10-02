@@ -74,7 +74,9 @@ describe("with AI", () => {
 
     await user.click(planMenu);
     expect(await screen.findByRole("menuitem", { name: "Audit plan" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /Select some tasks first/ })).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: /Filter the board to the tasks you want first/ }),
+    ).toBeTruthy();
     await user.keyboard("{Escape}");
 
     await user.click(taskMenu);

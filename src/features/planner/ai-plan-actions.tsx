@@ -178,7 +178,9 @@ export function PlanAiMenu({
               </span>
               {(!hasRepo || selectedTaskIds.length === 0) && (
                 <span className="text-xs text-muted-foreground">
-                  {!hasRepo ? "Connect a repository to the plan first" : "Select some tasks first"}
+                  {!hasRepo
+                    ? "Connect a repository to the plan first"
+                    : "Filter the board to the tasks you want first"}
                 </span>
               )}
             </span>
