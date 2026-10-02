@@ -86,6 +86,32 @@ user" are all enforced by triggers and constraints rather than application code.
 `RESTRICTIVE` RLS policy that ANDs with the existing per-table policies. The UI is
 single-workspace today; onboarding a second agency does not require a rewrite.
 
+## The planner
+
+Plans hold sections, sections hold tasks, and people and AI agents work the same board.
+
+- **Questions.** Anyone, human or agent, can ask a question on a task; it shows up as needing an
+  answer (task card, the plan header's "Needs you", the Questions tab). A _blocking_ question holds
+  the task in `blocked` and releases it when the last one is answered or dismissed. The database
+  trigger `plan_sync_question_block` does this, so it works the same for the UI and the agent API.
+- **Feature lists and sub-steps.** A task has a brief, a feature list (what it must deliver) and
+  sub-steps (how). A step can name the feature it delivers; the drawer shows features with no step.
+- **Sections** carry a description, goals and intentions, a colour and tags. Tasks have a colour and
+  tags (stored in `plan_tasks.labels`). Sections and tasks drag to reorder; ids copy with one click.
+- **Working branch.** Next to the base branch a plan says where work happens: a new branch, an
+  existing one, or the base branch itself. Repository and branch pickers are searchable.
+- **AI.** The assistant (bottom-right button, and preset buttons on the plan and task) proposes
+  actions that run in the browser as the signed-in person, so nothing gets more access than they
+  have. _Audit plan_, _Add context_ (reads the plan's repository with the person's own GitHub
+  token) and the optional background assessment in Settings use the same provider adapter as the
+  rest of the app; with no provider configured they stay hidden. The background mode runs while a
+  plan is open in the browser; there is no server-side scheduler.
+- **Agents.** `/app/agents` documents the MCP server, the skill and the REST API. The tool catalog
+  in `src/mcp/tool-catalog.ts` is the single source of truth, and a test fails if the MCP server,
+  the catalog and `.agents/skills/ai-planner/SKILL.md` drift apart.
+- **Markdown.** Export writes a readable GitHub-flavoured document; import reads it back (and still
+  reads the older numbered-outline and heading formats).
+
 ## Database
 
 Migrations live in `supabase/migrations/` and are ordered — later ones depend on
