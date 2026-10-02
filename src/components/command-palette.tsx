@@ -5,6 +5,7 @@ import {
   Bug,
   BarChart3,
   BrainCircuit,
+  Cable,
   Building2,
   Clock,
   FolderKanban,
@@ -244,6 +245,13 @@ export function CommandPalette() {
                 >
                   <BrainCircuit className="mr-2 h-4 w-4" aria-hidden="true" />
                   AI Planner
+                </CommandItem>
+                <CommandItem
+                  value="agents mcp"
+                  onSelect={() => run(() => void navigate({ to: "/app/agents" }))}
+                >
+                  <Cable className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Agents &amp; MCP
                 </CommandItem>
               </>
             )}

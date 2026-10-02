@@ -5,7 +5,7 @@ describe("buildNavGroups", () => {
   it("gives agency admins the grouped work / business / inbox layout", () => {
     const groups = buildNavGroups({ isAdmin: true, needsTriage: 4, unread: 2 });
     expect(groups.map((g) => g.map((i) => i.label))).toEqual([
-      ["Home", "Triage", "Projects", "AI Planner"],
+      ["Home", "Triage", "Projects", "AI Planner", "Agents & MCP"],
       ["Clients", "Time", "Reports", "Team"],
       ["Inbox", "Settings"],
     ]);

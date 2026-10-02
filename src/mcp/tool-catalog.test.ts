@@ -1,0 +1,167 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { agentGuideText, MCP_INSTRUCTIONS, WORKFLOW_RULES } from "./agent-guide";
+import {
+  searchTools,
+  TOOL_CATALOG,
+  TOOL_GROUPS,
+  toolsByGroup,
+  type CatalogTool,
+} from "./tool-catalog";
+import { toolDescription, toolShape } from "./tool-schema";
+
+const root = process.cwd();
+const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+
+/** The names `server.ts` registers: `server.tool("name", ...` or with the name on the next line. */
+function registeredTools(): string[] {
+  return [...read("src/mcp/server.ts").matchAll(/server\.tool\(\s*"([a-z_]+)"/g)].map(
+    (match) => match[1],
+  );
+}
+
+const catalogNames = TOOL_CATALOG.map((tool) => tool.name);
+const skill = read(".agents/skills/ai-planner/SKILL.md");
+
+describe("tool catalog and server.ts", () => {
+  it("registers every tool once", () => {
+    const names = registeredTools();
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("has a catalog entry for every tool the server registers", () => {
+    const missing = registeredTools().filter((name) => !catalogNames.includes(name));
+    expect(missing, `Add to src/mcp/tool-catalog.ts: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("has a server.tool registration for every catalog entry", () => {
+    const registered = registeredTools();
+    const orphans = catalogNames.filter((name) => !registered.includes(name));
+    expect(orphans, `In the catalog but not in server.ts: ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("lists each tool once", () => {
+    expect(new Set(catalogNames).size).toBe(catalogNames.length);
+  });
+});
+
+describe("tool catalog entries", () => {
+  it.each(TOOL_CATALOG.map((tool) => [tool.name, tool] as const))(
+    "%s is well formed",
+    (_, tool) => {
+      expect(TOOL_GROUPS).toContain(tool.group);
+      expect(tool.summary.trim().length).toBeGreaterThan(10);
+      const names = tool.params.map((param) => param.name);
+      expect(new Set(names).size).toBe(names.length);
+      for (const param of tool.params) expect(param.description.trim()).not.toBe("");
+      // Every :placeholder in the REST path is a parameter of the tool.
+      for (const [, placeholder] of (tool.rest?.path ?? "").matchAll(/:([a-z_]+)/g)) {
+        expect(names, `${tool.name}: ${placeholder} is in the path but not a param`).toContain(
+          placeholder,
+        );
+      }
+    },
+  );
+
+  it("builds a zod shape and description for every tool", () => {
+    for (const tool of TOOL_CATALOG) {
+      expect(Object.keys(toolShape(tool.name))).toEqual(tool.params.map((param) => param.name));
+      expect(toolDescription(tool.name).length).toBeGreaterThan(10);
+    }
+  });
+
+  it("marks required params as required in the shape", () => {
+    const shape = toolShape("claim_task");
+    expect(shape.task_id.isOptional()).toBe(false);
+    expect(shape.model.isOptional()).toBe(true);
+    expect(toolShape("report_progress").steps_done.isOptional()).toBe(true);
+  });
+
+  it("covers the whole authoring and question surface", () => {
+    for (const name of [
+      "report_progress",
+      "ask_question",
+      "list_questions",
+      "answer_question",
+      "add_task_features",
+      "update_task_feature",
+      "add_task_steps",
+      "create_section",
+      "update_section",
+      "create_task",
+      "update_task",
+      "agent_guide",
+    ]) {
+      expect(catalogNames).toContain(name);
+    }
+  });
+});
+
+describe("the skill", () => {
+  it("is named ai-planner", () => {
+    expect(skill).toMatch(/^---\nname: ai-planner\n/);
+  });
+
+  it.each(catalogNames)("mentions the tool %s", (name) => {
+    expect(skill, `Add ${name} to .agents/skills/ai-planner/SKILL.md`).toContain(name);
+  });
+
+  it("lists the REST path of every tool", () => {
+    const missing: string[] = [];
+    for (const tool of TOOL_CATALOG as readonly CatalogTool[]) {
+      if (!tool.rest) continue;
+      for (const candidate of tool.rest.path.split(" or ")) {
+        const route = candidate.split("?")[0];
+        if (!skill.includes(route)) missing.push(`${tool.name}: ${route}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("states the progress rules agents have to follow", () => {
+    expect(skill).toMatch(/Claim before working/);
+    expect(skill).toMatch(/only when `note` is non-empty/);
+    expect(skill).toMatch(/work_target/);
+  });
+});
+
+describe("the agent guide", () => {
+  it("only names tools that exist", () => {
+    const verbs =
+      /^(list|get|claim|start|complete|block|unclaim|add|ask|answer|create|update|import|set|check|merge|report|dismiss|view)_/;
+    const text = [MCP_INSTRUCTIONS, agentGuideText(), ...WORKFLOW_RULES.map((rule) => rule.body)];
+    for (const [token] of text.join("\n").matchAll(/\b[a-z]+(?:_[a-z]+)+\b/g)) {
+      if (verbs.test(token)) expect(catalogNames, `${token} is not a tool`).toContain(token);
+    }
+  });
+
+  it("tells agents to claim, tick, ask and check the work target", () => {
+    for (const phrase of ["claim_task", "report_progress", "ask_question", "work_target"]) {
+      expect(MCP_INSTRUCTIONS).toContain(phrase);
+    }
+    expect(MCP_INSTRUCTIONS).toMatch(/only when `note` is not empty/);
+  });
+
+  it("is numbered rule by rule", () => {
+    expect(MCP_INSTRUCTIONS).toContain(`${WORKFLOW_RULES.length}. `);
+    expect(new Set(WORKFLOW_RULES.map((rule) => rule.id)).size).toBe(WORKFLOW_RULES.length);
+  });
+});
+
+describe("catalog helpers", () => {
+  it("groups tools in group order and drops nothing", () => {
+    const grouped = toolsByGroup();
+    expect(grouped.map((entry) => entry.group)).toEqual([...TOOL_GROUPS]);
+    expect(grouped.flatMap((entry) => entry.tools)).toHaveLength(TOOL_CATALOG.length);
+  });
+
+  it("searches names, summaries, paths and parameters", () => {
+    expect(searchTools("").length).toBe(TOOL_CATALOG.length);
+    expect(searchTools("report_progress").map((tool) => tool.name)).toContain("report_progress");
+    expect(searchTools("features_met").map((tool) => tool.name)).toContain("report_progress");
+    expect(searchTools("questions").map((tool) => tool.name)).toContain("ask_question");
+    expect(searchTools("zzzz-no-such-thing")).toEqual([]);
+  });
+});
