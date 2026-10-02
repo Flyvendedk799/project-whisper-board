@@ -10,6 +10,8 @@ import {
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import { applyPlanMarkdown } from "@/lib/plan-import";
 import { parsePullRequestUrl } from "@/lib/plan-refs";
+import { githubConfigured, octokitPort } from "@/lib/github-port";
+import { loadPlanPulls, mergePlanPulls } from "@/lib/plan-pulls";
 import { AppError } from "@/lib/errors";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
@@ -201,6 +203,19 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         );
       }
 
+      // The plan's pull requests in merge order, read from GitHub now.
+      const pullsMatch = path.match(/^plans\/([^/]+)\/pull-requests$/);
+      if (pullsMatch) {
+        return Response.json(
+          await loadPlanPulls({
+            db: admin,
+            github: githubConfigured() ? octokitPort() : null,
+            planId: pullsMatch[1],
+            workspaceId,
+          }),
+        );
+      }
+
       const taskMatch = path.match(/^tasks\/([^/]+)$/);
       if (taskMatch) {
         // Needs a join to ensure workspace access, or simply verify task belongs to a plan in workspace
@@ -349,6 +364,38 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
           });
         }
         return Response.json(plan);
+      }
+
+      // Merge the plan's pull requests in stack order. A dry run is the default: say what it would do
+      // first, then repeat with `"dry_run": false` to do it.
+      const mergePullsMatch = path.match(/^plans\/([^/]+)\/pull-requests\/merge$/);
+      if (mergePullsMatch) {
+        const body = await readJson(request).catch(() => ({}) as Record<string, unknown>);
+        const method = body.method ?? "merge";
+        if (method !== "merge" && method !== "squash" && method !== "rebase") {
+          throw new AppError("validation", '`method` is "merge", "squash" or "rebase".');
+        }
+        const max = body.max === undefined ? undefined : Number(body.max);
+        if (max !== undefined && (!Number.isInteger(max) || max < 1 || max > 50)) {
+          throw new AppError("validation", "`max` is a whole number from 1 to 50.");
+        }
+        return Response.json(
+          await mergePlanPulls(
+            {
+              db: admin,
+              github: githubConfigured() ? octokitPort() : null,
+              planId: mergePullsMatch[1],
+              workspaceId,
+            },
+            {
+              method,
+              dryRun: body.dry_run !== false,
+              max,
+              only: optionalString(body.only) ?? undefined,
+              ignoreChecks: body.ignore_checks === true,
+            },
+          ),
+        );
       }
 
       const claimMatch = path.match(/^tasks\/([^/]+)\/claim$/);

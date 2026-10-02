@@ -10,6 +10,7 @@ import {
   listPlanAttachments,
   listTasksByTicket,
 } from "@/lib/planner.functions";
+import { getPlanPullRequests } from "@/lib/plan-pulls.functions";
 
 export const planListQuery = (workspaceId?: string | null, projectId?: string) =>
   queryOptions({
@@ -66,6 +67,15 @@ export const apiKeysQuery = (workspaceId?: string | null) =>
     queryKey: [...qk.apiKeys(), workspaceId ?? "none"],
     enabled: Boolean(workspaceId),
     queryFn: () => listApiKeys({ data: { workspaceId: workspaceId ?? undefined } }),
+  });
+
+/** The plan's pull requests in merge order, as GitHub has them. Asked afresh, not polled. */
+export const planPullsQuery = (planId: string) =>
+  queryOptions({
+    queryKey: qk.planPulls(planId),
+    queryFn: () => getPlanPullRequests({ data: { planId } }),
+    enabled: Boolean(planId),
+    staleTime: 60_000,
   });
 
 /** Every file on a plan with signed URLs. Refetched before the hour is up. */

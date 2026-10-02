@@ -26,6 +26,8 @@ import { PlanActivityPanel } from "./plan-activity-panel";
 import { PlanBoard } from "./plan-board";
 import { NewTaskDialog, SectionDialog, DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
 import { PlanFilesView } from "./plan-files-view";
+import { PlanPullRequests } from "./plan-pull-requests";
+import { hasLivePullRequest } from "@/lib/plan-refs";
 import { PlanGettingStarted } from "./plan-getting-started";
 import { PlanHeader } from "./plan-header";
 import { downloadPlanMarkdown } from "./plan-export";
@@ -123,6 +125,10 @@ function PlanScreenBody({
   }, [rawPlan, actions.pendingDelete]);
 
   const tasks = useMemo(() => tasksOf(plan), [plan]);
+  const pullRequestCount = useMemo(
+    () => new Set(tasks.filter(hasLivePullRequest).map((task) => task.pr_url?.trim())).size,
+    [tasks],
+  );
   const [layoutChoice, setLayoutChoice] = useState<PlanLayout | null>(null);
   const layout: PlanLayout =
     layoutChoice ?? (defaultBoardLayout(plan.sections.length) as PlanLayout);
@@ -235,6 +241,7 @@ function PlanScreenBody({
         layout={layout}
         onLayout={setLayoutChoice}
         fileCount={media.visible.length}
+        prCount={pullRequestCount}
         filters={filters}
         onFilters={setFilters}
         statusCounts={countByStatus(tasks)}
@@ -259,6 +266,8 @@ function PlanScreenBody({
                 onImportTickets={() => importTickets.fire({ planId })}
               />
             </div>
+          ) : layout === "prs" ? (
+            <PlanPullRequests planId={planId} />
           ) : layout === "files" ? (
             <PlanFilesView
               plan={plan}

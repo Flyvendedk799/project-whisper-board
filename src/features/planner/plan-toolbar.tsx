@@ -21,7 +21,7 @@ import {
   type WhoFilter,
 } from "./plan-model";
 
-export type PlanLayout = "columns" | "outline" | "files";
+export type PlanLayout = "columns" | "outline" | "files" | "prs";
 
 function FilterMenu({
   label,
@@ -89,6 +89,8 @@ export const PlanToolbar = forwardRef<
     layout: PlanLayout;
     onLayout: (layout: PlanLayout) => void;
     fileCount: number;
+    /** Pull requests the plan's tasks point at. The tab is only offered when there are some. */
+    prCount?: number;
     filters: TaskFilters;
     onFilters: (filters: TaskFilters) => void;
     statusCounts: Record<PlanTaskStatus, number>;
@@ -102,6 +104,7 @@ export const PlanToolbar = forwardRef<
     layout,
     onLayout,
     fileCount,
+    prCount = 0,
     filters,
     onFilters,
     statusCounts,
@@ -137,6 +140,23 @@ export const PlanToolbar = forwardRef<
             ),
             ariaLabel: "Files",
           },
+          // Offered when there is something to show, or when it is already the open view.
+          ...(prCount > 0 || layout === "prs"
+            ? [
+                {
+                  value: "prs" as const,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      Pull requests
+                      {prCount > 0 ? (
+                        <span className="text-[11px] text-muted-foreground">{prCount}</span>
+                      ) : null}
+                    </span>
+                  ),
+                  ariaLabel: "Pull requests",
+                },
+              ]
+            : []),
         ]}
       />
 

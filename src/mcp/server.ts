@@ -579,6 +579,49 @@ server.tool(
   },
 );
 
+server.tool(
+  "list_plan_pull_requests",
+  "List a plan's pull requests in the order they must be merged (stacked PRs go parents first), read from GitHub now: state, base <- head branches, checks, conflicts, and what blocks each one.",
+  {
+    plan_id: z.string().describe("The ID of the plan"),
+  },
+  async ({ plan_id }) => {
+    try {
+      return asText(await fetchApi(`plans/${plan_id}/pull-requests`));
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
+
+server.tool(
+  "merge_plan_pull_requests",
+  "Merge a plan's pull requests in stack order. Dry run by default: it returns what it would do (merge order, which stacked PRs get retargeted to the base branch first, what blocks a merge) without changing anything. Pass dry_run false to do it. It stops at the first PR that cannot be merged and is safe to repeat. A merge commit is the default because squash or rebase breaks a stack.",
+  {
+    plan_id: z.string().describe("The ID of the plan"),
+    dry_run: z.boolean().optional().describe("Defaults to true. Pass false to really merge."),
+    method: z.enum(["merge", "squash", "rebase"]).optional().describe("Defaults to merge"),
+    max: z.number().int().optional().describe("Merge at most this many PRs in this call"),
+    only: z
+      .string()
+      .optional()
+      .describe("Merge just this PR (owner/name#123); it has to be the next in line"),
+    ignore_checks: z.boolean().optional().describe("Merge even if checks are failing or running"),
+  },
+  async ({ plan_id, ...body }) => {
+    try {
+      return asText(
+        await fetchApi(`plans/${plan_id}/pull-requests/merge`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
+
 // Run server
 async function main() {
   const transport = new StdioServerTransport();
