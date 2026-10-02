@@ -88,4 +88,6 @@ export const qk = {
   planPulls: (id: string) => [...qk.plans(), "pulls", id] as const,
   taskComments: (id: string) => [...qk.all, "task-comments", id] as const,
   apiKeys: () => [...qk.all, "api-keys"] as const,
+  /** The signed-in person's own AI switches (the automatic mode). */
+  aiSettings: () => [...qk.all, "ai-settings"] as const,
 } as const;
