@@ -16,6 +16,35 @@ export function ticketPriorityToTask(priority: TicketPriority): TaskPriority {
   return priority;
 }
 
+/**
+ * The row for a task made through the workspace API, with or without a ticket behind it.
+ * A task someone puts on a plan is ready to work, like one made in the app or through the
+ * planner API; left to the column default it would sit in `backlog`, where an agent cannot
+ * claim it.
+ */
+export function linkedTaskRow(input: {
+  planId: string;
+  sectionId: string;
+  position: number;
+  title: string;
+  description: string | null;
+  priority?: TaskPriority;
+  ticketId?: string;
+  labels?: string[];
+}) {
+  return {
+    plan_id: input.planId,
+    section_id: input.sectionId,
+    title: input.title,
+    description: input.description,
+    position: input.position,
+    status: "available" as const,
+    ...(input.priority ? { priority: input.priority } : {}),
+    ...(input.ticketId ? { ticket_id: input.ticketId } : {}),
+    ...(input.labels ? { labels: input.labels } : {}),
+  };
+}
+
 export function taskTitleFromTicket(title: string): string {
   return title.trim().slice(0, 200);
 }
