@@ -40,6 +40,9 @@ function Landing() {
         <span className="font-display text-2xl">Boared</span>
         <div className="flex items-center gap-1 md:gap-2">
           <Button variant="ghost" asChild>
+            <Link to="/mcp">For agents</Link>
+          </Button>
+          <Button variant="ghost" asChild>
             <Link to="/login">Sign in</Link>
           </Button>
           <Button asChild>

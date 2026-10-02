@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { AGENT_TABS, AgentsPage, type AgentTab } from "@/features/agents/agents-page";
+import { AGENT_TABS, type AgentTab } from "@/features/agents/agent-tabs";
+import { AgentsPage } from "@/features/agents/agents-page";
 
 export const Route = createFileRoute("/app/agents")({
   head: () => ({ meta: [{ title: "Agents & MCP · Boared" }] }),

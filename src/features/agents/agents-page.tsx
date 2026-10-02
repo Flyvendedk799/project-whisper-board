@@ -1,20 +1,11 @@
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/status-pill";
 import { useAuth } from "@/components/auth-provider";
+import { AGENT_TABS, TAB_LABEL, type AgentTab } from "./agent-tabs";
 import { ConnectTab } from "./connect-tab";
 import { SkillTab } from "./skill-tab";
 import { ToolsTab } from "./tools-tab";
 import { WorkflowTab } from "./workflow-tab";
-
-export const AGENT_TABS = ["connect", "tools", "skill", "workflow"] as const;
-export type AgentTab = (typeof AGENT_TABS)[number];
-
-const TAB_LABEL: Record<AgentTab, string> = {
-  connect: "Connect",
-  tools: "Tools",
-  skill: "Skill",
-  workflow: "Workflow",
-};
 
 /** Everything an admin needs to put an AI agent on the board: connect it, see its tools, give it the skill. */
 export function AgentsPage({
@@ -46,7 +37,7 @@ export function AgentsPage({
     <>
       <PageHeader
         title="Agents & MCP"
-        description="Connect an AI agent to your plans, and tell it how to work."
+        description="Connect an AI agent to your plans, and tell it how to work. Anyone can read the same guide, without an account, at /mcp."
         maxWidth="max-w-4xl"
         tabs={AGENT_TABS.map((key) => ({
           id: key,
