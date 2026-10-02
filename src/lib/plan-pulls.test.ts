@@ -154,6 +154,7 @@ describe("loadPlanPulls", () => {
     expect(loaded.stack.map((e) => e.number)).toEqual([36, 37, 38]);
     expect(loaded.stack.map((e) => e.status)).toEqual(["ready", "waiting", "waiting"]);
     expect(loaded.baseBranches[REPO]).toBe("master");
+    expect(loaded.orderIsGuess).toBe(false);
     expect(loaded.tokenCanMerge).toBe(true);
     expect(loaded.configured).toBe(true);
   });
@@ -164,6 +165,8 @@ describe("loadPlanPulls", () => {
     expect(loaded.configured).toBe(false);
     expect(loaded.stack.every((e) => e.status === "unknown")).toBe(true);
     expect(loaded.stack[0].problems[0].message).toContain("not connected");
+    expect(loaded.orderIsGuess).toBe(true);
+    expect(loaded.stack.map((e) => e.number)).toEqual([36, 37, 38]);
   });
 
   it("reports a token that cannot write", async () => {

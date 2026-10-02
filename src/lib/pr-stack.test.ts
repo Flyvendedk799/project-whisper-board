@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStack,
+  headlineOf,
   methodWarning,
   nextMergeable,
   planMerge,
   pullKey,
+  summarizeTasks,
   type PullInfo,
   type PullLookup,
   type StackTask,
@@ -209,6 +211,17 @@ describe("buildStack", () => {
     expect(stack[0].problems[0].message).toBe("Not Found");
   });
 
+  it("guesses by pull request number, not by the plan's order, when the branches cannot be read", () => {
+    // The tasks of #38 sit in an early section of the plan, so going by the plan would put it first.
+    const tasks = [task("early", 38, 1, 1), task("a", 36, 5, 1), task("b", 37, 5, 2)];
+    const unread = new Map<string, PullLookup>(
+      [36, 37, 38].map((n) => [pullKey(REPO, n), { error: "GitHub is not connected" }]),
+    );
+    const stack = buildStack({ tasks, pulls: unread, baseBranchOf });
+    expect(stack.map((e) => e.number)).toEqual([36, 37, 38]);
+    expect(stack.every((e) => e.status === "unknown")).toBe(true);
+  });
+
   it("keeps repositories apart", () => {
     const other: StackTask = { ...task("x", 36, 1, 1), repo: "o/other" };
     const pulls = new Map<string, PullLookup>([
@@ -273,6 +286,29 @@ describe("planMerge", () => {
     ]);
     expect(steps[2].reason).toContain("conflicts");
     expect(steps[3].reason).toContain("#38");
+  });
+});
+
+describe("headlineOf and summarizeTasks", () => {
+  const tasks = [
+    "4.1 Chat (conversations only)",
+    "Phase 2: Work surface",
+    "4.4 Data model changes",
+    "4.5 API additions",
+    "4.2 Work",
+  ].map((title, i) => ({ id: `t${i}`, title }));
+
+  it("names a pull request by its GitHub title, else its Phase task, else its first task", () => {
+    expect(headlineOf({ info: pull(38, "h", "master"), tasks })).toBe("PR 38");
+    expect(headlineOf({ info: null, tasks })).toBe("Phase 2: Work surface");
+    expect(headlineOf({ info: null, tasks: [{ id: "x", title: "Only task" }] })).toBe("Only task");
+  });
+
+  it("keeps the list of what it closes to one short line", () => {
+    expect(summarizeTasks(tasks, "Phase 2: Work surface")).toBe(
+      "4.1 Chat (conversations only) · 4.4 Data model changes · +2 more",
+    );
+    expect(summarizeTasks([{ title: "Only task" }], "Only task")).toBe("");
   });
 });
 

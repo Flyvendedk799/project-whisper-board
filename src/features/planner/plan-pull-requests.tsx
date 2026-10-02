@@ -5,7 +5,13 @@ import { QueryState } from "@/components/query-state";
 import { Segmented, StatusPill, type Tone } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { planPullsQuery } from "@/data/planner";
-import type { MergeMethod, StackEntry, StackStatus } from "@/lib/pr-stack";
+import {
+  headlineOf,
+  summarizeTasks,
+  type MergeMethod,
+  type StackEntry,
+  type StackStatus,
+} from "@/lib/pr-stack";
 import { cn } from "@/lib/utils";
 import { PlanMergeDialog } from "./plan-merge-dialog";
 
@@ -131,6 +137,13 @@ export function PlanPullRequests({ planId }: { planId: string }) {
                 </p>
               ) : null}
 
+              {data.orderIsGuess ? (
+                <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground" role="status">
+                  Some branches could not be read, so this order is a guess, by pull request number.
+                  It is worked out from the branches once GitHub can be reached.
+                </p>
+              ) : null}
+
               <ol className="flex flex-col" aria-label="Pull requests in merge order">
                 {data.stack.map((entry, index) => (
                   <PullRow
@@ -180,6 +193,8 @@ function PullRow({
   const status = STATUS[entry.status];
   const info = entry.info;
   const done = entry.status === "merged";
+  const headline = headlineOf(entry);
+  const covers = summarizeTasks(entry.tasks, headline);
 
   return (
     <li className="flex gap-3" data-testid={`pr-row-${entry.number}`} data-status={entry.status}>
@@ -199,9 +214,15 @@ function PullRow({
         <div className="rounded-xl border bg-card p-3.5">
           <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium leading-snug">
-                {entry.tasks.map((t) => t.title).join(" · ")}
-              </p>
+              <p className="text-sm font-medium leading-snug">{headline}</p>
+              {covers ? (
+                <p
+                  className="mt-0.5 text-xs text-muted-foreground"
+                  title={entry.tasks.map((t) => t.title).join("\n")}
+                >
+                  Closes {covers}
+                </p>
+              ) : null}
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 <a
                   href={entry.url}

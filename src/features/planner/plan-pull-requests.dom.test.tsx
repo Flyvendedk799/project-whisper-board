@@ -136,11 +136,13 @@ describe("PlanPullRequests", () => {
         configured: false,
         canMerge: false,
         tokenCanMerge: false,
+        orderIsGuess: true,
         stack: buildStack({ tasks: TASKS, pulls: new Map(), baseBranchOf: () => "master" }),
       }),
     );
     renderWithQuery(<PlanPullRequests planId="plan-1" />);
     expect(await screen.findByText(/GitHub is not connected on this deployment/)).toBeTruthy();
+    expect(screen.getByText(/this order is a guess, by pull request number/)).toBeTruthy();
     expect((screen.getByTestId("merge-all") as HTMLButtonElement).disabled).toBe(true);
     // still a way to follow the order on GitHub
     expect(screen.getAllByLabelText("Open on GitHub").length).toBeGreaterThan(0);

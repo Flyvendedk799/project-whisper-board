@@ -167,16 +167,27 @@ function parentsOf(drafts: Draft[]): Map<string, string | null> {
   return parents;
 }
 
-/** Parents first; among those free to go, the plan's own order. A cycle is appended, flagged by the caller. */
+/**
+ * Parents first; among those free to go, the plan's own order. A cycle is appended, flagged by the
+ * caller.
+ *
+ * When some branch could not be read there are no parents to go on, and the plan's order is a poor
+ * guess (a pull request that closes tasks from several sections sits at its earliest one). Stacked
+ * pull requests are opened one after another, so their numbers are the better guess then.
+ */
 function mergeOrder(drafts: Draft[], parents: Map<string, string | null>) {
   const byKey = new Map(drafts.map((d) => [d.key, d]));
   const done = new Set<string>();
   const order: Draft[] = [];
-  const rank = (a: Draft, b: Draft) =>
+  const guessing = drafts.some((d) => !d.info);
+  const byPlan = (a: Draft, b: Draft) =>
     a.sectionPosition - b.sectionPosition ||
     a.position - b.position ||
     a.repo.localeCompare(b.repo) ||
     a.number - b.number;
+  const rank = guessing
+    ? (a: Draft, b: Draft) => a.repo.localeCompare(b.repo) || a.number - b.number
+    : byPlan;
 
   let remaining = [...drafts];
   while (remaining.length > 0) {
@@ -379,6 +390,23 @@ export function planMerge(
     steps.push(step);
   }
   return steps;
+}
+
+/**
+ * One pull request can close a dozen tasks (a phase and its sub-tasks). Name it by its GitHub title
+ * when we have it, else by its "Phase ..." task, else by the first task.
+ */
+export function headlineOf(entry: Pick<StackEntry, "info" | "tasks">): string {
+  const phase = entry.tasks.find((t) => /^phase\b/i.test(t.title.trim()));
+  return entry.info?.title ?? phase?.title ?? entry.tasks[0]?.title ?? "Pull request";
+}
+
+/** "Fixes · Phase 4 · +3 more": the tasks a pull request covers, short enough for one line. */
+export function summarizeTasks(tasks: Array<{ title: string }>, headline: string, max = 2): string {
+  const others = tasks.filter((t) => t.title !== headline);
+  const shown = others.slice(0, max).map((t) => t.title);
+  const more = others.length - shown.length;
+  return [...shown, ...(more > 0 ? [`+${more} more`] : [])].join(" · ");
 }
 
 /** Squash and rebase rewrite the commits, so every PR stacked on top has to be redone. */

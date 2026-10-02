@@ -39,6 +39,11 @@ export type PlanPulls = {
   tokenCanMerge: boolean;
   baseBranches: Record<string, string>;
   stack: StackEntry[];
+  /**
+   * True when a branch could not be read, so the order is a guess (by pull request number) rather
+   * than worked out from the branches.
+   */
+  orderIsGuess: boolean;
   fetchedAt: string;
 };
 
@@ -151,13 +156,15 @@ export async function loadPlanPulls(deps: PlanPullsDeps): Promise<PlanPulls> {
   }
 
   const baseBranchOf = (repo: string) => baseBranches[repo] ?? plan.github_base ?? "main";
+  const stack = buildStack({ tasks, pulls, baseBranchOf });
   return {
     planId: deps.planId,
     repo: plan.github_repo,
     configured: Boolean(deps.github),
     tokenCanMerge,
     baseBranches,
-    stack: buildStack({ tasks, pulls, baseBranchOf }),
+    stack,
+    orderIsGuess: stack.some((entry) => !entry.info),
     fetchedAt: new Date().toISOString(),
   };
 }

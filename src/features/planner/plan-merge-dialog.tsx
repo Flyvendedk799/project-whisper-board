@@ -23,7 +23,7 @@ import {
 import { qk } from "@/data/keys";
 import { toUserMessage } from "@/lib/errors";
 import { mergePlanPullRequests } from "@/lib/plan-pulls.functions";
-import type { MergeMethod } from "@/lib/pr-stack";
+import { headlineOf, type MergeMethod } from "@/lib/pr-stack";
 import { cn } from "@/lib/utils";
 import { DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
 
@@ -303,7 +303,7 @@ function StepRow({
         <p className="text-sm font-medium">
           #{step.number}{" "}
           <span className="font-normal text-muted-foreground">
-            {step.tasks.map((t) => t.title).join(" · ")}
+            {headlineOf({ info: null, tasks: step.tasks })}
           </span>
         </p>
         <p className="text-xs text-muted-foreground">
