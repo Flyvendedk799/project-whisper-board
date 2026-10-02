@@ -29,6 +29,9 @@ import {
   TASK_STATUSES,
   timeAgo,
 } from "./plan-model";
+import { ColorPicker } from "./color-picker";
+import { CopyIdButton } from "./copy-id-button";
+import { TagEditor } from "./tag-editor";
 import type { PlanActions } from "./use-plan-actions";
 import { useSyncedField } from "./use-synced-field";
 
@@ -63,11 +66,14 @@ export function TaskProperties({
   planId,
   actions,
   createdBy,
+  tagSuggestions = [],
 }: {
   task: TaskWithAgent;
   planId: string;
   actions: PlanActions;
   createdBy?: string | null;
+  /** Tags already used on the plan, offered while typing. */
+  tagSuggestions?: readonly string[];
 }) {
   const { workspaceId } = useAuth();
   const people = useQuery(workspacePeopleQuery(workspaceId));
@@ -167,6 +173,23 @@ export function TaskProperties({
           </Select>
         </Field>
       </div>
+
+      <Field label="Colour">
+        <ColorPicker
+          label="Task colour"
+          value={task.color}
+          onChange={(color) => actions.patchTask(task, { color }, { color })}
+        />
+      </Field>
+
+      <Field label="Tags">
+        <TagEditor
+          label="Task tags"
+          tags={task.labels ?? []}
+          suggestions={tagSuggestions}
+          onChange={(labels) => actions.patchTask(task, { labels }, { labels })}
+        />
+      </Field>
 
       <Field label="Agent" hint="Agents claim tasks themselves through the API.">
         <div className="flex h-[38px] items-center gap-2 rounded-lg border bg-card px-3 text-[13px]">
@@ -334,8 +357,12 @@ export function TaskProperties({
       </Field>
 
       <div className="h-px bg-border" />
-      <div className="text-xs text-muted-foreground">
-        Created{createdBy ? ` by ${createdBy}` : ""} · {timeAgo(task.created_at)}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex-1">
+          Created{createdBy ? ` by ${createdBy}` : ""} · {timeAgo(task.created_at)}
+        </span>
+        <span className="font-mono">{task.id.slice(0, 8)}</span>
+        <CopyIdButton id={task.id} label="task" />
       </div>
     </div>
   );

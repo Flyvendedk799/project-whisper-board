@@ -21,7 +21,7 @@ import {
   type WhoFilter,
 } from "./plan-model";
 
-export type PlanLayout = "columns" | "outline" | "files" | "prs";
+export type PlanLayout = "columns" | "outline" | "files" | "prs" | "questions";
 
 function FilterMenu({
   label,
@@ -91,6 +91,10 @@ export const PlanToolbar = forwardRef<
     fileCount: number;
     /** Pull requests the plan's tasks point at. The tab is only offered when there are some. */
     prCount?: number;
+    /** Questions on the plan: open ones need an answer. The tab is offered when there are any. */
+    questions?: { open: number; total: number };
+    /** Tags in use on the plan's sections and tasks, most used first. */
+    tags?: ReadonlyArray<{ tag: string; count: number }>;
     filters: TaskFilters;
     onFilters: (filters: TaskFilters) => void;
     statusCounts: Record<PlanTaskStatus, number>;
@@ -105,6 +109,8 @@ export const PlanToolbar = forwardRef<
     onLayout,
     fileCount,
     prCount = 0,
+    questions = { open: 0, total: 0 },
+    tags = [],
     filters,
     onFilters,
     statusCounts,
@@ -140,6 +146,24 @@ export const PlanToolbar = forwardRef<
             ),
             ariaLabel: "Files",
           },
+          ...(questions.total > 0 || layout === "questions"
+            ? [
+                {
+                  value: "questions" as const,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      Questions
+                      {questions.open > 0 ? (
+                        <span className="rounded-full bg-warning/25 px-1.5 text-[11px] text-foreground">
+                          {questions.open}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                  ariaLabel: "Questions",
+                },
+              ]
+            : []),
           // Offered when there is something to show, or when it is already the open view.
           ...(prCount > 0 || layout === "prs"
             ? [
@@ -172,7 +196,7 @@ export const PlanToolbar = forwardRef<
             else event.currentTarget.blur();
           }
         }}
-        placeholder="Search tasks  /"
+        placeholder="Search title, tag, id  /"
         aria-label="Search tasks"
         className="h-[34px] w-[190px] rounded-lg border bg-card px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
@@ -231,6 +255,44 @@ export const PlanToolbar = forwardRef<
           />
         ))}
       </FilterMenu>
+
+      {tags.length > 0 || filters.tag ? (
+        <FilterMenu
+          label="Tag"
+          current={filters.tag ? `#${filters.tag}` : "Any"}
+          active={Boolean(filters.tag)}
+        >
+          <Option
+            label="Any tag"
+            selected={!filters.tag}
+            onSelect={() => onFilters({ ...filters, tag: null })}
+          />
+          {tags.map(({ tag, count }) => (
+            <Option
+              key={tag}
+              label={`#${tag}`}
+              count={count}
+              selected={filters.tag === tag}
+              onSelect={() => onFilters({ ...filters, tag })}
+            />
+          ))}
+        </FilterMenu>
+      ) : null}
+
+      {questions.open > 0 || filters.questions ? (
+        <button
+          type="button"
+          aria-pressed={filters.questions}
+          onClick={() => onFilters({ ...filters, questions: !filters.questions })}
+          className={cn(
+            "flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            filters.questions ? "border-primary bg-accent" : "bg-card",
+          )}
+        >
+          Needs an answer
+          <span className="rounded-full bg-warning/25 px-1.5 text-[11px]">{questions.open}</span>
+        </button>
+      ) : null}
 
       {hasActiveFilters(filters) ? (
         <button

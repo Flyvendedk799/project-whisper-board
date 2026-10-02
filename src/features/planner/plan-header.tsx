@@ -11,9 +11,12 @@ import {
 import type { PlanStatus, PlanWithSections } from "@/data";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
 import { repoWebUrl } from "@/lib/github-url";
+import { workTargetOf } from "@/lib/plan-fields";
+import { CopyIdButton } from "./copy-id-button";
 import { cn } from "@/lib/utils";
 import {
   attentionChips,
+  planQuestionCounts,
   progressOf,
   sectionColor,
   sortedTasks,
@@ -45,6 +48,8 @@ export interface PlanHeaderActions {
   /** Roadmap card clicked: bring that section into view. */
   onFocusSection: (sectionId: string) => void;
   onFilterStatus: (status: TaskFilters["status"]) => void;
+  /** The "N questions" chip: show what is waiting for an answer. */
+  onShowQuestions: () => void;
   importingTickets?: boolean;
 }
 
@@ -55,13 +60,18 @@ export interface PlanHeaderActions {
 export function PlanHeader({
   plan,
   actions,
+  aiMenu,
 }: {
   plan: PlanWithSections;
   actions: PlanHeaderActions;
+  /** The plan's AI menu (Audit plan and friends), shown only when AI is configured. */
+  aiMenu?: React.ReactNode;
 }) {
   const tasks = tasksOf(plan);
   const overall = progressOf(tasks);
   const attention = attentionChips(tasks);
+  const questions = planQuestionCounts(tasks);
+  const work = workTargetOf(plan);
   const agents = workingAgentCount(tasks);
   const status = (plan.status ?? "draft") as PlanStatus;
   const empty = plan.sections.length === 0;
@@ -107,6 +117,7 @@ export function PlanHeader({
               <h1 className="font-display text-[38px] font-normal leading-[1.1] tracking-[-0.01em]">
                 {plan.title}
               </h1>
+              <CopyIdButton id={plan.id} label="plan" showId />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -155,6 +166,14 @@ export function PlanHeader({
                     <span>{plan.github_repo}</span>
                   )}
                   <span>base: {plan.github_base || "main"}</span>
+                  {work.mode === "base" ? (
+                    <span>working directly on {plan.github_base || "main"}</span>
+                  ) : work.branch ? (
+                    <span>
+                      working on <span className="font-mono">{work.branch}</span>
+                      {work.mode === "new" ? " (new)" : ""}
+                    </span>
+                  ) : null}
                 </>
               ) : (
                 <button
@@ -169,6 +188,7 @@ export function PlanHeader({
           </div>
 
           <div className="flex items-center gap-2">
+            {aiMenu}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="h-9 gap-1.5">
@@ -234,9 +254,19 @@ export function PlanHeader({
               {overall.done} of {overall.total} tasks done
             </span>
             <span className="flex-1" />
-            {attention.length > 0 ? (
+            {attention.length > 0 || questions.open > 0 ? (
               <div className="flex items-center gap-2 rounded-full bg-accent py-1 pl-3 pr-1 text-[13px]">
                 <span>Needs you</span>
+                {questions.open > 0 ? (
+                  <button
+                    type="button"
+                    onClick={actions.onShowQuestions}
+                    className="h-6 rounded-full bg-card px-2.5 text-xs font-medium hover:bg-card/70"
+                  >
+                    {questions.open} {questions.open === 1 ? "question" : "questions"}
+                    {questions.blocking > 0 ? ` (${questions.blocking} blocking)` : ""}
+                  </button>
+                ) : null}
                 {attention.map((chip) => (
                   <button
                     key={chip.status}

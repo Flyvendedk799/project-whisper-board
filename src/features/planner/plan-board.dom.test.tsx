@@ -99,6 +99,8 @@ function actionsMock() {
   return {
     advance: vi.fn(),
     moveTask: vi.fn(),
+    moveSection: vi.fn(),
+    shiftSection: vi.fn(),
     create: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
     removeSection: { fire: vi.fn(), run: vi.fn(), busy: false, error: null, reset: vi.fn() },
   };

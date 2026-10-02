@@ -71,6 +71,7 @@ const fns = vi.hoisted(() => {
     createSection: vi.fn(async () => ({ id: "s-new" })),
     updateSection: ok(),
     deleteSection: ok(),
+    reorderSections: ok(),
     addTaskComment: vi.fn(async () => ({ id: "c-new" })),
     updatePlan: ok(),
     deletePlan: ok(),
@@ -90,6 +91,24 @@ const fns = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/planner.functions", () => fns);
+vi.mock("@/lib/plan-extras.functions", () => {
+  const ok = () => vi.fn(async () => ({ ok: true }));
+  const created = () => vi.fn(async () => ({ created: 1, ids: ["x"] }));
+  return {
+    askQuestion: vi.fn(async () => ({ id: "q-new" })),
+    answerQuestion: ok(),
+    dismissQuestion: ok(),
+    setQuestionBlocking: ok(),
+    deleteQuestion: ok(),
+    addTaskFeatures: created(),
+    updateTaskFeature: ok(),
+    deleteTaskFeature: ok(),
+    reorderTaskFeatures: ok(),
+    addTaskSteps: created(),
+    setStepFeature: ok(),
+    reorderTaskSteps: ok(),
+  };
+});
 vi.mock("./plan-upload", () => ({ uploadPlanFile: vi.fn(async () => undefined) }));
 vi.mock("sonner", () => {
   const toast = Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() });

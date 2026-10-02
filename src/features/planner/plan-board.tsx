@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { GripVertical, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { collapseEmptySections, type BoardLayout } from "@/lib/board-view";
 import { partitionUploadable } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import type { PlanSection, PlanWithSections, TaskWithAgent } from "@/data";
+import { CopyIdButton } from "./copy-id-button";
 import { PlanTaskCard } from "./plan-task-card";
+import { TagChip } from "./tag-editor";
 import { usePlanMedia } from "./plan-media";
 import {
   hasFiles,
@@ -25,7 +28,19 @@ import {
 } from "./plan-model";
 import type { PlanActions } from "./use-plan-actions";
 
-type BoardActions = Pick<PlanActions, "advance" | "moveTask" | "create" | "removeSection">;
+type BoardActions = Pick<
+  PlanActions,
+  "advance" | "moveTask" | "create" | "removeSection" | "moveSection" | "shiftSection"
+>;
+
+const SECTION_DRAG = "sectionId";
+
+/** True while a drag carries a section (a column), not a card or a file. */
+function hasSectionDrag(event: { dataTransfer: Pick<DataTransfer, "types"> | null }): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).some(
+    (type) => type.toLowerCase() === SECTION_DRAG.toLowerCase(),
+  );
+}
 
 /**
  * Columns or Outline. Tasks drag between and within sections (Shift + arrow keys
@@ -42,7 +57,8 @@ export function PlanBoard({
   onSelectSection,
   onOpenTask,
   onAddSection,
-  onRenameSection,
+  onEditSection,
+  onTagFilter,
   actions,
 }: {
   plan: PlanWithSections;
@@ -55,13 +71,16 @@ export function PlanBoard({
   onSelectSection?: (sectionId: string) => void;
   onOpenTask: (taskId: string) => void;
   onAddSection?: () => void;
-  onRenameSection?: (section: PlanSection) => void;
+  onEditSection?: (section: PlanSection) => void;
+  /** A tag chip was clicked: filter the board by it. */
+  onTagFilter?: (tag: string) => void;
   actions: BoardActions;
 }) {
   const media = usePlanMedia();
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [overSection, setOverSection] = useState<string | null>(null);
   const [overTask, setOverTask] = useState<string | null>(null);
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [openEmpty, setOpenEmpty] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [quickSection, setQuickSection] = useState<string | null>(null);
@@ -111,10 +130,26 @@ export function PlanBoard({
 
   // ----- Dragging ---------------------------------------------------------
 
+  /** Put the dragged section where `targetId` is: before it, or after it when moving right. */
+  const dropSectionOn = (event: React.DragEvent, targetId: string) => {
+    const movingId = event.dataTransfer.getData(SECTION_DRAG) || draggedSectionId;
+    setDraggedSectionId(null);
+    if (!movingId || movingId === targetId) return;
+    const ids = sections.map((section) => section.id);
+    const from = ids.indexOf(movingId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    actions.moveSection(movingId, from < to ? (ids[to + 1] ?? null) : targetId);
+  };
+
   const dropOnSection = (event: React.DragEvent, sectionId: string) => {
     event.preventDefault();
     setOverSection(null);
     setOverTask(null);
+    if (hasSectionDrag(event) || draggedSectionId) {
+      dropSectionOn(event, sectionId);
+      return;
+    }
     if (event.dataTransfer.files.length > 0) {
       void tasksFromFiles(sectionId, Array.from(event.dataTransfer.files));
       return;
@@ -127,6 +162,10 @@ export function PlanBoard({
   const dropOnTask = (event: React.DragEvent, task: TaskWithAgent) => {
     event.preventDefault();
     event.stopPropagation();
+    if (hasSectionDrag(event) || draggedSectionId) {
+      dropOnSection(event, task.section_id);
+      return;
+    }
     setOverSection(null);
     setOverTask(null);
     if (event.dataTransfer.files.length > 0) {
@@ -142,7 +181,7 @@ export function PlanBoard({
     onDragOver: (event: React.DragEvent) => {
       event.preventDefault();
       event.dataTransfer.dropEffect = hasFiles(event) ? "copy" : "move";
-      if (overSection !== sectionId) setOverSection(sectionId);
+      if (overSection !== sectionId && draggedSectionId !== sectionId) setOverSection(sectionId);
     },
     onDragLeave: (event: React.DragEvent) => {
       if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -217,6 +256,8 @@ export function PlanBoard({
         onAdvance={() => actions.advance(task)}
         attachments={media.byTask.get(task.id) ?? []}
         dropActive={overTask === task.id && Boolean(draggedTaskId === null)}
+        onTagClick={onTagFilter}
+        activeTag={filters.tag}
       />
     </div>
   );
@@ -232,30 +273,62 @@ export function PlanBoard({
 
   const renderSection = (section: PlanSection, index: number, wide: boolean) => {
     const mine = columns.get(section.id) ?? [];
-    const shown = mine.filter((task) => matchesFilters(task, filters, meId));
+    const shown = mine.filter((task) => matchesFilters(task, filters, meId, section.tags ?? []));
     const progress = progressOf(mine);
     const color = sectionColor(section.color, index);
     const isEmpty = mine.length === 0;
     const hovered = overSection === section.id;
     const adding = quickSection === section.id;
+    const sectionTags = section.tags ?? [];
+    const hasAbout = Boolean(section.description || section.goals || section.intentions);
+    const position = sections.findIndex((s) => s.id === section.id);
 
     return (
       <div
         key={section.id}
         id={`col-${section.id}`}
-        style={wide ? undefined : { width: 304 }}
+        style={{ ...(wide ? {} : { width: 304 }), borderTopColor: color }}
         className={cn(
-          "flex shrink-0 flex-col gap-2.5 rounded-[14px] border bg-surface p-3 transition-colors",
+          "flex shrink-0 flex-col gap-2.5 rounded-[14px] border border-t-[3px] bg-surface p-3 transition-colors",
           wide && "w-[min(760px,100%)]",
           hovered && "border-primary bg-accent/60",
+          draggedSectionId === section.id && "opacity-50",
         )}
         {...overSectionProps(section.id)}
       >
         <div className="relative flex flex-col gap-2 px-1 pb-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              draggable
+              aria-label={`Drag section ${section.title}`}
+              title="Drag to reorder sections"
+              onDragStart={(event) => {
+                event.stopPropagation();
+                setDraggedSectionId(section.id);
+                event.dataTransfer.setData(SECTION_DRAG, section.id);
+                event.dataTransfer.effectAllowed = "move";
+                const column = document.getElementById(`col-${section.id}`);
+                if (column) event.dataTransfer.setDragImage(column, 24, 18);
+              }}
+              onDragEnd={() => {
+                setDraggedSectionId(null);
+                setOverSection(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  event.preventDefault();
+                  actions.shiftSection(section.id, event.key === "ArrowLeft" ? -1 : 1);
+                }
+              }}
+              className="-ml-1 cursor-grab rounded p-0.5 text-muted-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+            >
+              <GripVertical className="h-4 w-4" aria-hidden="true" />
+            </button>
             <h3 className="flex-1 font-display text-[21px] font-normal leading-tight">
               {section.title}
             </h3>
+            <CopyIdButton id={section.id} label="section" />
             <span className="text-xs tabular-nums text-muted-foreground">
               {progress.done}/{progress.total}
             </span>
@@ -287,9 +360,22 @@ export function PlanBoard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem onSelect={() => onRenameSection?.(section)}>
-                  Rename section
+                <DropdownMenuItem onSelect={() => onEditSection?.(section)}>
+                  Edit section
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={position <= 0}
+                  onSelect={() => actions.shiftSection(section.id, -1)}
+                >
+                  Move left
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={position < 0 || position >= sections.length - 1}
+                  onSelect={() => actions.shiftSection(section.id, 1)}
+                >
+                  Move right
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   disabled={!isEmpty}
@@ -313,14 +399,43 @@ export function PlanBoard({
               style={{ width: `${progress.percent}%`, backgroundColor: color }}
             />
           </span>
-          {section.description ? (
+          {sectionTags.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {sectionTags.map((tag) => (
+                <TagChip
+                  key={tag}
+                  tag={tag}
+                  active={filters.tag === tag}
+                  onClick={onTagFilter ? () => onTagFilter(tag) : undefined}
+                />
+              ))}
+            </div>
+          ) : null}
+          {hasAbout ? (
             <details className="text-muted-foreground" open={mine.length === 0}>
               <summary className="cursor-pointer select-none text-xs hover:text-foreground">
-                Section notes
+                About this section
               </summary>
-              <div className="mt-1.5 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-xs leading-relaxed text-foreground/80">
-                {section.description}
-              </div>
+              <dl className="mt-1.5 flex max-h-72 flex-col gap-2 overflow-auto rounded-md bg-muted/40 p-2 text-xs leading-relaxed text-foreground/80">
+                {section.description ? (
+                  <div>
+                    <dt className="font-medium text-foreground">What it covers</dt>
+                    <dd className="whitespace-pre-wrap break-words">{section.description}</dd>
+                  </div>
+                ) : null}
+                {section.goals ? (
+                  <div>
+                    <dt className="font-medium text-foreground">Goals</dt>
+                    <dd className="whitespace-pre-wrap break-words">{section.goals}</dd>
+                  </div>
+                ) : null}
+                {section.intentions ? (
+                  <div>
+                    <dt className="font-medium text-foreground">Intentions</dt>
+                    <dd className="whitespace-pre-wrap break-words">{section.intentions}</dd>
+                  </div>
+                ) : null}
+              </dl>
             </details>
           ) : null}
         </div>
@@ -387,9 +502,19 @@ export function PlanBoard({
               <button
                 key={section.id}
                 type="button"
+                draggable
                 aria-current={active ? "page" : undefined}
                 title={section.title}
                 onClick={() => onSelectSection?.(section.id)}
+                onDragStart={(event) => {
+                  setDraggedSectionId(section.id);
+                  event.dataTransfer.setData(SECTION_DRAG, section.id);
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => {
+                  setDraggedSectionId(null);
+                  setOverSection(null);
+                }}
                 {...overSectionProps(section.id)}
                 className={cn(
                   "flex w-44 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-full",

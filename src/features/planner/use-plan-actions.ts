@@ -21,11 +21,27 @@ import {
   deleteTaskStep,
   moveTaskTo,
   releaseTaskAgent,
+  reorderSections,
   updateSection,
   updateTask,
   updateTaskStep,
 } from "@/lib/planner.functions";
 import {
+  addTaskFeatures,
+  addTaskSteps,
+  answerQuestion,
+  askQuestion,
+  deleteQuestion,
+  deleteTaskFeature,
+  dismissQuestion,
+  reorderTaskFeatures,
+  reorderTaskSteps,
+  setQuestionBlocking,
+  setStepFeature,
+  updateTaskFeature,
+} from "@/lib/plan-extras.functions";
+import {
+  applySectionMove,
   applyTaskMove,
   locateTask,
   nextStatus,
@@ -47,7 +63,21 @@ export type TaskFields = Partial<{
   branchName: string;
   assignedUserId: string | null;
   ticketId: string | null;
+  labels: string[];
+  color: string | null;
+  aiContext: string | null;
 }>;
+
+/** `ids` with the entry at `from` moved by `delta` places; the same array when it cannot move. */
+export function shiftId(ids: readonly string[], id: string, delta: number): string[] {
+  const at = ids.indexOf(id);
+  const to = at + delta;
+  if (at < 0 || to < 0 || to >= ids.length) return [...ids];
+  const next = [...ids];
+  next.splice(at, 1);
+  next.splice(to, 0, id);
+  return next;
+}
 
 /** How long "Undo" stays on screen, and how long a delete waits before it is real. */
 export const UNDO_MS = 5000;
@@ -120,6 +150,72 @@ export function usePlanActions(planId: string) {
     label: "sections.delete",
     success: "Section deleted",
     invalidate: refresh,
+  });
+  const reorderSec = useServerAction(useServerFn(reorderSections), {
+    label: "sections.reorder",
+    invalidate: refresh,
+    onError: rollback,
+  });
+  const ask = useServerAction(useServerFn(askQuestion), {
+    label: "questions.ask",
+    success: (_result: unknown, input: { taskId: string; body: string; blocking?: boolean }) =>
+      input.blocking
+        ? "Question asked. The task is blocked until it is answered"
+        : "Question asked",
+    invalidate: refresh,
+  });
+  const answer = useServerAction(useServerFn(answerQuestion), {
+    label: "questions.answer",
+    success: "Answer saved",
+    invalidate: refresh,
+  });
+  const dismiss = useServerAction(useServerFn(dismissQuestion), {
+    label: "questions.dismiss",
+    invalidate: refresh,
+  });
+  const setBlocking = useServerAction(useServerFn(setQuestionBlocking), {
+    label: "questions.setBlocking",
+    invalidate: refresh,
+  });
+  const removeQuestion = useServerAction(useServerFn(deleteQuestion), {
+    label: "questions.delete",
+    invalidate: refresh,
+  });
+  const addFeatures = useServerAction(useServerFn(addTaskFeatures), {
+    label: "features.add",
+    success: (result) =>
+      result.created > 1 ? `Added ${result.created} features` : "Feature added",
+    invalidate: [qk.plan(planId)],
+  });
+  const editFeature = useServerAction(useServerFn(updateTaskFeature), {
+    label: "features.update",
+    invalidate: [qk.plan(planId)],
+    onError: rollback,
+  });
+  const removeFeature = useServerAction(useServerFn(deleteTaskFeature), {
+    label: "features.delete",
+    invalidate: [qk.plan(planId)],
+    onError: rollback,
+  });
+  const reorderFeatures = useServerAction(useServerFn(reorderTaskFeatures), {
+    label: "features.reorder",
+    invalidate: [qk.plan(planId)],
+    onError: rollback,
+  });
+  const addSteps = useServerAction(useServerFn(addTaskSteps), {
+    label: "steps.addMany",
+    success: (result) => (result.created > 1 ? `Added ${result.created} sub-steps` : ""),
+    invalidate: [qk.plan(planId)],
+  });
+  const linkStep = useServerAction(useServerFn(setStepFeature), {
+    label: "steps.setFeature",
+    invalidate: [qk.plan(planId)],
+    onError: rollback,
+  });
+  const reorderSteps = useServerAction(useServerFn(reorderTaskSteps), {
+    label: "steps.reorder",
+    invalidate: [qk.plan(planId)],
+    onError: rollback,
   });
   const addStep = useServerAction(useServerFn(createTaskStep), {
     label: "steps.create",
@@ -298,9 +394,170 @@ export function usePlanActions(planId: string) {
     [queryClient, planId, setPlan, removeStep],
   );
 
+  // ----- Sections ---------------------------------------------------------
+
+  /** Drop a section before another (or last). Optimistic; the server renumbers. */
+  const moveSection = useCallback(
+    (sectionId: string, beforeId?: string | null) => {
+      const plan = currentPlan();
+      if (!plan || sectionId === beforeId) return;
+      const next = applySectionMove(plan, sectionId, beforeId);
+      const before = plan.sections.map((s) => s.id).join();
+      const after = next.sections.map((s) => s.id).join();
+      if (before === after) return;
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan(() => next);
+      reorderSec.fire({ planId, order: next.sections.map((s) => s.id) });
+    },
+    [currentPlan, queryClient, planId, setPlan, reorderSec],
+  );
+
+  /** One place left or right, for the keyboard and the section menu. */
+  const shiftSection = useCallback(
+    (sectionId: string, delta: -1 | 1) => {
+      const plan = currentPlan();
+      if (!plan) return;
+      const ids = plan.sections.map((s) => s.id);
+      const at = ids.indexOf(sectionId);
+      if (at < 0 || at + delta < 0 || at + delta >= ids.length) return;
+      // Dropping before the neighbour two places on (or last) lands one place along.
+      moveSection(sectionId, delta === -1 ? ids[at - 1] : (ids[at + 2] ?? null));
+    },
+    [currentPlan, moveSection],
+  );
+
+  // ----- Features ---------------------------------------------------------
+
+  const toggleFeature = useCallback(
+    (taskId: string, featureId: string, met: boolean) => {
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((plan) => {
+        const task = tasksOf(plan).find((t) => t.id === taskId);
+        return patchTaskInPlan(plan, taskId, {
+          features: (task?.features ?? []).map((f) => (f.id === featureId ? { ...f, met } : f)),
+        });
+      });
+      editFeature.fire({ featureId, met });
+    },
+    [queryClient, planId, setPlan, editFeature],
+  );
+
+  const deleteFeatureNow = useCallback(
+    (taskId: string, featureId: string) => {
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((plan) => {
+        const task = tasksOf(plan).find((t) => t.id === taskId);
+        return patchTaskInPlan(plan, taskId, {
+          features: (task?.features ?? []).filter((f) => f.id !== featureId),
+          steps: (task?.steps ?? []).map((st) =>
+            st.feature_id === featureId ? { ...st, feature_id: null } : st,
+          ),
+        });
+      });
+      removeFeature.fire({ featureId });
+    },
+    [queryClient, planId, setPlan, removeFeature],
+  );
+
+  const shiftFeature = useCallback(
+    (taskId: string, featureId: string, delta: -1 | 1) => {
+      const plan = currentPlan();
+      const task = plan ? tasksOf(plan).find((t) => t.id === taskId) : null;
+      if (!task) return;
+      const list = task.features ?? [];
+      const order = shiftId(
+        list.map((f) => f.id),
+        featureId,
+        delta,
+      );
+      if (order.join() === list.map((f) => f.id).join()) return;
+      const byId = new Map(list.map((f) => [f.id, f] as const));
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((p) =>
+        patchTaskInPlan(p, taskId, {
+          features: order.map((id, index) => ({ ...byId.get(id)!, position: index + 1 })),
+        }),
+      );
+      reorderFeatures.fire({ taskId, order });
+    },
+    [currentPlan, queryClient, planId, setPlan, reorderFeatures],
+  );
+
+  // ----- More step operations ---------------------------------------------
+
+  const shiftStep = useCallback(
+    (taskId: string, stepId: string, delta: -1 | 1) => {
+      const plan = currentPlan();
+      const task = plan ? tasksOf(plan).find((t) => t.id === taskId) : null;
+      if (!task) return;
+      const list = task.steps ?? [];
+      const order = shiftId(
+        list.map((st) => st.id),
+        stepId,
+        delta,
+      );
+      if (order.join() === list.map((st) => st.id).join()) return;
+      const byId = new Map(list.map((st) => [st.id, st] as const));
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((p) =>
+        patchTaskInPlan(p, taskId, {
+          steps: order.map((id, index) => ({ ...byId.get(id)!, position: index + 1 })),
+        }),
+      );
+      reorderSteps.fire({ taskId, order });
+    },
+    [currentPlan, queryClient, planId, setPlan, reorderSteps],
+  );
+
+  const setStepDepth = useCallback(
+    (taskId: string, stepId: string, depth: number) => {
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((plan) => {
+        const task = tasksOf(plan).find((t) => t.id === taskId);
+        return patchTaskInPlan(plan, taskId, {
+          steps: (task?.steps ?? []).map((st) => (st.id === stepId ? { ...st, depth } : st)),
+        });
+      });
+      editStep.fire({ stepId, depth });
+    },
+    [queryClient, planId, setPlan, editStep],
+  );
+
+  const setStepFeatureLink = useCallback(
+    (taskId: string, stepId: string, featureId: string | null) => {
+      void queryClient.cancelQueries({ queryKey: qk.plan(planId) });
+      setPlan((plan) => {
+        const task = tasksOf(plan).find((t) => t.id === taskId);
+        return patchTaskInPlan(plan, taskId, {
+          steps: (task?.steps ?? []).map((st) =>
+            st.id === stepId ? { ...st, feature_id: featureId } : st,
+          ),
+        });
+      });
+      linkStep.fire({ stepId, featureId });
+    },
+    [queryClient, planId, setPlan, linkStep],
+  );
+
   return {
     create,
     update,
+    ask,
+    answer,
+    dismiss,
+    setBlocking,
+    removeQuestion,
+    addFeatures,
+    editFeature,
+    toggleFeature,
+    deleteFeature: deleteFeatureNow,
+    shiftFeature,
+    addSteps,
+    shiftStep,
+    setStepDepth,
+    linkStep: setStepFeatureLink,
+    moveSection,
+    shiftSection,
     setStatus,
     advance,
     patchTask,

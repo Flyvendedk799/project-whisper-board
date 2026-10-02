@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import type { PlanSection } from "@/data";
 import { cn } from "@/lib/utils";
+import { ColorPicker } from "./color-picker";
+import { TagEditor } from "./tag-editor";
 
 export const DIALOG_CONTENT = "sm:rounded-2xl";
 export const DIALOG_TITLE = "font-display text-[26px] font-normal leading-tight tracking-normal";
@@ -108,41 +112,77 @@ export function NewTaskDialog({
   );
 }
 
-/** Add a section, or rename the one passed as `section`. */
+export type SectionValues = {
+  title: string;
+  description: string;
+  goals: string;
+  intentions: string;
+  color: string | null;
+  tags: string[];
+};
+
+/**
+ * Add a section, or edit the one passed as `section`. A section is more than a
+ * column title: it says what the phase is for (description), what it should
+ * achieve (goals) and why it exists (intentions), and agents read all three.
+ */
 export function SectionDialog({
   open,
   onOpenChange,
   section,
   busy,
+  tagSuggestions = [],
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   section: PlanSection | null;
   busy: boolean;
-  onSubmit: (title: string) => void;
+  tagSuggestions?: readonly string[];
+  onSubmit: (values: SectionValues) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [goals, setGoals] = useState("");
+  const [intentions, setIntentions] = useState("");
+  const [color, setColor] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+
   useEffect(() => {
-    if (open) setTitle(section?.title ?? "");
+    if (!open) return;
+    setTitle(section?.title ?? "");
+    setDescription(section?.description ?? "");
+    setGoals(section?.goals ?? "");
+    setIntentions(section?.intentions ?? "");
+    setColor(section?.color ?? null);
+    setTags(section?.tags ?? []);
   }, [open, section]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-w-[420px]", DIALOG_CONTENT)}>
+      <DialogContent className={cn("max-h-[90vh] max-w-[560px] overflow-auto", DIALOG_CONTENT)}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (title.trim() && !busy) onSubmit(title.trim());
+            if (title.trim() && !busy) {
+              onSubmit({
+                title: title.trim(),
+                description: description.trim(),
+                goals: goals.trim(),
+                intentions: intentions.trim(),
+                color,
+                tags,
+              });
+            }
           }}
         >
           <DialogHeader>
             <DialogTitle className={DIALOG_TITLE}>
-              {section ? "Rename section" : "New section"}
+              {section ? "Edit section" : "New section"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Sections are the phases of the plan.
+              Sections are the phases of the plan. Describe what each one is for.
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -154,6 +194,60 @@ export function SectionDialog({
             maxLength={100}
             className="h-[42px] text-[15px]"
           />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="section-description" className="text-xs text-muted-foreground">
+              Description
+            </Label>
+            <Textarea
+              id="section-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What this part of the plan covers."
+              rows={3}
+              className="resize-y text-sm"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="section-goals" className="text-xs text-muted-foreground">
+                Goals
+              </Label>
+              <Textarea
+                id="section-goals"
+                value={goals}
+                onChange={(event) => setGoals(event.target.value)}
+                placeholder="What should be true when it is done?"
+                rows={3}
+                className="resize-y text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="section-intentions" className="text-xs text-muted-foreground">
+                Intentions
+              </Label>
+              <Textarea
+                id="section-intentions"
+                value={intentions}
+                onChange={(event) => setIntentions(event.target.value)}
+                placeholder="Why it exists, and how to approach it."
+                rows={3}
+                className="resize-y text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Colour</span>
+            <ColorPicker label="Section colour" value={color} onChange={setColor} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Tags</span>
+            <TagEditor
+              label="Section tags"
+              tags={tags}
+              suggestions={tagSuggestions}
+              onChange={setTags}
+            />
+          </div>
           <DialogFooter className="gap-2 sm:space-x-0">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

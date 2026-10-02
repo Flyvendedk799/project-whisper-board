@@ -28,6 +28,8 @@ import { PlanDeleteDialog } from "./plan-delete-dialog";
 import { NewTaskDialog, SectionDialog, DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
 import { PlanFilesView } from "./plan-files-view";
 import { PlanPullRequests } from "./plan-pull-requests";
+import { PlanQuestionsView } from "./plan-questions-view";
+import { collectTags } from "@/lib/plan-fields";
 import { hasLivePullRequest } from "@/lib/plan-refs";
 import { PlanGettingStarted } from "./plan-getting-started";
 import { PlanHeader } from "./plan-header";
@@ -38,6 +40,7 @@ import {
   boardOrder,
   countByStatus,
   NO_FILTERS,
+  planQuestionCounts,
   removeTaskFromPlan,
   tasksOf,
   type FileKindFilter,
@@ -150,6 +153,13 @@ function PlanScreenBody({
   }, [rawPlan, actions.pendingDelete]);
 
   const tasks = useMemo(() => tasksOf(plan), [plan]);
+  const tags = useMemo(() => collectTags(plan), [plan]);
+  const tagNames = useMemo(() => tags.map((entry) => entry.tag), [tags]);
+  const questions = useMemo(() => {
+    const open = planQuestionCounts(tasks).open;
+    const total = tasks.reduce((sum, task) => sum + (task.questions?.length ?? 0), 0);
+    return { open, total };
+  }, [tasks]);
   const pullRequestCount = useMemo(
     () => new Set(tasks.filter(hasLivePullRequest).map((task) => task.pr_url?.trim())).size,
     [tasks],
@@ -207,7 +217,9 @@ function PlanScreenBody({
         setSectionId(id);
         return;
       }
-      if (layout === "files") setLayoutChoice("columns");
+      if (layout === "files" || layout === "prs" || layout === "questions") {
+        setLayoutChoice("columns");
+      }
       // The columns render on the next frame when switching from Files.
       requestAnimationFrame(() =>
         document
@@ -256,8 +268,11 @@ function PlanScreenBody({
           onFocusSection: focusSection,
           onFilterStatus: (status) => {
             setFilters((current) => ({ ...current, status }));
-            if (layout === "files") setLayoutChoice("columns");
+            if (layout === "files" || layout === "prs" || layout === "questions") {
+              setLayoutChoice("columns");
+            }
           },
+          onShowQuestions: () => setLayoutChoice("questions"),
           importingTickets: importTickets.busy,
         }}
       />
@@ -268,6 +283,8 @@ function PlanScreenBody({
         onLayout={setLayoutChoice}
         fileCount={media.visible.length}
         prCount={pullRequestCount}
+        questions={questions}
+        tags={tags}
         filters={filters}
         onFilters={setFilters}
         statusCounts={countByStatus(tasks)}
@@ -294,6 +311,8 @@ function PlanScreenBody({
             </div>
           ) : layout === "prs" ? (
             <PlanPullRequests planId={planId} />
+          ) : layout === "questions" ? (
+            <PlanQuestionsView plan={plan} actions={actions} onOpenTask={onTaskChange} />
           ) : layout === "files" ? (
             <PlanFilesView
               plan={plan}
@@ -317,10 +336,11 @@ function PlanScreenBody({
                 setEditingSection(null);
                 setModal("section");
               }}
-              onRenameSection={(section) => {
+              onEditSection={(section) => {
                 setEditingSection(section);
                 setModal("section");
               }}
+              onTagFilter={(tag) => setFilters((current) => ({ ...current, tag }))}
               actions={actions}
             />
           )}
@@ -361,12 +381,29 @@ function PlanScreenBody({
         onOpenChange={(open) => !open && closeModal()}
         section={editingSection}
         busy={actions.addSection.busy || actions.editSection.busy}
-        onSubmit={async (title) => {
+        tagSuggestions={tagNames}
+        onSubmit={async (values) => {
           try {
             if (editingSection) {
-              await actions.editSection.run({ sectionId: editingSection.id, title });
+              await actions.editSection.run({
+                sectionId: editingSection.id,
+                title: values.title,
+                description: values.description || null,
+                goals: values.goals || null,
+                intentions: values.intentions || null,
+                color: values.color,
+                tags: values.tags,
+              });
             } else {
-              await actions.addSection.run({ planId, title });
+              await actions.addSection.run({
+                planId,
+                title: values.title,
+                description: values.description || undefined,
+                goals: values.goals || undefined,
+                intentions: values.intentions || undefined,
+                color: values.color ?? undefined,
+                tags: values.tags,
+              });
             }
             closeModal();
           } catch {
