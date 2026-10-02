@@ -106,6 +106,10 @@ async function failFromResponse(res: Response, wire: Wire, model: string): Promi
   const errorLike = { status: res.status, headers: res.headers, message: body };
   const facts = providerErrorFacts(errorLike);
 
+  // The person sees one sentence, and `guard` lets an AppError through without logging it, so
+  // without this the provider's own status and body are gone and a failure cannot be diagnosed.
+  console.error(`[ai] ${wire} ${model} answered ${res.status}`, body);
+
   if (res.status === 429) {
     throw new AppError("ai_rate_limited", "The AI service is busy. Try again in a minute.", {
       status: 429,
@@ -301,6 +305,27 @@ type AntigravityAuth =
   | { kind: "key"; credential: () => Promise<string> }
   | { kind: "subscription"; credential: () => Promise<string>; projectId: string | null };
 
+interface GeminiCandidates {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+}
+
+/**
+ * The text of a Gemini reply.
+ *
+ * The Cloud Code endpoint behind a subscription wraps the usual body as `{ response: {...} }`;
+ * the public API does not. A reply can also open with thinking parts, which are the model
+ * talking to itself and not part of the answer, so the answer is every plain text part.
+ */
+function geminiText(body: GeminiCandidates & { response?: GeminiCandidates }): string | undefined {
+  const candidates = body.response?.candidates ?? body.candidates;
+  const parts = candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .filter((part) => typeof part.text === "string" && !part.thought)
+    .map((part) => part.text)
+    .join("");
+  return text || undefined;
+}
+
 function createAntigravityProvider(
   auth: AntigravityAuth,
   baseUrl: string,
@@ -340,8 +365,9 @@ function createAntigravityProvider(
 
           const req = toCodeAssistRequest(
             model,
+            // Gemini calls the assistant's turns "model"; "assistant" is not a role it knows.
             turns.map((m) => ({
-              role: m.role as "user" | "model" | "system",
+              role: m.role === "assistant" ? ("model" as const) : ("user" as const),
               parts: [{ text: contentToText(m.content) }],
             })),
             {
@@ -350,10 +376,20 @@ function createAntigravityProvider(
             },
           );
 
-          res = await fetch(`${clientOptions.baseURL}/generateContent`, {
+          // The method hangs off the version with a colon, as in `v1internal:generateContent`.
+          // A slash there is a different, nonexistent path, so every call came back 404.
+          res = await fetch(`${clientOptions.baseURL}:generateContent`, {
             method: "POST",
             headers: clientOptions.defaultHeaders as Record<string, string>,
-            body: JSON.stringify(req),
+            body: JSON.stringify({
+              ...req,
+              request: {
+                ...req.request,
+                ...(opts?.maxTokens
+                  ? { generationConfig: { maxOutputTokens: opts.maxTokens } }
+                  : {}),
+              },
+            }),
           });
         } else {
           // Standard Gemini API
@@ -383,11 +419,10 @@ function createAntigravityProvider(
 
       if (!res.ok) await failFromResponse(res, "gemini", model);
 
-      const body = (await res.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-      const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (typeof text !== "string" || text.length === 0) failEmpty();
+      const text = geminiText(
+        (await res.json()) as GeminiCandidates & { response?: GeminiCandidates },
+      );
+      if (!text) failEmpty();
       return text;
     },
   };

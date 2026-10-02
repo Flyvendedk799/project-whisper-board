@@ -106,7 +106,8 @@ Plans hold sections, sections hold tasks, and people and AI agents work the same
   token) and the optional background assessment in Settings use the same provider adapter as the
   rest of the app; with no provider configured they stay hidden. The background mode runs while a
   plan is open in the browser; there is no server-side scheduler.
-- **Agents.** `/app/agents` documents the MCP server, the skill and the REST API. The tool catalog
+- **Agents.** `/app/agents` documents the MCP server, the skill and the REST API; `/mcp` is the same
+  guide open to everyone before signing in, with the skill and config files to download. The tool catalog
   in `src/mcp/tool-catalog.ts` is the single source of truth, and a test fails if the MCP server,
   the catalog and `.agents/skills/ai-planner/SKILL.md` drift apart. The planner tools work with any
   API key; the Workspace tools (projects and tickets, `/api/v1`) need a key with the account scope,

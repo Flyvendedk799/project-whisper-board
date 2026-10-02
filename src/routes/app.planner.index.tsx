@@ -27,7 +27,7 @@ import { EmptyState, PageHeader, ProgressBar, StatusPill } from "@/components/ap
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
-import { CardActionsMenu } from "@/components/card-actions-menu";
+import { CardActionsMenu, CardCorner } from "@/components/card-actions-menu";
 import { CopyIdButton } from "@/features/planner/copy-id-button";
 import { PlanDeleteDialog } from "@/features/planner/plan-delete-dialog";
 import { qk } from "@/data/keys";
@@ -250,7 +250,7 @@ function PlannerIndexPage() {
                         className="group block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md">
-                          <div className="flex items-center justify-between gap-2 pr-8">
+                          <div className="flex items-center justify-between gap-2 pr-14">
                             <StatusPill tone={PLAN_TONE[status]}>
                               {PLAN_STATUS_LABEL[status]}
                             </StatusPill>
@@ -279,19 +279,18 @@ function PlannerIndexPage() {
                           </p>
                         </article>
                       </Link>
-                      <CopyIdButton
-                        id={plan.id}
-                        label="plan"
-                        className="absolute right-12 top-[15px] z-10"
-                      />
-                      <CardActionsMenu
-                        label={plan.title}
-                        archived={status === "archived"}
-                        busy={setStatus.busy}
-                        onArchive={() => void changeStatus(plan.id, "archived")}
-                        onRestore={() => void changeStatus(plan.id, "paused")}
-                        onDelete={() => setDeleting(plan)}
-                      />
+                      <CardCorner>
+                        <CopyIdButton id={plan.id} label="plan" />
+                        <CardActionsMenu
+                          inline
+                          label={plan.title}
+                          archived={status === "archived"}
+                          busy={setStatus.busy}
+                          onArchive={() => void changeStatus(plan.id, "archived")}
+                          onRestore={() => void changeStatus(plan.id, "paused")}
+                          onDelete={() => setDeleting(plan)}
+                        />
+                      </CardCorner>
                     </div>
                   );
                 })}

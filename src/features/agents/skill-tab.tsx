@@ -1,22 +1,7 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "./code-block";
-// The skill as it sits in the repository, so this page cannot drift from it.
-import skillMarkdown from "../../../.agents/skills/ai-planner/SKILL.md?raw";
-
-export const SKILL_FILE = "SKILL.md";
-
-/** Hands a text to the browser as a file download. */
-function downloadText(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
+import { downloadSkill, SKILL_FILE, SKILL_MARKDOWN as skillMarkdown } from "./skill-file";
 
 export function SkillTab() {
   return (
@@ -31,12 +16,7 @@ export function SkillTab() {
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <CopyButton text={skillMarkdown} label="Copy skill" />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => downloadText(SKILL_FILE, skillMarkdown)}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={downloadSkill}>
             <Download className="h-3.5 w-3.5" aria-hidden />
             Download {SKILL_FILE}
           </Button>

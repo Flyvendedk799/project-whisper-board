@@ -105,10 +105,12 @@ describe("tool catalog entries", () => {
 describe("workspace tools", () => {
   const workspace = TOOL_CATALOG.filter((tool) => tool.group === "Workspace");
 
-  it("covers projects and the whole ticket flow", () => {
+  it("covers the workspace, its projects and the whole ticket flow", () => {
     expect(workspace.map((tool) => tool.name)).toEqual([
+      "get_workspace",
       "list_projects",
       "get_project",
+      "update_project",
       "list_tickets",
       "get_ticket",
       "create_ticket",

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { KeyRound } from "lucide-react";
+import { Download, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { CodeBlock } from "./code-block";
-import { mcpSnippets, type McpSnippets } from "./connect-snippets";
+import { CodeBlock, type CodeDownload } from "./code-block";
+import { mcpSnippets, REPO_ZIP_URL, type McpSnippets } from "./connect-snippets";
 
 type Client = "claude" | "cursor" | "antigravity" | "rest";
 
@@ -41,7 +41,10 @@ function Step({
   );
 }
 
-function clientSnippet(client: Client, snippets: McpSnippets) {
+function clientSnippet(
+  client: Client,
+  snippets: McpSnippets,
+): { caption: string; code: string; hint: string; download?: CodeDownload } {
   switch (client) {
     case "claude":
       return {
@@ -53,6 +56,7 @@ function clientSnippet(client: Client, snippets: McpSnippets) {
       return {
         caption: "~/.cursor/mcp.json (or .cursor/mcp.json in a project)",
         code: snippets.cursor,
+        download: { filename: "mcp.json", type: "application/json" },
         hint: "Restart Cursor, then enable the server under Settings -> MCP.",
       };
     case "antigravity":
@@ -77,7 +81,25 @@ function useOrigin() {
   return origin;
 }
 
-export function ConnectTab() {
+/** What step 1 says to someone who is signed in: the keys live in their own settings. */
+function SignedInKeyStep() {
+  return (
+    <Button asChild size="sm">
+      <Link to="/app/settings" search={{ tab: "api" }}>
+        <KeyRound className="h-4 w-4" aria-hidden />
+        Open Settings &rarr; API keys
+      </Link>
+    </Button>
+  );
+}
+
+/**
+ * The four steps that put an agent on the board.
+ *
+ * `keyAction` is what step 1 offers for getting a key. In the dashboard that is a link into
+ * Settings; the public page, where nobody is signed in yet, passes sign-in and sign-up instead.
+ */
+export function ConnectTab({ keyAction = <SignedInKeyStep /> }: { keyAction?: React.ReactNode }) {
   const origin = useOrigin();
   const [client, setClient] = useState<Client>("claude");
   const [repoPath, setRepoPath] = useState("");
@@ -92,18 +114,27 @@ export function ConnectTab() {
           revoke it on its own. It starts with <code className="text-xs">cpk_</code> and is shown
           once.
         </p>
-        <Button asChild size="sm">
-          <Link to="/app/settings" search={{ tab: "api" }}>
-            <KeyRound className="h-4 w-4" aria-hidden />
-            Open Settings &rarr; API keys
-          </Link>
-        </Button>
+        <p className="text-sm text-muted-foreground">
+          An <strong className="font-medium text-foreground">account</strong> key reaches plans,
+          projects and tickets, so an agent can pick up the tickets people file. A{" "}
+          <strong className="font-medium text-foreground">planner</strong> key reaches plans only.
+        </p>
+        {keyAction}
       </Step>
 
       <Step number={2} title="Add the MCP server to your agent">
         <p className="text-sm text-muted-foreground">
-          The server is a small program in the Boared repository. Clone it, run{" "}
-          <code className="text-xs">npm install</code> once, and tell the snippet where it lives.
+          The server is a small program in the public Boared repository. Clone it and install once.
+        </p>
+        <CodeBlock code={snippets.install} caption="Run in a terminal" />
+        <Button asChild variant="outline" size="sm">
+          <a href={REPO_ZIP_URL} rel="noreferrer">
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            Download as a zip instead
+          </a>
+        </Button>
+        <p className="text-sm text-muted-foreground">
+          Then tell the snippet below where you put it.
         </p>
         <div className="max-w-md space-y-1.5">
           <Label htmlFor="agents-repo-path">Path to your Boared checkout</Label>
@@ -135,7 +166,7 @@ export function ConnectTab() {
             </button>
           ))}
         </div>
-        <CodeBlock code={shown.code} caption={shown.caption} />
+        <CodeBlock code={shown.code} caption={shown.caption} download={shown.download} />
         <p className="text-xs text-muted-foreground">{shown.hint}</p>
       </Step>
 
@@ -145,7 +176,11 @@ export function ConnectTab() {
           key out of any config file. Replace <code className="text-xs">cpk_...</code> with your
           key.
         </p>
-        <CodeBlock code={snippets.env} caption="~/.boared.env" />
+        <CodeBlock
+          code={snippets.env}
+          caption="~/.boared.env"
+          download={{ filename: ".boared.env" }}
+        />
       </Step>
 
       <Step number={4} title="Try it">

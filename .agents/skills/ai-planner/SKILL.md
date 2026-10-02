@@ -54,7 +54,8 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
    Answers appear in `get_task` and `list_questions`.
 9. **Check `work_target` before committing** (returned by `get_plan` and `get_task`): repository, base branch,
    working branch and mode. `new` or `existing`: commit on that branch. `base`: commit directly on the base
-   branch and do not open a PR. No working branch chosen: one branch per task.
+   branch and do not open a PR. No working branch chosen: one branch per task. Pull requests use the key owner's
+   GitHub token: `github_status` says whether it is connected before you try.
 10. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
     `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
 11. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
@@ -76,15 +77,15 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 Server name: `consflow-planner`. `agent_id` is optional everywhere: it defaults to the agent that claimed a task in
 the session.
 
-| Group              | Tools                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment` |
-| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`             |
-| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                      |
-| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                            |
-| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`   |
-| GitHub             | `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                              |
-| Workspace          | `list_projects`, `get_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`    |
+| Group              | Tools                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment`                                 |
+| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                             |
+| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                      |
+| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                            |
+| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`                                   |
+| GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                             |
+| Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket` |
 
 Key parameters:
 
@@ -97,6 +98,9 @@ Key parameters:
   `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?)`.
 - `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
 - `create_pull_request(task_id, title, head_branch?, body?, repo?, base_branch?)`: errors with a clear message when the plan works on `base`.
+- `get_workspace()`, `list_projects()`, `get_project(project_id)`,
+  `update_project(project_id, title?, description?, status?, github_repo?, github_default_branch?)` (status: discovery,
+  proposal, in_progress, review, done, archived), and `github_status()` before opening pull requests.
 - `list_tickets(project_id?, status?)` (open, triaged, in_progress, in_review, done, wont_fix; newest first, at most 100),
   `get_ticket(ticket_id)`, `create_ticket(project_id, title, description?, type?, priority?)`,
   `update_ticket(ticket_id, status?, title?, description?, priority?, type?, assignee_id?)`,
@@ -137,6 +141,7 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, color?, tags?[] }`                                                                             |
 | `POST sections/:section_id`                          | same fields, all optional                                                                                                                   |
 | `POST plans/:plan_id/tasks`                          | `{ section_id, title, description?, priority?, complexity?, tags?[], color?, features?[], acceptance_criteria?[], depends_on?[], status? }` |
+| `GET github`                                         | is GitHub connected for the key owner (never the token)                                                                                     |
 | `GET tasks/:task_id/pull-request`                    | live PR state from GitHub                                                                                                                   |
 | `POST tasks/:task_id/pull-request`                   | `{ title, head_branch?, body?, repo?, base? }`; head defaults to the plan's work branch                                                     |
 | `GET plans/:plan_id/pull-requests`                   | the plan's PRs in merge order                                                                                                               |
@@ -148,8 +153,10 @@ Needs a key with the account scope. Errors have the same shape.
 
 | Request                                 | Body / notes                                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/workspace`                 | the workspace the key belongs to (id, name, slug)                                                          |
 | `GET /api/v1/projects`                  | the workspace's projects                                                                                   |
 | `GET /api/v1/projects/:project_id`      | one project                                                                                                |
+| `PATCH /api/v1/projects/:project_id`    | `{ title?, description?, status?, github_repo?, github_default_branch? }` (`github_repo` is `owner/name`)  |
 | `GET /api/v1/tickets`                   | `?project_id=` and `?status=` (open, triaged, in_progress, in_review, done, wont_fix)                      |
 | `GET /api/v1/tickets/:ticket_id`        | one ticket                                                                                                 |
 | `POST /api/v1/tickets`                  | `{ project_id, title, description?, type?, priority? }`                                                    |

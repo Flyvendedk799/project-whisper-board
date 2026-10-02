@@ -409,6 +409,10 @@ server.tool(
     }),
 );
 
+server.tool("github_status", toolDescription("github_status"), toolShape("github_status"), () =>
+  run(() => fetchApi("github")),
+);
+
 server.tool(
   "check_pr_status",
   toolDescription("check_pr_status"),
@@ -434,6 +438,10 @@ server.tool(
 // Workspace (account scope)
 // ---------------------------------------------------------------------------
 
+server.tool("get_workspace", toolDescription("get_workspace"), toolShape("get_workspace"), () =>
+  run(() => fetchAccount("workspace")),
+);
+
 server.tool("list_projects", toolDescription("list_projects"), toolShape("list_projects"), () =>
   run(() => fetchAccount("projects")),
 );
@@ -443,6 +451,16 @@ server.tool(
   toolDescription("get_project"),
   toolShape("get_project"),
   ({ project_id }) => run(() => fetchAccount(`projects/${project_id}`)),
+);
+
+server.tool(
+  "update_project",
+  toolDescription("update_project"),
+  toolShape("update_project"),
+  ({ project_id, ...patch }) =>
+    run(() =>
+      fetchAccount(`projects/${project_id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    ),
 );
 
 server.tool(
