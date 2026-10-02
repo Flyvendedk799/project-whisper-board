@@ -11,8 +11,20 @@
  * Outline keys are only bare `1 Title` or multi-segment `1.1 Title` —
  * markdown ordered lists (`1. Title`) are never outline keys.
  * A single wrapping `#` document title whose children are `##` chapters is
- * promoted away so chapters become sections (typical design-doc shape).
+ * promoted away so chapters become sections (typical design-doc shape). Its
+ * intro text is kept as the document `preamble`.
  * Outline keys are stripped from stored titles and regenerated on export.
+ *
+ * Nothing in the source is dropped:
+ * - prose, tables and code under a section become the section `description`;
+ * - bullets under a section that has prose or sub-headings stay text in that
+ *   description (a section that is *only* a list still turns its items into
+ *   tasks);
+ * - lines inside ``` / ~~~ fences are never structure, even if they start
+ *   with `#`, `-` or `1.`;
+ * - a title cut to fit its column keeps the full text at the top of the
+ *   description.
+ * `planMarkdownCoverage` proves it by listing any source line that is missing.
  */
 
 /** One line of a task's checklist. `depth` is 0 for a top-level step. */
@@ -32,11 +44,17 @@ export type PlanMdTask = {
 
 export type PlanMdSection = {
   title: string;
+  /** Prose, tables and bullets under the section heading (before its tasks). */
+  description?: string;
   tasks: PlanMdTask[];
 };
 
 export type PlanMdDocument = {
   sections: PlanMdSection[];
+  /** A wrapping `#` document title, when one was promoted away. */
+  title?: string;
+  /** Text above the first section (a title's intro, a status table, …). */
+  preamble?: string;
 };
 
 /** Preview tree for the import dialog (sections → tasks → nested titles). */
@@ -49,11 +67,15 @@ export type PlanMdPreviewNode = {
 
 type CheckState = "open" | "done";
 
+/** `list` items are bullets; `outline` items are headings or numbered keys. */
+type ItemKind = "outline" | "list";
+
 type OutlineNode = {
   title: string;
   body: string;
   children: OutlineNode[];
   check?: CheckState;
+  kind?: ItemKind;
 };
 
 type FlatItem = {
@@ -61,7 +83,31 @@ type FlatItem = {
   title: string;
   bodyLines: string[];
   check?: CheckState;
+  kind: ItemKind;
 };
+
+/** Opening or closing line of a fenced code block, at any indentation. */
+const FENCE = /^[ \t]*(?<mark>`{3,}|~{3,})/;
+
+/**
+ * Marks every line that sits inside a fenced code block, delimiters included.
+ * Those lines are body text and never headings, numbered keys or list items.
+ */
+function fencedLines(lines: readonly string[]): boolean[] {
+  const mask: boolean[] = [];
+  let open: string | null = null;
+  for (const line of lines) {
+    const mark = line.match(FENCE)?.groups?.mark;
+    if (open === null) {
+      mask.push(Boolean(mark));
+      if (mark) open = mark;
+    } else {
+      mask.push(true);
+      if (mark && mark[0] === open[0] && mark.length >= open.length) open = null;
+    }
+  }
+  return mask;
+}
 
 export const MAX_STEP_DEPTH = 3;
 export const STEP_TEXT_MAX = 500;
@@ -176,18 +222,22 @@ function classifyOutlineLine(
 }
 
 /** True when the source uses ATX headings (# / ## / …). */
-function documentHasAtxHeadings(lines: string[]): boolean {
-  return lines.some((line) => ATX_HEADING.test(line));
+function documentHasAtxHeadings(lines: string[], fenced: boolean[]): boolean {
+  return lines.some((line, index) => !fenced[index] && ATX_HEADING.test(line));
 }
 
 /**
  * True when the document is a nested-list outline (no numbered keys / ATX
  * headings). Top-level list items become sections.
  */
-function isListOutlineDocument(lines: string[]): boolean {
+function isListOutlineDocument(lines: string[], fenced: boolean[]): boolean {
   let sawList = false;
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (blankLine(line)) continue;
+    if (fenced[index]) {
+      if (!sawList) return false;
+      continue;
+    }
     if (classifyOutlineLine(line)) return false;
     if (LIST_ITEM.test(line)) {
       sawList = true;
@@ -198,9 +248,17 @@ function isListOutlineDocument(lines: string[]): boolean {
   return sawList;
 }
 
-function parseFlatItems(source: string): FlatItem[] {
+type FlatDocument = {
+  items: FlatItem[];
+  /** Text that comes before the first heading, key or list item. */
+  preamble: string;
+};
+
+function parseFlatItems(source: string): FlatDocument {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
   const items: FlatItem[] = [];
+  const preambleLines: string[] = [];
   let current: FlatItem | null = null;
   /** Depth of the most recent numbered/heading outline item (not a list). */
   let lastStructuralDepth = 0;
@@ -210,37 +268,48 @@ function parseFlatItems(source: string): FlatItem[] {
    * there so only ATX headings structure the tree; pure `1` / `1.1` outlines
    * still use the tightened numbered grammar.
    */
-  const atxOnly = documentHasAtxHeadings(lines);
+  const atxOnly = documentHasAtxHeadings(lines, fenced);
 
   const pushBody = (text: string) => {
-    if (!current) return;
-    current.bodyLines.push(text);
+    if (current) current.bodyLines.push(text);
+    else preambleLines.push(text);
+  };
+  const pushLine = (line: string) => {
+    if (!blankLine(line)) pushBody(line);
+    else if (current ? current.bodyLines.length > 0 : preambleLines.length > 0) pushBody("");
+  };
+  const listItem = (depth: number, rawTitle: string): FlatItem => {
+    const read = readCheck(rawTitle.trim());
+    return {
+      depth,
+      title: read.title,
+      bodyLines: [],
+      kind: "list",
+      ...(read.check && { check: read.check }),
+    };
   };
 
-  if (isListOutlineDocument(lines)) {
-    for (const line of lines) {
-      const list = line.match(LIST_ITEM);
+  if (isListOutlineDocument(lines, fenced)) {
+    for (const [index, line] of lines.entries()) {
+      const list = fenced[index] ? null : line.match(LIST_ITEM);
       if (list?.groups) {
-        const read = readCheck(list.groups.title.trim());
-        current = {
-          depth: listDepth(list.groups.indent),
-          title: read.title,
-          bodyLines: [],
-          ...(read.check && { check: read.check }),
-        };
+        current = listItem(listDepth(list.groups.indent), list.groups.title);
         items.push(current);
         continue;
       }
-      if (!blankLine(line)) pushBody(line);
-      else if (current && current.bodyLines.length > 0) pushBody("");
+      pushLine(line);
     }
-    return items;
+    return { items, preamble: joinBody(preambleLines) };
   }
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
+    if (fenced[index]) {
+      pushBody(line);
+      continue;
+    }
     const outline = classifyOutlineLine(line, { atxOnly });
     if (outline) {
-      current = { depth: outline.depth, title: outline.title, bodyLines: [] };
+      current = { depth: outline.depth, title: outline.title, bodyLines: [], kind: "outline" };
       items.push(current);
       lastStructuralDepth = outline.depth;
       continue;
@@ -249,23 +318,15 @@ function parseFlatItems(source: string): FlatItem[] {
     // List items under a structural outline become deeper nodes.
     const list = line.match(LIST_ITEM);
     if (list?.groups && lastStructuralDepth > 0) {
-      const depth = lastStructuralDepth + listDepth(list.groups.indent);
-      const read = readCheck(list.groups.title.trim());
-      current = {
-        depth,
-        title: read.title,
-        bodyLines: [],
-        ...(read.check && { check: read.check }),
-      };
+      current = listItem(lastStructuralDepth + listDepth(list.groups.indent), list.groups.title);
       items.push(current);
       continue;
     }
 
-    if (!blankLine(line)) pushBody(line);
-    else if (current && current.bodyLines.length > 0) pushBody("");
+    pushLine(line);
   }
 
-  return items;
+  return { items, preamble: joinBody(preambleLines) };
 }
 
 function buildTree(items: FlatItem[]): OutlineNode[] {
@@ -277,6 +338,7 @@ function buildTree(items: FlatItem[]): OutlineNode[] {
       title: item.title,
       body: joinBody(item.bodyLines),
       children: [],
+      kind: item.kind,
       ...(item.check && { check: item.check }),
     };
 
@@ -353,21 +415,55 @@ function collapseSpaces(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function treeToDocument(roots: OutlineNode[]): PlanMdDocument {
-  if (roots.length === 0) return { sections: [] };
+/**
+ * A title is cut to fit its column. When that loses words, the full original
+ * goes back in at the top of the description so nothing is dropped.
+ */
+function fitTitle(raw: string, fallback: string, max: number): { title: string; overflow: string } {
+  const source = raw || fallback;
+  const title = clampTitle(source, max);
+  return { title, overflow: title === stripInlineMarkdown(source) ? "" : source.trim() };
+}
+
+function withOverflow(overflow: string, description: string): string {
+  return [overflow, description].filter(Boolean).join("\n\n");
+}
+
+function sectionToDocument(section: OutlineNode): PlanMdSection {
+  const headings = section.children.filter((child) => child.kind !== "list");
+  const bullets = section.children.filter((child) => child.kind === "list");
+  // A section that is only a list is a list of tasks. One with prose or
+  // sub-headings keeps its bullets as text, so the prose around them survives.
+  const onlyList = headings.length === 0 && !section.body.trim();
+  const taskNodes = onlyList ? bullets : headings;
+  const textNodes = onlyList ? [] : bullets;
+
+  const { title, overflow } = fitTitle(section.title, "Untitled section", SECTION_TITLE_MAX);
+  const description = withOverflow(overflow, foldTaskDescription(section.body, textNodes));
 
   return {
-    sections: roots.map((section) => ({
-      title: clampTitle(section.title || "Untitled section", SECTION_TITLE_MAX),
-      tasks: section.children.map((task) => {
-        const { steps, rest } = collectSteps(task.children);
-        return {
-          title: clampTitle(task.title || "Untitled task", TASK_TITLE_MAX),
-          description: foldTaskDescription(task.body, rest),
-          steps,
-        };
-      }),
-    })),
+    title,
+    ...(description && { description }),
+    tasks: taskNodes.map((task) => {
+      const { steps, rest } = collectSteps(task.children);
+      const fitted = fitTitle(task.title, "Untitled task", TASK_TITLE_MAX);
+      return {
+        title: fitted.title,
+        description: withOverflow(fitted.overflow, foldTaskDescription(task.body, rest)),
+        steps,
+      };
+    }),
+  };
+}
+
+function treeToDocument(
+  roots: OutlineNode[],
+  extra: Pick<PlanMdDocument, "title" | "preamble"> = {},
+): PlanMdDocument {
+  return {
+    sections: roots.map(sectionToDocument),
+    ...(extra.title && { title: extra.title }),
+    ...(extra.preamble && { preamble: extra.preamble }),
   };
 }
 
@@ -380,9 +476,12 @@ function shouldPromoteDocumentTitle(source: string, roots: OutlineNode[]): boole
   if (roots.length !== 1) return false;
   if (roots[0].children.length === 0) return false;
 
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
   let h1Count = 0;
   let h2Count = 0;
-  for (const line of source.replace(/\r\n/g, "\n").split("\n")) {
+  for (const [index, line] of lines.entries()) {
+    if (fenced[index]) continue;
     const heading = line.match(ATX_HEADING);
     if (!heading?.groups) continue;
     const depth = heading.groups.hashes.length;
@@ -394,12 +493,22 @@ function shouldPromoteDocumentTitle(source: string, roots: OutlineNode[]): boole
 }
 
 /**
- * Drop a wrapping document-title root and promote its children to sections.
- * Title-level body is discarded (not turned into a fake section/task).
+ * Drop a wrapping document-title root and promote its `##` children to
+ * sections. What sat under the title (intro prose, a status table, bullets
+ * before the first chapter) is returned as the document preamble.
  */
-function promoteDocumentTitle(roots: OutlineNode[]): OutlineNode[] {
-  if (roots.length !== 1) return roots;
-  return roots[0].children;
+function promoteDocumentTitle(root: OutlineNode): {
+  sections: OutlineNode[];
+  preamble: string;
+} {
+  const sections = root.children.filter((child) => child.kind !== "list");
+  const intro = root.children.filter((child) => child.kind === "list");
+  return {
+    sections,
+    preamble: [root.body, intro.length > 0 ? serializeNestedList(intro) : ""]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
 }
 
 /** Parse markdown into sections / tasks (nested outline folded into descriptions). */
@@ -407,7 +516,7 @@ export function parsePlanMarkdown(source: string): PlanMdDocument {
   const trimmed = source.trim();
   if (!trimmed) return { sections: [] };
 
-  const items = parseFlatItems(trimmed);
+  const { items, preamble } = parseFlatItems(trimmed);
   if (items.length === 0) return { sections: [] };
 
   const minDepth = Math.min(...items.map((i) => i.depth));
@@ -416,12 +525,16 @@ export function parsePlanMarkdown(source: string): PlanMdDocument {
     depth: item.depth - minDepth + 1,
   }));
 
-  let roots = buildTree(normalized);
+  const roots = buildTree(normalized);
   if (shouldPromoteDocumentTitle(trimmed, roots)) {
-    roots = promoteDocumentTitle(roots);
+    const promoted = promoteDocumentTitle(roots[0]);
+    return treeToDocument(promoted.sections, {
+      title: clampTitle(roots[0].title, TASK_TITLE_MAX),
+      preamble: [preamble, promoted.preamble].filter(Boolean).join("\n\n"),
+    });
   }
 
-  return treeToDocument(roots);
+  return treeToDocument(roots, { preamble });
 }
 
 /** Parse a task description back into body + nested outline nodes. */
@@ -429,13 +542,14 @@ function unfoldDescription(description: string): { body: string; nested: Outline
   if (!description.trim()) return { body: "", nested: [] };
 
   const lines = description.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
   const bodyLines: string[] = [];
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i];
-    const heading = line.match(NESTED_HEADING);
-    const list = line.match(LIST_ITEM);
+    const heading = fenced[i] ? null : line.match(NESTED_HEADING);
+    const list = fenced[i] ? null : line.match(LIST_ITEM);
     if (heading || (list?.groups && listDepth(list.groups.indent) === 1)) {
       break;
     }
@@ -443,30 +557,32 @@ function unfoldDescription(description: string): { body: string; nested: Outline
     i += 1;
   }
 
-  const rest = lines.slice(i).join("\n").trim();
-  if (!rest) return { body: joinBody(bodyLines), nested: [] };
+  if (!lines.slice(i).join("\n").trim()) return { body: joinBody(bodyLines), nested: [] };
 
   const nestedItems: FlatItem[] = [];
   let current: FlatItem | null = null;
-  for (const line of rest.split("\n")) {
-    const heading = line.match(NESTED_HEADING);
+  for (let index = i; index < lines.length; index += 1) {
+    const line = lines[index];
+    const heading = fenced[index] ? null : line.match(NESTED_HEADING);
     if (heading?.groups) {
       const depth = Math.max(1, heading.groups.hashes.length - 2);
       current = {
         depth,
         title: heading.groups.title.trim(),
         bodyLines: [],
+        kind: "outline",
       };
       nestedItems.push(current);
       continue;
     }
-    const list = line.match(LIST_ITEM);
+    const list = fenced[index] ? null : line.match(LIST_ITEM);
     if (list?.groups) {
       const read = readCheck(list.groups.title.trim());
       current = {
         depth: listDepth(list.groups.indent),
         title: read.title,
         bodyLines: [],
+        kind: "list",
         ...(read.check && { check: read.check }),
       };
       nestedItems.push(current);
@@ -506,7 +622,10 @@ export function readTaskOutline(description: string | null | undefined): {
   body: string;
   nested: TaskOutlineNode[];
 } {
-  return unfoldDescription(description ?? "");
+  const { body, nested } = unfoldDescription(description ?? "");
+  const plain = (nodes: OutlineNode[]): TaskOutlineNode[] =>
+    nodes.map((node) => ({ title: node.title, body: node.body, children: plain(node.children) }));
+  return { body, nested: plain(nested) };
 }
 
 function emitNumbered(nodes: OutlineNode[], prefix: string, lines: string[]) {
@@ -531,7 +650,7 @@ function emitNumbered(nodes: OutlineNode[], prefix: string, lines: string[]) {
 export function serializePlanMarkdown(doc: PlanMdDocument): string {
   const roots: OutlineNode[] = doc.sections.map((section) => ({
     title: section.title,
-    body: "",
+    body: section.description ?? "",
     children: section.tasks.map((task) => {
       const { body, nested } = unfoldDescription(task.description ?? "");
       const checklist = stepsToMarkdown(task.steps ?? []);
@@ -544,6 +663,7 @@ export function serializePlanMarkdown(doc: PlanMdDocument): string {
   }));
 
   const lines: string[] = [];
+  if (doc.preamble?.trim()) lines.push(doc.preamble.trim(), "");
   emitNumbered(roots, "", lines);
   return (
     lines
@@ -693,4 +813,60 @@ export function stepsProgress(steps: ReadonlyArray<{ done: boolean }>): {
     total: steps.length,
     percent: steps.length === 0 ? 0 : Math.round((done / steps.length) * 100),
   };
+}
+
+/** Lowercased text with markdown punctuation removed, for comparing lines. */
+function plainText(text: string): string {
+  return text
+    .replace(/^[ \t]*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?/, "")
+    .replace(/^#+\s+/, "")
+    .replace(/[*_`|>~\\#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Checks that the parsed document still holds the source. Every non-blank
+ * source line must appear, ignoring markdown punctuation, in the title,
+ * preamble, section text, task text or steps. Returns the lines that do not,
+ * so an import can say so instead of silently losing them.
+ */
+export function planMarkdownCoverage(
+  source: string,
+  doc: PlanMdDocument,
+): { lines: number; missing: string[] } {
+  const kept = plainText(
+    [
+      doc.title,
+      doc.preamble,
+      ...doc.sections.flatMap((section) => [
+        section.title,
+        section.description,
+        ...section.tasks.flatMap((task) => [
+          task.title,
+          task.description,
+          ...(task.steps ?? []).map((step) => step.text),
+        ]),
+      ]),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const fenced = fencedLines(lines);
+  let counted = 0;
+  const missing: string[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (blankLine(line)) continue;
+    if (FENCE.test(line) && fenced[index]) continue;
+    // A table's divider row (| --- | :-: |) has no words to look for.
+    if (/^[\s|:-]+$/.test(line)) continue;
+    const text = plainText(line);
+    if (!text) continue;
+    counted += 1;
+    if (!kept.includes(text)) missing.push(line.trim());
+  }
+  return { lines: counted, missing };
 }

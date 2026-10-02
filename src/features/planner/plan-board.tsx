@@ -313,6 +313,16 @@ export function PlanBoard({
               style={{ width: `${progress.percent}%`, backgroundColor: color }}
             />
           </span>
+          {section.description ? (
+            <details className="text-muted-foreground">
+              <summary className="cursor-pointer select-none text-xs hover:text-foreground">
+                Section notes
+              </summary>
+              <div className="mt-1.5 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-xs leading-relaxed text-foreground/80">
+                {section.description}
+              </div>
+            </details>
+          ) : null}
         </div>
 
         {shown.map(renderTask)}

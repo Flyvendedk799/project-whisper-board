@@ -81,6 +81,8 @@ export default tseslint.config(
       "src/data/**",
       "src/lib/*.functions.ts",
       "src/lib/**/*.functions.ts",
+      // Server-side, shared by the import server function and the REST API.
+      "src/lib/plan-import.ts",
       "src/integrations/supabase/**",
       "src/components/auth-provider.tsx",
       "src/**/*.{test,spec}.{ts,tsx}",

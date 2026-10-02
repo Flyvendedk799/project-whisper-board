@@ -8,10 +8,34 @@ import {
   withSharedAttachments,
 } from "@/features/planner/agent-media";
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
-import type { Database } from "@/integrations/supabase/types";
+import { applyPlanMarkdown } from "@/lib/plan-import";
+import { AppError } from "@/lib/errors";
+import { Constants, type Database } from "@/integrations/supabase/types";
 
 type Admin = SupabaseClient<Database>;
 type EventKind = Database["public"]["Enums"]["plan_event_kind"];
+type PlanStatus = Database["public"]["Enums"]["plan_status"];
+
+const PLAN_STATUSES: readonly string[] = Constants.public.Enums.plan_status;
+
+/**
+ * `?status=` on the plan list. Agents only see active plans unless they ask:
+ * a plan that is still a draft is invisible by default, which made a freshly
+ * imported plan look like it had never arrived.
+ */
+function statusesFromQuery(raw: string | null): PlanStatus[] | "all" {
+  if (!raw) return ["active"];
+  if (raw === "all") return "all";
+  const wanted = raw.split(",").map((value) => value.trim());
+  const unknown = wanted.filter((value) => !PLAN_STATUSES.includes(value));
+  if (unknown.length > 0) {
+    throw new AppError(
+      "validation",
+      `Unknown plan status: ${unknown.join(", ")}. Use ${PLAN_STATUSES.join(", ")} or all.`,
+    );
+  }
+  return wanted as PlanStatus[];
+}
 
 // Helper to create Supabase service role client
 const getAdminClient = () => {
@@ -68,6 +92,27 @@ const notFound = () =>
     headers: { "Content-Type": "application/json" },
   });
 
+/** The JSON body of a request, which must be an object. */
+async function readJson(request: Request): Promise<Record<string, unknown>> {
+  const body: unknown = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new AppError("validation", "Send a JSON object as the request body.");
+  }
+  return body as Record<string, unknown>;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function optionalStatus(value: unknown): PlanStatus | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !PLAN_STATUSES.includes(value)) {
+    throw new AppError("validation", `Status is one of ${PLAN_STATUSES.join(", ")}.`);
+  }
+  return value as PlanStatus;
+}
+
 async function handleRequest(method: "GET" | "POST", request: Request, splat?: string) {
   try {
     const authHeader = request.headers.get("authorization");
@@ -93,11 +138,10 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
     if (method === "GET") {
       if (path === "plans" || path === "plans/") {
-        const { data: plans, error } = await admin
-          .from("plans")
-          .select("*")
-          .eq("workspace_id", workspaceId)
-          .eq("status", "active");
+        const statuses = statusesFromQuery(new URL(request.url).searchParams.get("status"));
+        let query = admin.from("plans").select("*").eq("workspace_id", workspaceId);
+        if (statuses !== "all") query = query.in("status", statuses);
+        const { data: plans, error } = await query.order("created_at", { ascending: false });
         if (error) throw error;
         return Response.json(plans);
       }
@@ -193,6 +237,111 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         return Response.json(attachment);
       }
     } else if (method === "POST") {
+      if (path === "plans" || path === "plans/") {
+        const body = await readJson(request);
+        const title = typeof body.title === "string" ? body.title.trim() : "";
+        if (!title || title.length > 200) {
+          throw new AppError("validation", "A plan needs a title of 1 to 200 characters.");
+        }
+        const status = optionalStatus(body.status);
+
+        let githubRepo = optionalString(body.github_repo);
+        let githubBase = optionalString(body.github_base);
+        const projectId = optionalString(body.project_id);
+        if (projectId) {
+          const { data: project } = await admin
+            .from("projects")
+            .select("github_repo, github_default_branch")
+            .eq("id", projectId)
+            .eq("workspace_id", workspaceId)
+            .maybeSingle();
+          if (!project) throw new AppError("not_found", "Project not found.", { status: 404 });
+          githubRepo = githubRepo ?? project.github_repo;
+          githubBase = githubBase ?? project.github_default_branch;
+        }
+
+        const { data: plan, error } = await admin
+          .from("plans")
+          .insert({
+            workspace_id: workspaceId,
+            title,
+            description: optionalString(body.description),
+            project_id: projectId,
+            github_repo: githubRepo,
+            github_base: githubBase,
+            ...(status && { status }),
+          })
+          .select("*")
+          .single();
+        if (error) throw error;
+        await admin.from("plan_events").insert({ plan_id: plan.id, kind: "plan_created" });
+
+        // A plan can arrive with its document in one call.
+        if (typeof body.markdown === "string" && body.markdown.trim()) {
+          const result = await applyPlanMarkdown(admin, {
+            planId: plan.id,
+            markdown: body.markdown,
+            mode: "replace",
+            actorId: null,
+          });
+          return Response.json({ ...plan, import: result }, { status: 201 });
+        }
+        return Response.json(plan, { status: 201 });
+      }
+
+      const planImportMatch = path.match(/^plans\/([^/]+)\/import$/);
+      if (planImportMatch) {
+        const body = await readJson(request);
+        if (typeof body.markdown !== "string" || !body.markdown.trim()) {
+          throw new AppError("validation", "Send the plan as markdown in `markdown`.");
+        }
+        if (body.markdown.length > 500_000) {
+          throw new AppError("validation", "That document is over 500,000 characters.");
+        }
+        if (body.mode !== undefined && body.mode !== "merge" && body.mode !== "replace") {
+          throw new AppError("validation", '`mode` is "merge" (add) or "replace".');
+        }
+        const planId = planImportMatch[1];
+        const { data: plan } = await admin
+          .from("plans")
+          .select("id")
+          .eq("id", planId)
+          .eq("workspace_id", workspaceId)
+          .maybeSingle();
+        if (!plan) throw new AppError("not_found", "Plan not found.", { status: 404 });
+
+        const result = await applyPlanMarkdown(admin, {
+          planId,
+          markdown: body.markdown,
+          mode: body.mode ?? "merge",
+          actorId: null,
+        });
+        return Response.json(result);
+      }
+
+      const planStatusMatch = path.match(/^plans\/([^/]+)\/status$/);
+      if (planStatusMatch) {
+        const body = await readJson(request);
+        const status = optionalStatus(body.status);
+        if (!status) throw new AppError("validation", "Send the new `status`.");
+        const { data: plan, error } = await admin
+          .from("plans")
+          .update({ status })
+          .eq("id", planStatusMatch[1])
+          .eq("workspace_id", workspaceId)
+          .select("*")
+          .maybeSingle();
+        if (error) throw error;
+        if (!plan) throw new AppError("not_found", "Plan not found.", { status: 404 });
+        if (status === "active" || status === "completed") {
+          await admin.from("plan_events").insert({
+            plan_id: plan.id,
+            kind: status === "active" ? "plan_activated" : "plan_completed",
+          });
+        }
+        return Response.json(plan);
+      }
+
       const claimMatch = path.match(/^tasks\/([^/]+)\/claim$/);
       if (claimMatch) {
         const body = await request.json().catch(() => ({}));
@@ -397,6 +546,13 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
     return new Response("Not Found", { status: 404 });
   } catch (error: unknown) {
+    // An error we wrote ourselves carries its own status and a message fit to show.
+    if (error instanceof AppError) {
+      return new Response(JSON.stringify({ error: error.message, code: error.code }), {
+        status: error.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     console.error("Planner API Error:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,

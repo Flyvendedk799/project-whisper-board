@@ -61,17 +61,99 @@ const server = new McpServer({
 });
 
 // Tools
-server.tool("list_plans", "List all active plans", {}, async () => {
-  try {
-    const plans = await fetchApi("plans");
-    return { content: [{ type: "text", text: JSON.stringify(plans, null, 2) }] };
-  } catch (error: unknown) {
-    return {
-      content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-      isError: true,
-    };
-  }
+const failure = (error: unknown) => ({
+  content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
+  isError: true,
 });
+
+const asText = (value: unknown) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
+});
+
+server.tool(
+  "list_plans",
+  "List plans. Only active plans by default; pass status (draft, active, paused, completed, archived, a comma list, or all) to see the rest.",
+  {
+    status: z
+      .string()
+      .optional()
+      .describe('Plan status filter: one status, a comma list, or "all". Defaults to active.'),
+  },
+  async ({ status }) => {
+    try {
+      return asText(
+        await fetchApi(status ? `plans?status=${encodeURIComponent(status)}` : "plans"),
+      );
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
+
+server.tool(
+  "create_plan",
+  "Create a plan. Pass markdown to fill it from a document in the same call: headings become sections and tasks, prose and tables are kept as descriptions, and the result reports any source line that did not land.",
+  {
+    title: z.string().describe("Plan title"),
+    description: z.string().optional(),
+    markdown: z.string().optional().describe("The plan document, as markdown"),
+    github_repo: z.string().optional().describe("owner/repo the work lands in"),
+    status: z
+      .enum(["draft", "active", "paused", "completed", "archived"])
+      .optional()
+      .describe("Defaults to draft"),
+  },
+  async (input) => {
+    try {
+      return asText(await fetchApi("plans", { method: "POST", body: JSON.stringify(input) }));
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
+
+server.tool(
+  "import_plan_markdown",
+  'Import a markdown document into an existing plan. mode "merge" adds sections; "replace" removes the plan\'s sections and tasks first. The result reports coverage: how many source lines were checked and which ones are missing.',
+  {
+    plan_id: z.string().describe("The ID of the plan"),
+    markdown: z.string().describe("The plan document, as markdown"),
+    mode: z.enum(["merge", "replace"]).optional().describe("Defaults to merge"),
+  },
+  async ({ plan_id, markdown, mode }) => {
+    try {
+      return asText(
+        await fetchApi(`plans/${plan_id}/import`, {
+          method: "POST",
+          body: JSON.stringify({ markdown, mode }),
+        }),
+      );
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
+
+server.tool(
+  "set_plan_status",
+  "Change a plan's status, for example draft to active so agents can see it.",
+  {
+    plan_id: z.string().describe("The ID of the plan"),
+    status: z.enum(["draft", "active", "paused", "completed", "archived"]),
+  },
+  async ({ plan_id, status }) => {
+    try {
+      return asText(
+        await fetchApi(`plans/${plan_id}/status`, {
+          method: "POST",
+          body: JSON.stringify({ status }),
+        }),
+      );
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  },
+);
 
 server.tool(
   "get_plan",

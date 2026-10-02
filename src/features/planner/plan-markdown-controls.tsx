@@ -111,7 +111,10 @@ export function ImportMarkdownDialog({
       const parts = `${pluralize(result.sections, "section")}, ${pluralize(result.tasks, "task")}${
         result.steps ? ` and ${pluralize(result.steps, "sub-step")}` : ""
       }`;
-      return result.mode === "replace" ? `Replaced plan with ${parts}` : `Merged ${parts}`;
+      const lost = result.coverage.missing
+        ? `. ${pluralize(result.coverage.missing, "line")} of your document could not be placed.`
+        : "";
+      return `${result.mode === "replace" ? "Replaced plan with" : "Merged"} ${parts}${lost}`;
     },
     invalidate: [qk.plan(planId), qk.planEvents(planId), qk.planAttachments(planId)],
     onSuccess: () => {

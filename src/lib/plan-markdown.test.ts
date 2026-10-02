@@ -3,6 +3,7 @@ import {
   clampStepDepth,
   parseChecklist,
   parsePlanMarkdown,
+  planMarkdownCoverage,
   planMarkdownFilename,
   planMarkdownPreview,
   planMarkdownStats,
@@ -609,5 +610,131 @@ describe("checklist helpers", () => {
       total: 3,
       percent: 67,
     });
+  });
+});
+
+describe("parsePlanMarkdown — nothing is dropped", () => {
+  const designDoc = `
+# Plan: ship the thing
+
+| | |
+|---|---|
+| **Status** | draft |
+
+Intro paragraph under the title.
+
+## 1. Evidence
+
+All of this was read from the live server.
+
+| time | event |
+|---|---|
+| 23:05 | queued |
+
+* First finding, a bullet and not a task.
+* Second finding.
+
+## 2. Fix
+
+Why we fix it.
+
+### 2a. Parser
+
+Do the parser.
+
+\`\`\`bash
+# a comment that is not a heading
+- not a list item
+1. not an ordered item
+\`\`\`
+
+## 3. Order of work
+
+1. **First.** Do this.
+2. **Second.** Then this.
+`;
+
+  it("keeps section prose, tables and bullets as the section description", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    const evidence = doc.sections[0];
+
+    expect(evidence.title).toBe("1. Evidence");
+    expect(evidence.tasks).toEqual([]);
+    expect(evidence.description).toContain("All of this was read from the live server.");
+    expect(evidence.description).toContain("| 23:05 | queued |");
+    expect(evidence.description).toContain("- First finding, a bullet and not a task.");
+    expect(evidence.description).toContain("- Second finding.");
+  });
+
+  it("keeps the title intro as the document preamble", () => {
+    const doc = parsePlanMarkdown(designDoc);
+
+    expect(doc.title).toBe("Plan: ship the thing");
+    expect(doc.preamble).toContain("| **Status** | draft |");
+    expect(doc.preamble).toContain("Intro paragraph under the title.");
+    expect(doc.sections.map((s) => s.title)).not.toContain("Plan: ship the thing");
+  });
+
+  it("keeps a section's prose when it also has sub-headings", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    const fix = doc.sections[1];
+
+    expect(fix.description).toBe("Why we fix it.");
+    expect(fix.tasks.map((t) => t.title)).toEqual(["2a. Parser"]);
+  });
+
+  it("ignores headings, bullets and numbers inside code fences", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    const parser = doc.sections[1].tasks[0];
+
+    expect(doc.sections.map((s) => s.title)).toEqual(["1. Evidence", "2. Fix", "3. Order of work"]);
+    expect(parser.description).toContain("# a comment that is not a heading");
+    expect(parser.description).toContain("- not a list item");
+    expect(parser.description).toContain("1. not an ordered item");
+    expect(parser.steps).toEqual([]);
+  });
+
+  it("still turns a section that is only a list into tasks", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    const order = doc.sections[2];
+
+    expect(order.description).toBeUndefined();
+    expect(order.tasks.map((t) => t.title)).toEqual(["First. Do this.", "Second. Then this."]);
+  });
+
+  it("puts the full text back when a title is cut to fit", () => {
+    const long = `A very long task title ${"word ".repeat(60)}end`;
+    const doc = parsePlanMarkdown(`## Chapter\n### ${long}\nBody.\n`);
+    const task = doc.sections[0].tasks[0];
+
+    expect(task.title.endsWith("…")).toBe(true);
+    expect(task.description.startsWith(long)).toBe(true);
+    expect(task.description).toContain("Body.");
+  });
+
+  it("reports full coverage for a document that kept everything", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    expect(planMarkdownCoverage(designDoc, doc).missing).toEqual([]);
+  });
+
+  it("names the lines that were lost", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    doc.sections[0].description = "All of this was read from the live server.";
+    const { missing } = planMarkdownCoverage(designDoc, doc);
+
+    expect(missing).toContain("| 23:05 | queued |");
+    expect(missing).toContain("* Second finding.");
+    expect(missing).not.toContain("All of this was read from the live server.");
+  });
+
+  it("round-trips section descriptions and the preamble through the numbered export", () => {
+    const doc = parsePlanMarkdown(designDoc);
+    const again = parsePlanMarkdown(serializePlanMarkdown(doc));
+
+    expect(again.preamble).toContain("Intro paragraph under the title.");
+    expect(again.sections[0].description).toContain("| 23:05 | queued |");
+    expect(again.sections[1].description).toBe("Why we fix it.");
+    // The document title is the plan's own title, so the export does not repeat it.
+    expect(planMarkdownCoverage(designDoc, again).missing).toEqual(["# Plan: ship the thing"]);
   });
 });

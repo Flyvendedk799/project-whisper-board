@@ -12,13 +12,8 @@ import {
 } from "@/lib/ticket-task";
 import { normalizeScopes } from "@/lib/api-scopes";
 import { isOrphanPullRequestRef, isOrphanTicketRef, scrubCommentIfUnlinked } from "@/lib/plan-refs";
-import {
-  MAX_STEP_DEPTH,
-  parsePlanMarkdown,
-  planMarkdownStats,
-  splitDescriptionSteps,
-  STEP_TEXT_MAX,
-} from "@/lib/plan-markdown";
+import { MAX_STEP_DEPTH, splitDescriptionSteps, STEP_TEXT_MAX } from "@/lib/plan-markdown";
+import { applyPlanMarkdown, attachmentPathsWhere, purgePlanFiles } from "@/lib/plan-import";
 import { isPlanAttachmentPath, PLAN_ATTACHMENT_BUCKET, validateFileMeta } from "@/lib/upload";
 import {
   eventKindForStatus,
@@ -183,26 +178,6 @@ async function logPlanEvent(
     metadata: event.metadata ?? {},
   });
   if (error) console.error("[planner] plan event", error.message);
-}
-
-/** Removes files from storage after their rows are gone. Orphans are logged, not thrown. */
-async function purgePlanFiles(paths: string[]) {
-  if (paths.length === 0) return;
-  const { error } = await storageAdmin().storage.from(PLAN_ATTACHMENT_BUCKET).remove(paths);
-  if (error) console.error("[planner] purge plan files", error.message);
-}
-
-async function attachmentPathsWhere(
-  supabase: SupabaseClient<Database>,
-  column: "task_id" | "plan_id",
-  ids: string[],
-): Promise<string[]> {
-  if (ids.length === 0) return [];
-  const { data } = await supabase
-    .from("plan_task_attachments")
-    .select("storage_path")
-    .in(column, ids);
-  return (data ?? []).map((row) => row.storage_path);
 }
 
 const SIGNED_URL_SECONDS = 60 * 60;
@@ -1498,109 +1473,12 @@ export const importPlanMarkdown = createServerFn({ method: "POST" })
     guard("plans.importMarkdown", async () => {
       const { supabase, userId } = context;
 
-      const { data: planRow } = await supabase
-        .from("plans")
-        .select("id")
-        .eq("id", data.planId)
-        .maybeSingle();
-      const plan = requireFound(planRow, "plan");
-
-      const doc = parsePlanMarkdown(data.markdown);
-      const stats = planMarkdownStats(doc);
-      if (stats.sections === 0) {
-        throw new AppError(
-          "validation",
-          "No sections found in that markdown. Use numbered outlines, headings, or nested lists.",
-          { status: 400 },
-        );
-      }
-
-      if (data.mode === "replace") {
-        const paths = await attachmentPathsWhere(supabase, "plan_id", [plan.id]);
-        const { error: deleteError } = await supabase
-          .from("plan_sections")
-          .delete()
-          .eq("plan_id", plan.id);
-        if (deleteError) throw deleteError;
-        await purgePlanFiles(paths);
-      }
-
-      const { data: maxPosSection } = await supabase
-        .from("plan_sections")
-        .select("position")
-        .eq("plan_id", plan.id)
-        .order("position", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let sectionPosition = maxPosSection ? (maxPosSection.position || 0) + 1 : 1;
-
-      let createdSections = 0;
-      let createdTasks = 0;
-      let createdSteps = 0;
-
-      for (const section of doc.sections) {
-        const { data: createdSection, error: sectionError } = await supabase
-          .from("plan_sections")
-          .insert({
-            plan_id: plan.id,
-            title: section.title,
-            color: SECTION_PALETTE[(sectionPosition - 1) % SECTION_PALETTE.length],
-            position: sectionPosition,
-          })
-          .select("id")
-          .single();
-        if (sectionError) throw sectionError;
-        sectionPosition += 1;
-        createdSections += 1;
-
-        if (section.tasks.length === 0) continue;
-
-        // One insert per section; rows come back in the order they were sent.
-        const { data: createdRows, error: taskError } = await supabase
-          .from("plan_tasks")
-          .insert(
-            section.tasks.map((task, index) => ({
-              plan_id: plan.id,
-              section_id: createdSection.id,
-              title: task.title,
-              description: task.description || null,
-              status: "available" as const,
-              position: index + 1,
-            })),
-          )
-          .select("id, position")
-          .order("position", { ascending: true });
-        if (taskError) throw taskError;
-        createdTasks += createdRows?.length ?? 0;
-
-        const stepRows = (createdRows ?? []).flatMap((row, index) =>
-          (section.tasks[index]?.steps ?? []).map((step, stepIndex) => ({
-            task_id: row.id,
-            text: step.text.slice(0, STEP_TEXT_MAX),
-            done: step.done,
-            depth: Math.min(step.depth, MAX_STEP_DEPTH),
-            position: stepIndex + 1,
-          })),
-        );
-        if (stepRows.length > 0) {
-          const { error: stepError } = await supabase.from("plan_task_steps").insert(stepRows);
-          if (stepError) throw stepError;
-          createdSteps += stepRows.length;
-        }
-      }
-
-      await logPlanEvent(supabase, userId, {
-        planId: plan.id,
-        kind: "section_created",
-        newValue: `${createdSections} sections, ${createdTasks} tasks`,
-      });
-
-      return {
+      return applyPlanMarkdown(supabase, {
+        planId: data.planId,
+        markdown: data.markdown,
         mode: data.mode,
-        sections: createdSections,
-        tasks: createdTasks,
-        steps: createdSteps,
-      };
+        actorId: userId,
+      });
     }),
   );
 
