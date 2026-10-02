@@ -55,7 +55,7 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
   {
     id: "target",
     title: "Check work_target before committing",
-    body: "get_plan returns work_target: repository, base branch, working branch and mode. new or existing: commit on that branch. base: commit directly on the base branch, no pull request. No working branch chosen: use one branch per task.",
+    body: "get_plan returns work_target: repository, base branch, working branch and mode. new or existing: commit on that branch. base: commit directly on the base branch, no pull request. No working branch chosen: use one branch per task. Pull requests are opened with the key owner's GitHub token: github_status tells you whether it is connected before you try.",
   },
   {
     id: "finish",

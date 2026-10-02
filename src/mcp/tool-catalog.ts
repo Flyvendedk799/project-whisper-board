@@ -62,6 +62,14 @@ export interface CatalogTool {
 const PLAN_STATUSES = ["draft", "active", "paused", "completed", "archived"] as const;
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const COMPLEXITIES = ["trivial", "small", "medium", "large", "epic"] as const;
+const PROJECT_STATUSES = [
+  "discovery",
+  "proposal",
+  "in_progress",
+  "review",
+  "done",
+  "archived",
+] as const;
 const TICKET_STATUSES = [
   "open",
   "triaged",
@@ -711,6 +719,15 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     ],
   },
   {
+    name: "github_status",
+    group: "GitHub",
+    summary: "Whether GitHub is connected for the person who made your API key.",
+    description:
+      "Whether GitHub is connected for the person who made your API key: connected, where the token comes from, their login and any problem. Never returns the token. Check it before create_pull_request, check_pr_status or the plan pull-request tools, which all use that person's token.",
+    rest: { method: "GET", path: "github" },
+    params: [],
+  },
+  {
     name: "check_pr_status",
     group: "GitHub",
     summary: "Read a task's pull request from GitHub now and record it on the task.",
@@ -766,6 +783,15 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
   // Workspace (needs an API key with the account scope)
   // -------------------------------------------------------------------------
   {
+    name: "get_workspace",
+    group: "Workspace",
+    summary: "The workspace your API key belongs to.",
+    description:
+      "Get the workspace your API key belongs to: its id, name and slug. Needs an API key with the account scope.",
+    rest: { method: "GET", path: "workspace", api: "account" },
+    params: [],
+  },
+  {
     name: "list_projects",
     group: "Workspace",
     summary: "The workspace's projects, most recently updated first.",
@@ -782,6 +808,26 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       "Get a project: title, description, status, progress, GitHub repository and default branch. Needs an API key with the account scope.",
     rest: { method: "GET", path: "projects/:project_id", api: "account" },
     params: [PROJECT_ID],
+  },
+  {
+    name: "update_project",
+    group: "Workspace",
+    summary: "Change a project's title, description, status or GitHub repository.",
+    description:
+      "Change a project; only the fields you pass change. github_repo (owner/name) and github_default_branch are where the project's plans open pull requests by default. Needs an API key with the account scope.",
+    rest: { method: "PATCH", path: "projects/:project_id", api: "account" },
+    params: [
+      PROJECT_ID,
+      { name: "title", type: "string", description: "New title" },
+      { name: "description", type: "string", description: "New description" },
+      { name: "status", type: "string", enum: PROJECT_STATUSES, description: "New status" },
+      { name: "github_repo", type: "string", description: "The repository, as owner/name" },
+      {
+        name: "github_default_branch",
+        type: "string",
+        description: "The branch pull requests go to",
+      },
+    ],
   },
   {
     name: "list_tickets",
