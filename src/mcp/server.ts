@@ -4,7 +4,11 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { agentGuideText, MCP_INSTRUCTIONS } from "./agent-guide";
+import { toolDescription, toolShape } from "./tool-schema";
+
+// Every tool's description and input schema come from tool-catalog.ts, which is also what the
+// Agents & MCP page and the skill are checked against. Add a tool there first.
 
 // Load environment variables: CWD -> Boared project root -> ~/.boared.env
 dotenv.config();
@@ -29,7 +33,7 @@ function getApiKey(): string {
   }
   if (!key) {
     throw new Error(
-      "Missing PLANNER_API_KEY. Please generate an API key in the Boared Planner UI (https://boared.online/planner) and set PLANNER_API_KEY in your .env or ~/.boared.env",
+      "Missing PLANNER_API_KEY. Create an API key in Boared (Settings -> API keys, or Plan options -> Planner API keys) and set PLANNER_API_KEY in your .env or ~/.boared.env",
     );
   }
   return key;
@@ -55,10 +59,13 @@ const fetchApi = async (path: string, options: RequestInit = {}): Promise<unknow
   return response.json();
 };
 
-const server = new McpServer({
-  name: "consflow-planner",
-  version: "1.0.0",
-});
+const post = (path: string, body?: unknown) =>
+  fetchApi(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+
+const server = new McpServer(
+  { name: "consflow-planner", version: "2.0.0" },
+  { instructions: MCP_INSTRUCTIONS },
+);
 
 // Tools
 const failure = (error: unknown) => ({
@@ -70,332 +77,59 @@ const asText = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
 });
 
-server.tool(
-  "list_plans",
-  "List plans. Only active plans by default; pass status (draft, active, paused, completed, archived, a comma list, or all) to see the rest.",
-  {
-    status: z
-      .string()
-      .optional()
-      .describe('Plan status filter: one status, a comma list, or "all". Defaults to active.'),
-  },
-  async ({ status }) => {
-    try {
-      return asText(
-        await fetchApi(status ? `plans?status=${encodeURIComponent(status)}` : "plans"),
-      );
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
+/** Runs a call and answers with its JSON, or with the error as the tool result. */
+async function run(action: () => Promise<unknown>) {
+  try {
+    return asText(await action());
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+/** The agent that claimed a task in this session, so later calls are attributed to it without an id. */
+let sessionAgentId: string | undefined;
+const asAgent = (agentId?: string) => agentId ?? sessionAgentId;
+
+// ---------------------------------------------------------------------------
+// Orient
+// ---------------------------------------------------------------------------
+
+server.tool("agent_guide", toolDescription("agent_guide"), toolShape("agent_guide"), async () => ({
+  content: [{ type: "text" as const, text: agentGuideText() }],
+}));
+
+server.tool("list_plans", toolDescription("list_plans"), toolShape("list_plans"), ({ status }) =>
+  run(() => fetchApi(status ? `plans?status=${encodeURIComponent(status)}` : "plans")),
 );
 
-server.tool(
-  "create_plan",
-  "Create a plan. Pass markdown to fill it from a document in the same call: headings become sections and tasks, prose and tables are kept as descriptions, and the result reports any source line that did not land.",
-  {
-    title: z.string().describe("Plan title"),
-    description: z.string().optional(),
-    markdown: z.string().optional().describe("The plan document, as markdown"),
-    github_repo: z.string().optional().describe("owner/repo the work lands in"),
-    status: z
-      .enum(["draft", "active", "paused", "completed", "archived"])
-      .optional()
-      .describe("Defaults to draft"),
-  },
-  async (input) => {
-    try {
-      return asText(await fetchApi("plans", { method: "POST", body: JSON.stringify(input) }));
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
-);
-
-server.tool(
-  "import_plan_markdown",
-  'Import a markdown document into an existing plan. mode "sync" matches sections and tasks by title and only adds what is missing (and fills empty descriptions or acceptance criteria), so status, claims, PRs and ticked steps are kept: use it to bring a plan up to date after the document changed. "merge" adds every section as new; "replace" removes the plan\'s sections and tasks first. A section with a bold-labelled list ("**Plan**", "**Implementation**") gets one task per entry, and "**Acceptance:**" becomes the tasks\' acceptance criteria. The result reports coverage: how many source lines were checked and which ones are missing.',
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-    markdown: z.string().describe("The plan document, as markdown"),
-    mode: z.enum(["sync", "merge", "replace"]).optional().describe("Defaults to merge"),
-  },
-  async ({ plan_id, markdown, mode }) => {
-    try {
-      return asText(
-        await fetchApi(`plans/${plan_id}/import`, {
-          method: "POST",
-          body: JSON.stringify({ markdown, mode }),
-        }),
-      );
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
-);
-
-server.tool(
-  "set_plan_status",
-  "Change a plan's status, for example draft to active so agents can see it.",
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-    status: z.enum(["draft", "active", "paused", "completed", "archived"]),
-  },
-  async ({ plan_id, status }) => {
-    try {
-      return asText(
-        await fetchApi(`plans/${plan_id}/status`, {
-          method: "POST",
-          body: JSON.stringify({ status }),
-        }),
-      );
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
-);
-
-server.tool(
-  "get_plan",
-  "Get plan detail with sections and tasks",
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-  },
-  async ({ plan_id }) => {
-    try {
-      const plan = await fetchApi(`plans/${plan_id}`);
-      return { content: [{ type: "text", text: JSON.stringify(plan, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+server.tool("get_plan", toolDescription("get_plan"), toolShape("get_plan"), ({ plan_id }) =>
+  run(() => fetchApi(`plans/${plan_id}`)),
 );
 
 server.tool(
   "list_available_tasks",
-  "Available tasks with met dependencies",
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-  },
-  async ({ plan_id }) => {
-    try {
-      const availableTasks = await fetchApi(`plans/${plan_id}/available-tasks`);
-      return { content: [{ type: "text", text: JSON.stringify(availableTasks, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+  toolDescription("list_available_tasks"),
+  toolShape("list_available_tasks"),
+  ({ plan_id }) => run(() => fetchApi(`plans/${plan_id}/available-tasks`)),
 );
 
-server.tool(
-  "get_task",
-  "Get task detail with description, acceptance criteria, sub-steps and the files shared with agents",
-  {
-    task_id: z.string().describe("The ID of the task"),
-  },
-  async ({ task_id }) => {
-    try {
-      const task = await fetchApi(`tasks/${task_id}`);
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "claim_task",
-  "Claim an available task. Registers agent if needed.",
-  {
-    task_id: z.string(),
-    agent_name: z.string(),
-    provider: z.string(),
-    model: z.string().optional(),
-  },
-  async ({ task_id, agent_name, provider, model }) => {
-    try {
-      // Auto-register agent
-      const agent = (await fetchApi("agents/register", {
-        method: "POST",
-        body: JSON.stringify({
-          name: agent_name,
-          provider: provider,
-          model: model,
-        }),
-      })) as { id: string };
-
-      const task = await fetchApi(`tasks/${task_id}/claim`, {
-        method: "POST",
-        body: JSON.stringify({ agent_id: agent.id }),
-      });
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error claiming task: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "start_task",
-  "Mark claimed task as in_progress",
-  {
-    task_id: z.string(),
-  },
-  async ({ task_id }) => {
-    try {
-      const task = await fetchApi(`tasks/${task_id}/start`, { method: "POST" });
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "complete_task",
-  "Mark task as done",
-  {
-    task_id: z.string(),
-    summary: z.string().optional(),
-    pr_url: z
-      .string()
-      .optional()
-      .describe("Pull request URL; its number is read from it so the board shows PR #n"),
-    branch_name: z.string().optional(),
-  },
-  async ({ task_id, summary, pr_url, branch_name }) => {
-    try {
-      if (summary) {
-        await fetchApi(`tasks/${task_id}/comment`, {
-          method: "POST",
-          body: JSON.stringify({ body: `COMPLETED: ${summary}` }),
-        }).catch(console.error);
-      }
-
-      const task = await fetchApi(`tasks/${task_id}/complete`, {
-        method: "POST",
-        body: JSON.stringify({ pr_url, branch_name }),
-      });
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "block_task",
-  "Mark task as blocked",
-  {
-    task_id: z.string(),
-    reason: z.string(),
-  },
-  async ({ task_id, reason }) => {
-    try {
-      await fetchApi(`tasks/${task_id}/comment`, {
-        method: "POST",
-        body: JSON.stringify({ body: `BLOCKED: ${reason}` }),
-      }).catch(console.error);
-
-      const task = await fetchApi(`tasks/${task_id}/block`, { method: "POST" });
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "unclaim_task",
-  "Release back to available",
-  {
-    task_id: z.string(),
-  },
-  async ({ task_id }) => {
-    try {
-      const task = await fetchApi(`tasks/${task_id}/unclaim`, { method: "POST" });
-      return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "add_task_comment",
-  "Post comment",
-  {
-    task_id: z.string(),
-    body: z.string(),
-  },
-  async ({ task_id, body }) => {
-    try {
-      const comment = await fetchApi(`tasks/${task_id}/comment`, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
-      return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+server.tool("get_task", toolDescription("get_task"), toolShape("get_task"), ({ task_id }) =>
+  run(() => fetchApi(`tasks/${task_id}`)),
 );
 
 server.tool(
   "list_task_attachments",
-  "Files the team shared with agents on a task (screenshots, recordings, documents). Hidden files are never listed. URLs expire in an hour.",
-  {
-    task_id: z.string().describe("The ID of the task"),
-  },
-  async ({ task_id }) => {
-    try {
-      const attachments = await fetchApi(`tasks/${task_id}/attachments`);
-      return { content: [{ type: "text", text: JSON.stringify(attachments, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+  toolDescription("list_task_attachments"),
+  toolShape("list_task_attachments"),
+  ({ task_id }) => run(() => fetchApi(`tasks/${task_id}/attachments`)),
 );
 
 const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024;
 
 server.tool(
   "view_task_attachment",
-  "Look at a shared task attachment. Images come back as images; other files come back as a signed URL to download.",
-  {
-    task_id: z.string().describe("The ID of the task"),
-    attachment_id: z.string().describe("The ID of the attachment, from list_task_attachments"),
-  },
+  toolDescription("view_task_attachment"),
+  toolShape("view_task_attachment"),
   async ({ task_id, attachment_id }) => {
     try {
       const attachment = (await fetchApi(`tasks/${task_id}/attachments/${attachment_id}`)) as {
@@ -413,176 +147,275 @@ server.tool(
         attachment.kind === "image" &&
         attachment.mime_type !== "image/svg+xml" &&
         (attachment.size_bytes ?? 0) <= MAX_INLINE_IMAGE_BYTES;
-      if (!inlineable) return { content: [{ type: "text", text: summary }] };
+      if (!inlineable) return { content: [{ type: "text" as const, text: summary }] };
 
       const file = await fetch(attachment.url!);
-      if (!file.ok) return { content: [{ type: "text", text: summary }] };
+      if (!file.ok) return { content: [{ type: "text" as const, text: summary }] };
       const data = Buffer.from(await file.arrayBuffer()).toString("base64");
       return {
         content: [
-          { type: "text", text: summary },
-          { type: "image", data, mimeType: attachment.mime_type ?? "image/png" },
+          { type: "text" as const, text: summary },
+          { type: "image" as const, data, mimeType: attachment.mime_type ?? "image/png" },
         ],
       };
     } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
+      return failure(error);
     }
   },
 );
 
+// ---------------------------------------------------------------------------
+// Work a task
+// ---------------------------------------------------------------------------
+
 server.tool(
-  "update_task_step",
-  "Tick or untick a sub-step of a task, or reword it.",
-  {
-    task_id: z.string(),
-    step_id: z.string().describe("The ID of the step, from get_task"),
-    done: z.boolean().optional(),
-    text: z.string().optional(),
-  },
-  async ({ task_id, step_id, done, text }) => {
-    try {
-      const step = await fetchApi(`tasks/${task_id}/steps/${step_id}`, {
-        method: "POST",
-        body: JSON.stringify({ done, text }),
-      });
-      return { content: [{ type: "text", text: JSON.stringify(step, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
+  "claim_task",
+  toolDescription("claim_task"),
+  toolShape("claim_task"),
+  ({ task_id, agent_name, provider, model }) =>
+    run(async () => {
+      // Auto-register agent
+      const agent = (await post("agents/register", { name: agent_name, provider, model })) as {
+        id: string;
       };
-    }
-  },
+      sessionAgentId = agent.id;
+      return post(`tasks/${task_id}/claim`, { agent_id: agent.id });
+    }),
+);
+
+server.tool("start_task", toolDescription("start_task"), toolShape("start_task"), ({ task_id }) =>
+  run(() => post(`tasks/${task_id}/start`)),
+);
+
+server.tool(
+  "report_progress",
+  toolDescription("report_progress"),
+  toolShape("report_progress"),
+  ({ task_id, agent_id, ...progress }) =>
+    run(() => post(`tasks/${task_id}/progress`, { ...progress, agent_id: asAgent(agent_id) })),
+);
+
+server.tool(
+  "complete_task",
+  toolDescription("complete_task"),
+  toolShape("complete_task"),
+  ({ task_id, summary, pr_url, branch_name }) =>
+    run(async () => {
+      if (summary) {
+        await post(`tasks/${task_id}/comment`, {
+          body: `COMPLETED: ${summary}`,
+          agent_id: sessionAgentId,
+        }).catch(console.error);
+      }
+      return post(`tasks/${task_id}/complete`, { pr_url, branch_name });
+    }),
+);
+
+server.tool(
+  "block_task",
+  toolDescription("block_task"),
+  toolShape("block_task"),
+  ({ task_id, reason, agent_id }) =>
+    // The API turns the reason into a blocking question; no separate comment is needed.
+    run(() => post(`tasks/${task_id}/block`, { reason, agent_id: asAgent(agent_id) })),
+);
+
+server.tool(
+  "unclaim_task",
+  toolDescription("unclaim_task"),
+  toolShape("unclaim_task"),
+  ({ task_id }) => run(() => post(`tasks/${task_id}/unclaim`)),
+);
+
+server.tool(
+  "add_task_comment",
+  toolDescription("add_task_comment"),
+  toolShape("add_task_comment"),
+  ({ task_id, body, agent_id }) =>
+    run(() => post(`tasks/${task_id}/comment`, { body, agent_id: asAgent(agent_id) })),
+);
+
+// ---------------------------------------------------------------------------
+// Questions
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "ask_question",
+  toolDescription("ask_question"),
+  toolShape("ask_question"),
+  ({ task_id, body, blocking, agent_id }) =>
+    run(() => post(`tasks/${task_id}/questions`, { body, blocking, agent_id: asAgent(agent_id) })),
+);
+
+server.tool(
+  "list_questions",
+  toolDescription("list_questions"),
+  toolShape("list_questions"),
+  ({ plan_id, task_id, status }) =>
+    run(() => {
+      const query = status ? `?status=${encodeURIComponent(status)}` : "";
+      if (task_id) return fetchApi(`tasks/${task_id}/questions${query}`);
+      if (plan_id) return fetchApi(`plans/${plan_id}/questions${query}`);
+      throw new Error("Pass plan_id or task_id.");
+    }),
+);
+
+server.tool(
+  "answer_question",
+  toolDescription("answer_question"),
+  toolShape("answer_question"),
+  ({ task_id, question_id, answer, agent_id }) =>
+    run(() =>
+      post(`tasks/${task_id}/questions/${question_id}/answer`, {
+        answer,
+        agent_id: asAgent(agent_id),
+      }),
+    ),
+);
+
+server.tool(
+  "dismiss_question",
+  toolDescription("dismiss_question"),
+  toolShape("dismiss_question"),
+  ({ task_id, question_id }) =>
+    run(() => post(`tasks/${task_id}/questions/${question_id}/dismiss`)),
+);
+
+// ---------------------------------------------------------------------------
+// Features and steps
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "add_task_features",
+  toolDescription("add_task_features"),
+  toolShape("add_task_features"),
+  ({ task_id, agent_id, ...features }) =>
+    run(() => post(`tasks/${task_id}/features`, { ...features, agent_id: asAgent(agent_id) })),
+);
+
+server.tool(
+  "update_task_feature",
+  toolDescription("update_task_feature"),
+  toolShape("update_task_feature"),
+  ({ task_id, feature_id, ...patch }) =>
+    run(() => post(`tasks/${task_id}/features/${feature_id}`, patch)),
 );
 
 server.tool(
   "add_task_step",
-  "Add a sub-step to the end of a task's checklist.",
-  {
-    task_id: z.string(),
-    text: z.string(),
-  },
-  async ({ task_id, text }) => {
-    try {
-      const step = await fetchApi(`tasks/${task_id}/steps`, {
-        method: "POST",
-        body: JSON.stringify({ text }),
-      });
-      return { content: [{ type: "text", text: JSON.stringify(step, null, 2) }] };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+  toolDescription("add_task_step"),
+  toolShape("add_task_step"),
+  ({ task_id, ...step }) => run(() => post(`tasks/${task_id}/steps`, step)),
 );
 
 server.tool(
+  "add_task_steps",
+  toolDescription("add_task_steps"),
+  toolShape("add_task_steps"),
+  ({ task_id, agent_id, ...steps }) =>
+    run(() => post(`tasks/${task_id}/steps`, { ...steps, agent_id: asAgent(agent_id) })),
+);
+
+server.tool(
+  "update_task_step",
+  toolDescription("update_task_step"),
+  toolShape("update_task_step"),
+  ({ task_id, step_id, ...patch }) => run(() => post(`tasks/${task_id}/steps/${step_id}`, patch)),
+);
+
+// ---------------------------------------------------------------------------
+// Authoring
+// ---------------------------------------------------------------------------
+
+server.tool("create_plan", toolDescription("create_plan"), toolShape("create_plan"), (input) =>
+  run(() => post("plans", input)),
+);
+
+server.tool(
+  "import_plan_markdown",
+  toolDescription("import_plan_markdown"),
+  toolShape("import_plan_markdown"),
+  ({ plan_id, markdown, mode }) => run(() => post(`plans/${plan_id}/import`, { markdown, mode })),
+);
+
+server.tool(
+  "set_plan_status",
+  toolDescription("set_plan_status"),
+  toolShape("set_plan_status"),
+  ({ plan_id, status }) => run(() => post(`plans/${plan_id}/status`, { status })),
+);
+
+server.tool(
+  "create_section",
+  toolDescription("create_section"),
+  toolShape("create_section"),
+  ({ plan_id, ...section }) => run(() => post(`plans/${plan_id}/sections`, section)),
+);
+
+server.tool(
+  "update_section",
+  toolDescription("update_section"),
+  toolShape("update_section"),
+  ({ section_id, ...patch }) => run(() => post(`sections/${section_id}`, patch)),
+);
+
+server.tool(
+  "create_task",
+  toolDescription("create_task"),
+  toolShape("create_task"),
+  ({ plan_id, ...task }) => run(() => post(`plans/${plan_id}/tasks`, task)),
+);
+
+server.tool(
+  "update_task",
+  toolDescription("update_task"),
+  toolShape("update_task"),
+  ({ task_id, ...patch }) => run(() => post(`tasks/${task_id}`, patch)),
+);
+
+// ---------------------------------------------------------------------------
+// GitHub
+// ---------------------------------------------------------------------------
+
+server.tool(
   "create_pull_request",
-  "Open a GitHub pull request for a task and mark the task done with it. Uses the GitHub token of the person who made your API key (connected in Boared under Settings), so no GitHub token is needed here. The repository and base branch come from the plan unless given.",
-  {
-    task_id: z.string(),
-    head_branch: z.string(),
-    title: z.string(),
-    body: z.string().optional(),
-    repo: z.string().optional().describe("owner/name; defaults to the plan's repository"),
-    base_branch: z
-      .string()
-      .optional()
-      .describe("defaults to the plan's base, else the repository's default branch"),
-  },
-  async ({ task_id, head_branch, title, body, repo, base_branch }) => {
-    try {
-      const pr = (await fetchApi(`tasks/${task_id}/pull-request`, {
-        method: "POST",
-        body: JSON.stringify({ head_branch, title, body, repo, base: base_branch }),
-      })) as { pr_url: string; pr_number: number };
+  toolDescription("create_pull_request"),
+  toolShape("create_pull_request"),
+  ({ task_id, head_branch, title, body, repo, base_branch }) =>
+    run(async () => {
+      const pr = (await post(`tasks/${task_id}/pull-request`, {
+        head_branch,
+        title,
+        body,
+        repo,
+        base: base_branch,
+      })) as { pr_url: string; pr_number: number; base: string; head: string };
 
-      await fetchApi(`tasks/${task_id}/complete`, {
-        method: "POST",
-        body: JSON.stringify({ pr_url: pr.pr_url }),
-      }).catch(console.error);
+      await post(`tasks/${task_id}/complete`, { pr_url: pr.pr_url }).catch(console.error);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ url: pr.pr_url, number: pr.pr_number }, null, 2),
-          },
-        ],
-      };
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+      return { url: pr.pr_url, number: pr.pr_number, head: pr.head, base: pr.base };
+    }),
 );
 
 server.tool(
   "check_pr_status",
-  "Read a task's pull request from GitHub now (state, merged, draft, base and head, mergeability) and record it on the task. Uses the GitHub token of the person who made your API key; without one it returns what the task already records and says GitHub is not connected.",
-  {
-    task_id: z.string(),
-  },
-  async ({ task_id }) => {
-    try {
-      return asText(await fetchApi(`tasks/${task_id}/pull-request`));
-    } catch (error: unknown) {
-      return {
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        isError: true,
-      };
-    }
-  },
+  toolDescription("check_pr_status"),
+  toolShape("check_pr_status"),
+  ({ task_id }) => run(() => fetchApi(`tasks/${task_id}/pull-request`)),
 );
 
 server.tool(
   "list_plan_pull_requests",
-  "List a plan's pull requests in the order they must be merged (stacked PRs go parents first), read from GitHub now: state, base <- head branches, checks, conflicts, and what blocks each one.",
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-  },
-  async ({ plan_id }) => {
-    try {
-      return asText(await fetchApi(`plans/${plan_id}/pull-requests`));
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
+  toolDescription("list_plan_pull_requests"),
+  toolShape("list_plan_pull_requests"),
+  ({ plan_id }) => run(() => fetchApi(`plans/${plan_id}/pull-requests`)),
 );
 
 server.tool(
   "merge_plan_pull_requests",
-  "Merge a plan's pull requests in stack order. Dry run by default: it returns what it would do (merge order, which stacked PRs get retargeted to the base branch first, what blocks a merge) without changing anything. Pass dry_run false to do it. It stops at the first PR that cannot be merged and is safe to repeat. A merge commit is the default because squash or rebase breaks a stack.",
-  {
-    plan_id: z.string().describe("The ID of the plan"),
-    dry_run: z.boolean().optional().describe("Defaults to true. Pass false to really merge."),
-    method: z.enum(["merge", "squash", "rebase"]).optional().describe("Defaults to merge"),
-    max: z.number().int().optional().describe("Merge at most this many PRs in this call"),
-    only: z
-      .string()
-      .optional()
-      .describe("Merge just this PR (owner/name#123); it has to be the next in line"),
-    ignore_checks: z.boolean().optional().describe("Merge even if checks are failing or running"),
-  },
-  async ({ plan_id, ...body }) => {
-    try {
-      return asText(
-        await fetchApi(`plans/${plan_id}/pull-requests/merge`, {
-          method: "POST",
-          body: JSON.stringify(body),
-        }),
-      );
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
+  toolDescription("merge_plan_pull_requests"),
+  toolShape("merge_plan_pull_requests"),
+  ({ plan_id, ...body }) => run(() => post(`plans/${plan_id}/pull-requests/merge`, body)),
 );
 
 // Run server

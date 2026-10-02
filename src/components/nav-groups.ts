@@ -55,6 +55,7 @@ export function buildNavGroups({
       },
       { to: "/app/projects", label: "Projects" },
       { to: "/app/planner", label: "AI Planner" },
+      { to: "/app/agents", label: "Agents & MCP" },
     ],
     [
       { to: "/app/organizations", label: "Clients" },
