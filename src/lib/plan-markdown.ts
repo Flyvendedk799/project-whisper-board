@@ -27,11 +27,48 @@
  * `planMarkdownCoverage` proves it by listing any source line that is missing.
  */
 
+import {
+  blankLine,
+  collapseSpaces,
+  FENCE,
+  fencedLines,
+  joinBody,
+  MAX_STEP_DEPTH,
+  STEP_TEXT_MAX,
+} from "@/lib/plan-markdown-text";
+import type {
+  PlanStatus,
+  PlanTaskComplexity,
+  PlanTaskPriority,
+  PlanTaskStatus,
+} from "@/data/enums";
+import type { WorkMode } from "@/lib/plan-fields";
+import { isBoardMarkdown, parseBoardMarkdown } from "@/lib/plan-markdown-board";
+
+export { MAX_STEP_DEPTH, STEP_TEXT_MAX };
+
 /** One line of a task's checklist. `depth` is 0 for a top-level step. */
 export type PlanMdStep = {
   text: string;
   done: boolean;
   depth: number;
+  /** 1-based number of the task feature this step delivers (board format only). */
+  feature?: number;
+};
+
+/** A requirement written after the brief. Stored as plan_task_features. */
+export type PlanMdFeature = {
+  text: string;
+  met: boolean;
+};
+
+/** A question on a task. Stored as plan_task_questions. */
+export type PlanMdQuestion = {
+  body: string;
+  /** Only an open, blocking question holds the task in "blocked". */
+  blocking: boolean;
+  status: "open" | "answered" | "dismissed";
+  answer?: string;
 };
 
 export type PlanMdTask = {
@@ -44,6 +81,21 @@ export type PlanMdTask = {
   acceptance?: string;
   /** The source marked it finished (a leading ✅ or `[x]`). */
   done?: boolean;
+  // Everything below is only filled by the board format (see plan-markdown-board).
+  /** The task's id in the board it was exported from; `sync` matches on it. */
+  id?: string;
+  status?: PlanTaskStatus;
+  priority?: PlanTaskPriority;
+  size?: PlanTaskComplexity;
+  /** Stored as `labels`. */
+  tags?: string[];
+  color?: string;
+  /** A name for people reading the file. Never imported: people are not matched by name. */
+  assignee?: string;
+  features?: PlanMdFeature[];
+  questions?: PlanMdQuestion[];
+  /** Stored as `ai_context`. */
+  context?: string;
 };
 
 export type PlanMdSection = {
@@ -51,6 +103,26 @@ export type PlanMdSection = {
   /** Prose, tables and bullets under the section heading (before its tasks). */
   description?: string;
   tasks: PlanMdTask[];
+  // Board format only.
+  id?: string;
+  goals?: string;
+  intentions?: string;
+  tags?: string[];
+  color?: string;
+};
+
+/** What the board-format header says about the plan itself. */
+export type PlanMdSettings = {
+  /** Plan description: the text under the title. */
+  description?: string;
+  /** Read for people; the import never changes a plan's status. */
+  status?: PlanStatus;
+  repo?: string;
+  base?: string;
+  workMode?: WorkMode;
+  workBranch?: string;
+  id?: string;
+  exportedAt?: string;
 };
 
 export type PlanMdDocument = {
@@ -59,6 +131,15 @@ export type PlanMdDocument = {
   title?: string;
   /** Text above the first section (a title's intro, a status table, …). */
   preamble?: string;
+  /** `board` when the source was the board's own format (see plan-markdown-board). */
+  format?: "board";
+  /** Board format only: the plan header. */
+  plan?: PlanMdSettings;
+  /**
+   * Board format only: source lines that were read as structure and rewritten
+   * (meta rows, labels, question and step markers). Coverage counts them as placed.
+   */
+  structural?: string[];
 };
 
 /** Preview tree for the import dialog (sections → tasks → nested titles). */
@@ -67,6 +148,10 @@ export type PlanMdPreviewNode = {
   children: PlanMdPreviewNode[];
   /** Set on checklist lines so the dialog can draw a box. */
   step?: { done: boolean };
+  /** Set on a feature line (board format). */
+  feature?: { met: boolean };
+  /** Set on a question line (board format). */
+  question?: { status: PlanMdQuestion["status"]; blocking: boolean };
 };
 
 type CheckState = "open" | "done";
@@ -92,32 +177,6 @@ type FlatItem = {
   check?: CheckState;
   kind: ItemKind;
 };
-
-/** Opening or closing line of a fenced code block, at any indentation. */
-const FENCE = /^[ \t]*(?<mark>`{3,}|~{3,})/;
-
-/**
- * Marks every line that sits inside a fenced code block, delimiters included.
- * Those lines are body text and never headings, numbered keys or list items.
- */
-function fencedLines(lines: readonly string[]): boolean[] {
-  const mask: boolean[] = [];
-  let open: string | null = null;
-  for (const line of lines) {
-    const mark = line.match(FENCE)?.groups?.mark;
-    if (open === null) {
-      mask.push(Boolean(mark));
-      if (mark) open = mark;
-    } else {
-      mask.push(true);
-      if (mark && mark[0] === open[0] && mark.length >= open.length) open = null;
-    }
-  }
-  return mask;
-}
-
-export const MAX_STEP_DEPTH = 3;
-export const STEP_TEXT_MAX = 500;
 
 /** `[ ] text` / `[x] text` at the start of a list item's title. */
 const CHECKBOX = /^\[(?<mark>[ xX])\]\s+(?<rest>\S.*)$/;
@@ -187,18 +246,6 @@ function matchNumberedOutline(line: string): { depth: number; title: string } | 
     return { depth: 1, title };
   }
   return null;
-}
-
-function blankLine(line: string): boolean {
-  return line.trim().length === 0;
-}
-
-function joinBody(lines: string[]): string {
-  return lines
-    .join("\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 function listDepth(indent: string): number {
@@ -446,11 +493,6 @@ function collectSteps(children: OutlineNode[]): { steps: PlanMdStep[]; rest: Out
     else rest.push(child);
   }
   return { steps, rest };
-}
-
-/** Step text keeps its inline markdown (it is rendered as text, not a title). */
-function collapseSpaces(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -816,6 +858,8 @@ function promoteDocumentTitle(root: OutlineNode): {
 export function parsePlanMarkdown(source: string): PlanMdDocument {
   const trimmed = source.trim();
   if (!trimmed) return { sections: [] };
+  // A document the board itself exported (or written the same way) is read back field by field.
+  if (isBoardMarkdown(trimmed)) return parseBoardMarkdown(trimmed);
 
   const { items, preamble } = parseFlatItems(trimmed);
   if (items.length === 0) return { sections: [] };
@@ -992,9 +1036,19 @@ export function planMarkdownPreview(doc: PlanMdDocument): PlanMdPreviewNode[] {
         children: [],
         step: { done: step.done },
       }));
+      const featurePreview: PlanMdPreviewNode[] = (task.features ?? []).map((feature) => ({
+        title: feature.text,
+        children: [],
+        feature: { met: feature.met },
+      }));
+      const questionPreview: PlanMdPreviewNode[] = (task.questions ?? []).map((question) => ({
+        title: question.body,
+        children: [],
+        question: { status: question.status, blocking: question.blocking },
+      }));
       return {
         title: task.title,
-        children: [...stepPreview, ...nestedPreview(nested)],
+        children: [...featurePreview, ...questionPreview, ...stepPreview, ...nestedPreview(nested)],
       };
     }),
   }));
@@ -1029,6 +1083,44 @@ export function planMarkdownStepCount(doc: PlanMdDocument): number {
     (n, section) => n + section.tasks.reduce((m, task) => m + (task.steps?.length ?? 0), 0),
     0,
   );
+}
+
+/** What a board-format document carries beyond sections and tasks, for the import summary. */
+export type PlanMdCounts = {
+  features: number;
+  questions: number;
+  /** Questions still waiting for an answer, and how many of those block their task. */
+  openQuestions: number;
+  blockingQuestions: number;
+  /** Distinct tags across sections and tasks. */
+  tags: number;
+};
+
+export function planMarkdownCounts(doc: PlanMdDocument): PlanMdCounts {
+  const counts: PlanMdCounts = {
+    features: 0,
+    questions: 0,
+    openQuestions: 0,
+    blockingQuestions: 0,
+    tags: 0,
+  };
+  const tags = new Set<string>();
+  for (const section of doc.sections) {
+    for (const tag of section.tags ?? []) tags.add(tag);
+    for (const task of section.tasks) {
+      for (const tag of task.tags ?? []) tags.add(tag);
+      counts.features += task.features?.length ?? 0;
+      for (const question of task.questions ?? []) {
+        counts.questions += 1;
+        if (question.status === "open") {
+          counts.openQuestions += 1;
+          if (question.blocking) counts.blockingQuestions += 1;
+        }
+      }
+    }
+  }
+  counts.tags = tags.size;
+  return counts;
 }
 
 /** `- [ ] text` lines, two spaces of indent per level. */
@@ -1121,7 +1213,7 @@ export function stepsProgress(steps: ReadonlyArray<{ done: boolean }>): {
 /** Lowercased text with markdown punctuation removed, for comparing lines. */
 function plainText(text: string): string {
   return text
-    .replace(/^[ \t]*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?/, "")
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")
     .replace(/^#+\s+/, "")
     .replace(/[✅☑✔]\uFE0F?/gu, "")
     .replace(/[*_`~\\]/g, "")
@@ -1145,14 +1237,21 @@ export function planMarkdownCoverage(
     [
       doc.title,
       doc.preamble,
+      doc.plan?.description,
+      ...(doc.structural ?? []),
       ...doc.sections.flatMap((section) => [
         section.title,
         section.description,
+        section.goals,
+        section.intentions,
         ...section.tasks.flatMap((task) => [
           task.title,
           task.description,
           task.acceptance ? `Acceptance: ${task.acceptance}` : "",
+          task.context,
           ...(task.steps ?? []).map((step) => step.text),
+          ...(task.features ?? []).map((feature) => feature.text),
+          ...(task.questions ?? []).flatMap((question) => [question.body, question.answer]),
         ]),
       ]),
     ]
