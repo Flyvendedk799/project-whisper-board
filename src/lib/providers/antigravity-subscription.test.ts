@@ -66,6 +66,8 @@ describe("a connected Antigravity subscription", () => {
 
     const { url, init } = sent(fetchMock);
     expect(url).toMatch(/\/v1internal:generateContent$/);
+    // The prod host false-429s personal tokens; only `daily` answers them properly.
+    expect(url).toContain("daily-cloudcode-pa.googleapis.com");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer agy-token");
   });
 

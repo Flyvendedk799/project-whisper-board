@@ -358,7 +358,9 @@ function createAntigravityProvider(
               expiresAt: 0,
               email: null,
               projectId: auth.projectId,
-              isDogfood: false,
+              // Left at the default on purpose: that selects the `daily` Cloud Code host, where
+              // personal-account tokens succeed. `isDogfood: false` selects the prod host, which
+              // answers a healthy account with a 429 RESOURCE_EXHAUSTED.
             },
             baseUrl !== WIRE_BASE_URL.gemini ? baseUrl : undefined,
           );
