@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
+import { purgeFiles } from "@/lib/storage-purge";
 import type { Database } from "@/integrations/supabase/types";
 
 type Client = SupabaseClient<Database>;
@@ -146,24 +147,3 @@ export const deleteProject = createServerFn({ method: "POST" })
       return { ok: true };
     }),
   );
-
-async function purgeFiles(files: Array<{ storage_bucket: string; storage_path: string }>) {
-  if (files.length === 0) return;
-  const storage = createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  ).storage;
-
-  const byBucket = new Map<string, string[]>();
-  for (const file of files) {
-    byBucket.set(file.storage_bucket, [
-      ...(byBucket.get(file.storage_bucket) ?? []),
-      file.storage_path,
-    ]);
-  }
-  for (const [bucket, paths] of byBucket) {
-    const { error } = await storage.from(bucket).remove(paths);
-    if (error) console.error("[projects] purge files", bucket, error.message);
-  }
-}

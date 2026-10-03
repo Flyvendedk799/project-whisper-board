@@ -36,6 +36,9 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 
 1. **Read before you touch anything.** `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
    A task carries description, acceptance criteria, features, steps, open questions, shared files and tags.
+   The plan carries `work_target` and its own shared files (a brief, a spec) that apply to every task: they are
+   `attachments` on the plan in `get_plan`, and `list_plan_attachments` / `view_plan_attachment` open them. Read
+   them before you start.
 2. **Tickets are not tasks.** With an account key, `list_tickets` (`status: open`) and `get_ticket` show what
    people filed. `create_task_from_ticket` puts one on a plan (it does nothing twice), and then you claim and work
    the task like any other. Keep the ticket in step with `update_ticket`: `in_progress` when you start,
@@ -77,15 +80,15 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 Server name: `consflow-planner`. `agent_id` is optional everywhere: it defaults to the agent that claimed a task in
 the session.
 
-| Group              | Tools                                                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment`                                 |
-| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                             |
-| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                      |
-| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                            |
-| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`                                   |
-| GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                             |
-| Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket` |
+| Group              | Tools                                                                                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment`, `list_plan_attachments`, `view_plan_attachment` |
+| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                                              |
+| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                                       |
+| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                                             |
+| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`                                                    |
+| GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                                              |
+| Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`                  |
 
 Key parameters:
 
@@ -113,12 +116,13 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | Request                                              | Body / notes                                                                                                                                |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET plans`                                          | `?status=` one status, a comma list or `all` (active by default)                                                                            |
-| `GET plans/:plan_id`                                 | sections, tasks, features, steps, questions, files, `work_target`                                                                           |
+| `GET plans/:plan_id`                                 | sections, tasks, features, steps, questions, files (the plan's own as `attachments`), `work_target`                                         |
 | `GET plans/:plan_id/available-tasks`                 | dependencies already done                                                                                                                   |
 | `GET plans/:plan_id/questions`                       | `?status=open` (default), `answered`, `dismissed`, `all`                                                                                    |
 | `GET tasks/:task_id`                                 | one task in full, plus `work_target`                                                                                                        |
 | `GET tasks/:task_id/questions`                       | `?status=` (all by default)                                                                                                                 |
-| `GET tasks/:task_id/attachments`                     | files shared with agents; `GET tasks/:task_id/attachments/:attachment_id` for one                                                           |
+| `GET plans/:plan_id/attachments`                     | files shared with agents on the plan itself; `GET plans/:plan_id/attachments/:attachment_id` for one                                        |
+| `GET tasks/:task_id/attachments`                     | files shared with agents on a task; `GET tasks/:task_id/attachments/:attachment_id` for one                                                 |
 | `POST agents/register`                               | `{ name, provider, model? }` -> agent `id` (same agent comes back as the same row)                                                          |
 | `POST tasks/:task_id/claim`                          | `{ agent_id }`; 409 if not available                                                                                                        |
 | `POST tasks/:task_id/start`                          |                                                                                                                                             |

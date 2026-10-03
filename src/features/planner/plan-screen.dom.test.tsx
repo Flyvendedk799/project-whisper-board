@@ -418,6 +418,42 @@ describe("PlanScreen", () => {
     expect(screen.getByText(/No files match/)).toBeInTheDocument();
   });
 
+  it("attaches a file to the plan itself, from the Files layout, with no task", async () => {
+    const user = userEvent.setup();
+    fns.registerPlanAttachment.mockResolvedValue({ id: "a-plan" });
+    fns.listPlanAttachments.mockResolvedValue({
+      attachments: [
+        IMAGE,
+        {
+          ...IMAGE,
+          id: "a-brief",
+          task_id: null,
+          file_name: "brief.pdf",
+          mime_type: "application/pdf",
+        },
+      ],
+    });
+    renderScreen();
+    await screen.findByRole("heading", { name: "Launch v2 onboarding" });
+
+    await user.click(screen.getByRole("button", { name: "Files" }));
+    // The plan's own file is listed under Plan files, apart from the task's.
+    const own = await screen.findByRole("region", { name: "Plan files" });
+    expect(within(own).getByText("brief.pdf")).toBeInTheDocument();
+    expect(within(own).queryByText("checklist-mock.png")).not.toBeInTheDocument();
+
+    const file = new File(["%PDF"], "Spec.pdf", { type: "application/pdf" });
+    await user.upload(within(own).getByLabelText("Attach files to the plan"), file);
+
+    await waitFor(() => expect(fns.registerPlanAttachment).toHaveBeenCalledTimes(1));
+    const [{ data }] = fns.registerPlanAttachment.mock.calls[0] as unknown as [
+      { data: Record<string, unknown> },
+    ];
+    expect(data).toMatchObject({ planId: "plan-1", fileName: "Spec.pdf" });
+    expect(data).not.toHaveProperty("taskId");
+    expect(String(data.storagePath)).toMatch(/^me\/plan-1\/plan\/[0-9a-f-]{36}-spec\.pdf$/);
+  });
+
   it("shows live activity with the file events, in a side panel", async () => {
     const user = userEvent.setup();
     renderScreen();

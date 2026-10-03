@@ -498,16 +498,25 @@ export function matchesFileKind(mime: string | null | undefined, filter: FileKin
   return kind === filter;
 }
 
+/** Files on a task, by task. Files on the plan itself belong to no task and are left out: see `planLevelAttachments`. */
 export function groupAttachmentsByTask(
   attachments: readonly PlanAttachmentWithUrl[],
 ): Map<string, PlanAttachmentWithUrl[]> {
   const map = new Map<string, PlanAttachmentWithUrl[]>();
   for (const attachment of visibleAttachments(attachments)) {
+    if (!attachment.task_id) continue;
     const list = map.get(attachment.task_id) ?? [];
     list.push(attachment);
     map.set(attachment.task_id, list);
   }
   return map;
+}
+
+/** The files on the plan itself, as opposed to on one of its tasks. */
+export function planLevelAttachments(
+  attachments: readonly PlanAttachmentWithUrl[],
+): PlanAttachmentWithUrl[] {
+  return visibleAttachments(attachments).filter((attachment) => !attachment.task_id);
 }
 
 /** Images that can be a card cover, newest upload last. */

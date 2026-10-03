@@ -136,44 +136,61 @@ server.tool(
   ({ task_id }) => run(() => fetchApi(`tasks/${task_id}/attachments`)),
 );
 
+server.tool(
+  "list_plan_attachments",
+  toolDescription("list_plan_attachments"),
+  toolShape("list_plan_attachments"),
+  ({ plan_id }) => run(() => fetchApi(`plans/${plan_id}/attachments`)),
+);
+
 const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** One shared file: its details as text, and an image under the size cap as an image. */
+async function viewAttachment(path: string) {
+  try {
+    const attachment = (await fetchApi(path)) as {
+      file_name: string;
+      mime_type: string | null;
+      size_bytes: number | null;
+      kind: string;
+      marked_up: boolean;
+      url: string | null;
+    };
+    const summary = JSON.stringify(attachment, null, 2);
+
+    const inlineable =
+      attachment.url &&
+      attachment.kind === "image" &&
+      attachment.mime_type !== "image/svg+xml" &&
+      (attachment.size_bytes ?? 0) <= MAX_INLINE_IMAGE_BYTES;
+    if (!inlineable) return { content: [{ type: "text" as const, text: summary }] };
+
+    const file = await fetch(attachment.url!);
+    if (!file.ok) return { content: [{ type: "text" as const, text: summary }] };
+    const data = Buffer.from(await file.arrayBuffer()).toString("base64");
+    return {
+      content: [
+        { type: "text" as const, text: summary },
+        { type: "image" as const, data, mimeType: attachment.mime_type ?? "image/png" },
+      ],
+    };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
 
 server.tool(
   "view_task_attachment",
   toolDescription("view_task_attachment"),
   toolShape("view_task_attachment"),
-  async ({ task_id, attachment_id }) => {
-    try {
-      const attachment = (await fetchApi(`tasks/${task_id}/attachments/${attachment_id}`)) as {
-        file_name: string;
-        mime_type: string | null;
-        size_bytes: number | null;
-        kind: string;
-        marked_up: boolean;
-        url: string | null;
-      };
-      const summary = JSON.stringify(attachment, null, 2);
+  ({ task_id, attachment_id }) => viewAttachment(`tasks/${task_id}/attachments/${attachment_id}`),
+);
 
-      const inlineable =
-        attachment.url &&
-        attachment.kind === "image" &&
-        attachment.mime_type !== "image/svg+xml" &&
-        (attachment.size_bytes ?? 0) <= MAX_INLINE_IMAGE_BYTES;
-      if (!inlineable) return { content: [{ type: "text" as const, text: summary }] };
-
-      const file = await fetch(attachment.url!);
-      if (!file.ok) return { content: [{ type: "text" as const, text: summary }] };
-      const data = Buffer.from(await file.arrayBuffer()).toString("base64");
-      return {
-        content: [
-          { type: "text" as const, text: summary },
-          { type: "image" as const, data, mimeType: attachment.mime_type ?? "image/png" },
-        ],
-      };
-    } catch (error: unknown) {
-      return failure(error);
-    }
-  },
+server.tool(
+  "view_plan_attachment",
+  toolDescription("view_plan_attachment"),
+  toolShape("view_plan_attachment"),
+  ({ plan_id, attachment_id }) => viewAttachment(`plans/${plan_id}/attachments/${attachment_id}`),
 );
 
 // ---------------------------------------------------------------------------

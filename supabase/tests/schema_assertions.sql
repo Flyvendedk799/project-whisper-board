@@ -569,6 +569,95 @@ select assert(
 reset role;
 
 -- ---------------------------------------------------------------------------
+\echo 'files on the plan itself'
+-- ---------------------------------------------------------------------------
+-- No task: the file names its plan, and nothing derives it.
+insert into public.plan_task_attachments
+  (id, plan_id, uploader_id, storage_path, file_name, mime_type, size_bytes)
+values ('eeeeeeee-0000-0000-0000-000000000040', 'eeeeeeee-0000-0000-0000-000000000001',
+        '11111111-1111-1111-1111-111111111111',
+        '11111111-1111-1111-1111-111111111111/eeeeeeee-0000-0000-0000-000000000001/plan/a-brief.pdf',
+        'brief.pdf', 'application/pdf', 2048);
+select assert(
+  (select task_id is null and shared_with_agents from public.plan_task_attachments
+   where id = 'eeeeeeee-0000-0000-0000-000000000040'),
+  'a file can belong to the plan itself, shared with agents like any other'
+);
+
+do $$
+begin
+  begin
+    insert into public.plan_task_attachments
+      (plan_id, uploader_id, storage_path, file_name, size_bytes)
+    values ('eeeeeeee-0000-0000-0000-000000000099', '11111111-1111-1111-1111-111111111111',
+            'x/no-such-plan.pdf', 'no-such-plan.pdf', 10);
+    raise exception 'FAILED: a file was filed under a plan that does not exist';
+  exception when raise_exception then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    raise notice '  ok  a plan-level file must name a real plan';
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    insert into public.plan_task_attachments
+      (plan_id, uploader_id, storage_path, file_name, size_bytes, source_attachment_id)
+    values ('eeeeeeee-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
+            'x/lifted.png', 'lifted.png', 10, 'eeeeeeee-0000-0000-0000-000000000020');
+    raise exception 'FAILED: a task file''s marked-up copy was filed on the plan';
+  exception when raise_exception then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    raise notice '  ok  a marked-up copy stays at the level of its original';
+  end;
+end $$;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plan_task_attachments where task_id is null) = 1,
+  'a workspace member reads the plan''s own files'
+);
+insert into public.plan_task_attachments
+  (id, plan_id, uploader_id, storage_path, file_name, mime_type, size_bytes)
+values ('eeeeeeee-0000-0000-0000-000000000041', 'eeeeeeee-0000-0000-0000-000000000001',
+        '22222222-2222-2222-2222-222222222222',
+        '22222222-2222-2222-2222-222222222222/eeeeeeee-0000-0000-0000-000000000001/plan/b-spec.pdf',
+        'spec.pdf', 'application/pdf', 4096);
+select assert(
+  (select count(*) from public.plan_task_attachments where task_id is null) = 2,
+  'and any member can add one'
+);
+delete from public.plan_task_attachments where id = 'eeeeeeee-0000-0000-0000-000000000040';
+select assert(
+  (select count(*) from public.plan_task_attachments
+   where id = 'eeeeeeee-0000-0000-0000-000000000040') = 1,
+  'but cannot delete a plan file somebody else uploaded'
+);
+
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select assert(
+  (select count(*) from public.plan_task_attachments where task_id is null) = 0,
+  'another workspace sees none of the plan''s files'
+);
+do $$
+begin
+  begin
+    insert into public.plan_task_attachments
+      (plan_id, uploader_id, storage_path, file_name, size_bytes)
+    values ('eeeeeeee-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333',
+            '33333333-3333-3333-3333-333333333333/eeeeeeee-0000-0000-0000-000000000001/plan/c.pdf',
+            'c.pdf', 10);
+    raise exception 'FAILED: another workspace added a file to this plan';
+  exception when insufficient_privilege or raise_exception then
+    -- The trigger reads the plan as the caller, and the caller cannot see it; RLS would refuse next.
+    if sqlerrm like 'FAILED%' then raise; end if;
+    raise notice '  ok  nor can it add one';
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 \echo 'questions, features and tags'
 -- ---------------------------------------------------------------------------
 update public.plan_tasks set status = 'in_progress'

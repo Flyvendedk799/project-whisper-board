@@ -288,29 +288,37 @@ export function partitionUploadable<T extends FileMeta>(
 }
 
 /**
- * `<uploader>/<plan>/<task>/<uuid>-<name>`. The first segment is the uploader
+ * The path segment where a task's id goes, for a file that belongs to the plan
+ * itself. Not a uuid, so it can never be mistaken for a task.
+ */
+export const PLAN_LEVEL_SEGMENT = "plan";
+
+/**
+ * `<uploader>/<plan>/<task>/<uuid>-<name>`, or `<uploader>/<plan>/plan/<uuid>-<name>`
+ * for a file on the plan itself (`taskId` null). The first segment is the uploader
  * for the same reason as tickets: `plan_attachments_upload_own` checks it.
  */
 export function planAttachmentPath(
   userId: string,
   planId: string,
-  taskId: string,
+  taskId: string | null,
   fileName: string,
 ): string {
-  return `${userId}/${planId}/${taskId}/${crypto.randomUUID()}-${slugifyFileName(fileName)}`;
+  const scope = taskId ?? PLAN_LEVEL_SEGMENT;
+  return `${userId}/${planId}/${scope}/${crypto.randomUUID()}-${slugifyFileName(fileName)}`;
 }
 
-/** True when `path` was built for this uploader, plan and task. */
+/** True when `path` was built for this uploader, plan and task (or the plan itself, for `taskId` null). */
 export function isPlanAttachmentPath(
   path: string,
-  scope: { userId: string; planId: string; taskId: string },
+  scope: { userId: string; planId: string; taskId: string | null },
 ): boolean {
   const parts = path.split("/");
   return (
     parts.length === 4 &&
     parts[0] === scope.userId &&
     parts[1] === scope.planId &&
-    parts[2] === scope.taskId &&
+    parts[2] === (scope.taskId ?? PLAN_LEVEL_SEGMENT) &&
     parts[3].length > 0 &&
     !path.includes("..")
   );

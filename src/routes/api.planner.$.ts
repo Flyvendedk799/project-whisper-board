@@ -2,7 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { verifyApiKey } from "@/lib/api-auth";
 import { allowsPlanner } from "@/lib/api-scopes";
-import { sharedAttachments, withSharedAttachments } from "@/features/planner/agent-media";
+import {
+  groupByTask,
+  sharedAttachments,
+  withSharedAttachments,
+} from "@/features/planner/agent-media";
 import { applyPlanMarkdown } from "@/lib/plan-import";
 import {
   clampStepDepths,
@@ -339,10 +343,8 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
           .single();
         if (error) throw error;
         // Files come from their own query so a hidden one is never read.
-        const files = new Map<string, Awaited<ReturnType<typeof sharedAttachments>>>();
-        for (const attachment of await sharedAttachments(admin, { planId: plan.id })) {
-          files.set(attachment.task_id, [...(files.get(attachment.task_id) ?? []), attachment]);
-        }
+        const shared = await sharedAttachments(admin, { planId: plan.id });
+        const files = groupByTask(shared);
         const tasks = await enrichTasks(
           admin,
           workspaceId,
@@ -353,6 +355,8 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
           ...plan,
           // Where commits for this plan go: repository, base, working branch and the mode.
           work_target: workTargetOf(plan),
+          // Files that belong to the whole plan; each task's own are on the task.
+          attachments: shared.filter((attachment) => !attachment.task_id),
           plan_sections: byPosition(plan.plan_sections).map((section) => ({
             ...section,
             plan_tasks: byPosition(section.plan_tasks).map((task) => ({
@@ -552,6 +556,32 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         const { data: rows, error } = await query;
         if (error) throw error;
         return Response.json(await decorateQuestions(admin, workspaceId, rows ?? []));
+      }
+
+      // Files on the plan itself (a brief, a spec), shared with agents the same way a task's are.
+      const planAttachmentsMatch = path.match(/^plans\/([^/]+)\/attachments$/);
+      if (planAttachmentsMatch) {
+        await planInWorkspace(admin, planAttachmentsMatch[1], workspaceId);
+        return Response.json(
+          await sharedAttachments(admin, { planId: planAttachmentsMatch[1], planLevel: true }),
+        );
+      }
+
+      const planAttachmentMatch = path.match(/^plans\/([^/]+)\/attachments\/([^/]+)$/);
+      if (planAttachmentMatch) {
+        await planInWorkspace(admin, planAttachmentMatch[1], workspaceId);
+        const [attachment] = await sharedAttachments(admin, {
+          planId: planAttachmentMatch[1],
+          planLevel: true,
+          attachmentId: planAttachmentMatch[2],
+        });
+        if (!attachment) {
+          return new Response(JSON.stringify({ error: "Attachment not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.json(attachment);
       }
 
       // Files the team has shared with agents. Hidden files never appear here.

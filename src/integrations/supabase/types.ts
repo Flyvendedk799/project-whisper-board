@@ -2022,7 +2022,7 @@ export type Database = {
           source_attachment_id: string | null
           storage_bucket: string
           storage_path: string
-          task_id: string
+          task_id: string | null
           uploader_id: string | null
           width: number | null
         }
@@ -2039,7 +2039,7 @@ export type Database = {
           source_attachment_id?: string | null
           storage_bucket?: string
           storage_path: string
-          task_id: string
+          task_id?: string | null
           uploader_id?: string | null
           width?: number | null
         }
@@ -2056,7 +2056,7 @@ export type Database = {
           source_attachment_id?: string | null
           storage_bucket?: string
           storage_path?: string
-          task_id?: string
+          task_id?: string | null
           uploader_id?: string | null
           width?: number | null
         }
