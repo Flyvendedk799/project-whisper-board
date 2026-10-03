@@ -1,4 +1,4 @@
-import { Check, User, X } from "lucide-react";
+import { Check, Trash2, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -20,6 +20,7 @@ export function BulkBar({
   onStatus,
   onPriority,
   onAssignee,
+  onDelete,
   onClear,
 }: {
   count: number;
@@ -30,6 +31,8 @@ export function BulkBar({
   onStatus: (status: TicketStatus) => void;
   onPriority: (priority: TicketPriority) => void;
   onAssignee: (assigneeId: string | null) => void;
+  /** Asks to delete the selection; the caller owns the confirmation. */
+  onDelete: () => void;
   onClear: () => void;
 }) {
   if (count === 0) return null;
@@ -78,6 +81,17 @@ export function BulkBar({
           Assign to me
         </Button>
       )}
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 rounded-full bg-card px-3 text-xs text-destructive hover:text-destructive"
+        disabled={busy}
+        onClick={onDelete}
+      >
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+        Delete
+      </Button>
 
       <Button variant="ghost" size="sm" onClick={onClear} className="ml-auto h-7 text-xs">
         <X className="mr-1 h-3.5 w-3.5" aria-hidden="true" />

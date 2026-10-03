@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarClock, Sparkles } from "lucide-react";
+import { CalendarClock, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import { useAuth } from "@/components/auth-provider";
 import { AttachmentGrid } from "@/features/tickets/attachment-tile";
 import { CaptureContextPanel } from "@/features/tickets/capture-context-panel";
 import { SlaBadge } from "@/features/tickets/sla-badge";
+import { TicketDeleteDialog } from "@/features/tickets/ticket-delete-dialog";
 import { TicketSidebar } from "@/features/tickets/ticket-sidebar";
 import { TicketTimeline } from "@/features/tickets/ticket-timeline";
 import { CaptureDropzone } from "@/features/capture/capture-dropzone";
@@ -120,6 +121,8 @@ function TicketPage() {
   const { ticketId } = Route.useParams();
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
 
   const ticket = useQuery(ticketQuery(ticketId));
   const comments = useQuery(ticketCommentsQuery(ticketId));
@@ -193,7 +196,28 @@ function TicketPage() {
                 </>
               ) : null}
             </span>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-7 text-xs text-destructive hover:text-destructive"
+                onClick={() => setDeleting(true)}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Delete
+              </Button>
+            )}
           </div>
+          <TicketDeleteDialog
+            tickets={[{ id: t.id, title: t.title, number: t.ticket_number }]}
+            open={deleting}
+            onOpenChange={setDeleting}
+            onDeleted={() =>
+              router.history.canGoBack()
+                ? router.history.back()
+                : router.navigate({ to: "/app/triage" })
+            }
+          />
           <h1 className="mt-2.5 max-w-[820px] font-display text-[38px] font-normal leading-[1.15]">
             {t.title}
           </h1>

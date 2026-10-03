@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
+import { purgeFiles } from "@/lib/storage-purge";
 import { Constants } from "@/integrations/supabase/types";
 import type { Update } from "@/data/types";
 
@@ -228,6 +229,50 @@ export const bulkUpdateTickets = createServerFn({ method: "POST" })
 
       const failed = data.ticketIds.filter((id) => !updated.includes(id));
       return { updated, failed };
+    }),
+  );
+
+/**
+ * Deletes tickets for good: their comments, events and links go with them
+ * through the cascade, and the files they uploaded are removed from storage
+ * afterwards, since a cascade only reaches rows. A task on a plan that was made
+ * from one of these tickets stays, unlinked.
+ *
+ * RLS decides who may do this (workspace admins), so ids that were not deleted
+ * come back in `failed` for the UI to report honestly, the way bulk update does.
+ */
+export const deleteTickets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ ticketIds: z.array(z.string().uuid()).min(1).max(200) }).parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("tickets.delete", async () => {
+      const { supabase } = context;
+
+      const { data: files, error: filesError } = await supabase
+        .from("ticket_attachments")
+        .select("ticket_id, storage_bucket, storage_path")
+        .in("ticket_id", data.ticketIds);
+      if (filesError) throw filesError;
+
+      const { data: removed, error } = await supabase
+        .from("tickets")
+        .delete()
+        .in("id", data.ticketIds)
+        .select("id");
+      if (error) throw error;
+
+      const deleted = (removed ?? []).map((row) => row.id);
+      if (deleted.length === 0) {
+        throw new AppError("forbidden", "Only workspace admins can delete tickets.", {
+          status: 403,
+        });
+      }
+
+      // Only the files of tickets that really went; a refused ticket keeps its own.
+      await purgeFiles((files ?? []).filter((file) => deleted.includes(file.ticket_id)));
+      return { deleted, failed: data.ticketIds.filter((id) => !deleted.includes(id)) };
     }),
   );
 

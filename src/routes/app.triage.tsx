@@ -14,6 +14,7 @@ import { FilterBar } from "@/features/triage/filter-bar";
 import { TicketBoard } from "@/features/triage/ticket-board";
 import { BulkBar } from "@/features/triage/bulk-bar";
 import { ViewsRail } from "@/features/triage/views-rail";
+import { TicketDeleteDialog } from "@/features/tickets/ticket-delete-dialog";
 import { TicketListHeader, TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
 import { bulkUpdateTickets, deleteView, saveView } from "@/lib/tickets.functions";
@@ -50,6 +51,7 @@ function TriagePage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewsOpen, setViewsOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isMobile = useIsMobile();
 
   const viewerId = user?.id ?? "";
@@ -218,6 +220,15 @@ function TriagePage() {
         }
       />
 
+      <TicketDeleteDialog
+        tickets={rows
+          .filter((ticket) => selected.has(ticket.id))
+          .map((ticket) => ({ id: ticket.id, title: ticket.title, number: ticket.ticket_number }))}
+        open={deleting}
+        onOpenChange={setDeleting}
+        onDeleted={() => setSelected(new Set())}
+      />
+
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-[204px] shrink-0 border-r lg:block">
           <SectionBoundary label="views-rail">
@@ -256,6 +267,7 @@ function TriagePage() {
               bulk.fire({ ticketIds: [...selected], priority })
             }
             onAssignee={(assigneeId) => bulk.fire({ ticketIds: [...selected], assigneeId })}
+            onDelete={() => setDeleting(true)}
             onClear={() => setSelected(new Set())}
           />
 
