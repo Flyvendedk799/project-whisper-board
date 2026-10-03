@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { PlanAttachmentWithUrl, PlanWithSections } from "@/data";
 import { cn } from "@/lib/utils";
 import { AttachmentLightbox } from "./attachment-lightbox";
-import { AttachmentTile } from "./attachment-tile";
+import { AttachmentTile, UploadTile } from "./attachment-tile";
+import { FileDropzone } from "./file-dropzone";
 import { usePlanMedia } from "./plan-media";
 import {
   matchesFileKind,
@@ -20,7 +21,7 @@ const KINDS: Array<[FileKindFilter, string]> = [
   ["docs", "Documents"],
 ];
 
-/** Every file on the plan, grouped by task, filterable by type. */
+/** Every file on the plan: its own first, then each task's, filterable by type. */
 export function PlanFilesView({
   plan,
   filters,
@@ -39,7 +40,8 @@ export function PlanFilesView({
   const media = usePlanMedia();
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const { groups, flat } = useMemo(() => {
+  const { planFiles, groups, flat } = useMemo(() => {
+    const planFiles = media.planFiles.filter((file) => matchesFileKind(file.mime_type, kind));
     const groups: Array<{
       task: PlanWithSections["sections"][number]["tasks"][number];
       section: string;
@@ -54,8 +56,9 @@ export function PlanFilesView({
         if (files.length > 0) groups.push({ task, section: section.title, files });
       }
     }
-    return { groups, flat: groups.flatMap((group) => group.files) };
-  }, [plan.sections, filters, meId, media.byTask, kind]);
+    return { planFiles, groups, flat: [...planFiles, ...groups.flatMap((group) => group.files)] };
+  }, [plan.sections, filters, meId, media.byTask, media.planFiles, kind]);
+  const planUploads = media.uploads.filter((u) => u.taskId === null);
 
   const taskTitleOf = useMemo(() => {
     const map = new Map<string, string>();
@@ -83,9 +86,40 @@ export function PlanFilesView({
         ))}
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground">
-          Everything attached to tasks in this plan. Open a task to add more.
+          Files on the plan itself, then everything attached to its tasks.
         </span>
       </div>
+
+      <section className="flex flex-col gap-2.5" aria-labelledby="plan-files">
+        <div className="flex items-baseline gap-2.5">
+          <h2 id="plan-files" className="font-display text-xl">
+            Plan files
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            For the whole plan, not one task. Shared files are included in every agent&rsquo;s
+            context.
+          </span>
+        </div>
+        <FileDropzone
+          onFiles={(picked) => void media.upload(null, picked)}
+          prompt="or drop them here"
+          ariaLabel="Attach files to the plan"
+        />
+        {planFiles.length > 0 || planUploads.length > 0 ? (
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+            {planFiles.map((file) => (
+              <li key={file.id}>
+                <AttachmentTile roomy attachment={file} onOpen={() => setOpenId(file.id)} />
+              </li>
+            ))}
+            {planUploads.map((item) => (
+              <li key={item.id}>
+                <UploadTile item={item} onDismiss={() => media.dismissUpload(item.id)} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       {flat.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">
@@ -121,7 +155,9 @@ export function PlanFilesView({
         items={flat}
         openId={openId}
         onOpenChange={setOpenId}
-        contextFor={(file) => taskHeadline(taskTitleOf.get(file.task_id) ?? "")}
+        contextFor={(file) =>
+          file.task_id ? taskHeadline(taskTitleOf.get(file.task_id) ?? "") : "Plan files"
+        }
       />
     </div>
   );

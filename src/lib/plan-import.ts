@@ -46,16 +46,21 @@ export async function purgePlanFiles(paths: string[]) {
   if (error) console.error("[planner] purge plan files", error.message);
 }
 
+/**
+ * Storage paths of the files on these tasks or plans. For a plan, `tasksOnly`
+ * leaves out the files on the plan itself, for when the tasks are going and the
+ * plan is staying.
+ */
 export async function attachmentPathsWhere(
   supabase: Client,
   column: "task_id" | "plan_id",
   ids: string[],
+  options: { tasksOnly?: boolean } = {},
 ): Promise<string[]> {
   if (ids.length === 0) return [];
-  const { data } = await supabase
-    .from("plan_task_attachments")
-    .select("storage_path")
-    .in(column, ids);
+  let query = supabase.from("plan_task_attachments").select("storage_path").in(column, ids);
+  if (options.tasksOnly) query = query.not("task_id", "is", null);
+  const { data } = await query;
   return (data ?? []).map((row) => row.storage_path);
 }
 
@@ -164,7 +169,8 @@ export async function applyPlanMarkdown(
   }
 
   if (input.mode === "replace") {
-    const paths = await attachmentPathsWhere(supabase, "plan_id", [plan.id]);
+    // Replacing the board replaces its sections and tasks; the plan's own files stay.
+    const paths = await attachmentPathsWhere(supabase, "plan_id", [plan.id], { tasksOnly: true });
     const { error: deleteError } = await supabase
       .from("plan_sections")
       .delete()

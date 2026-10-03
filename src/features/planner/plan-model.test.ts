@@ -13,6 +13,7 @@ import {
   hasActiveFilters,
   initials,
   locateTask,
+  planLevelAttachments,
   matchesFileKind,
   matchesFilters,
   matchesSearch,
@@ -233,6 +234,16 @@ describe("attachments", () => {
     const grouped = groupAttachmentsByTask(rows as never);
     expect([...grouped.keys()]).toEqual(["t", "u"]);
     expect(grouped.get("t")!.map((r) => r.id)).toEqual(["2"]);
+  });
+
+  it("keeps the plan's own files out of every task's group", () => {
+    const withPlanFile = [
+      ...rows,
+      { id: "4", task_id: null, mime_type: "application/pdf", source_attachment_id: null },
+    ];
+    expect([...groupAttachmentsByTask(withPlanFile as never).keys()]).toEqual(["t", "u"]);
+    expect(planLevelAttachments(withPlanFile as never).map((r) => r.id)).toEqual(["4"]);
+    expect(planLevelAttachments(rows as never)).toEqual([]);
   });
 
   it("filters by kind, keeping audio with documents", () => {

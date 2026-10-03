@@ -1833,13 +1833,17 @@ export const signPlanAttachmentDownload = createServerFn({ method: "POST" })
  * (the client is not trusted), checks the path belongs to this user and task,
  * writes the row and records the event. If the row cannot be written the object
  * is removed so nothing is orphaned.
+ *
+ * A file belongs to a task (`taskId`) or to the plan itself (`planId`): exactly
+ * one of the two is named.
  */
 export const registerPlanAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
     z
       .object({
-        taskId: z.string().uuid(),
+        taskId: z.string().uuid().nullable().optional(),
+        planId: z.string().uuid().nullable().optional(),
         storagePath: z.string().min(1).max(500),
         fileName: z.string().min(1).max(255),
         mimeType: z.string().max(200).nullable().optional(),
@@ -1851,18 +1855,35 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
         /** Skips the activity entry, for files that are part of a batch reported once. */
         quiet: z.boolean().optional(),
       })
+      .refine((value) => Boolean(value.taskId) !== Boolean(value.planId), {
+        message: "Name a task or a plan, not both",
+      })
       .parse(input),
   )
   .handler(({ data, context }) =>
     guard("attachments.register", async () => {
       const { supabase, userId } = context;
 
-      const { data: taskRow } = await supabase
-        .from("plan_tasks")
-        .select("id, plan_id")
-        .eq("id", data.taskId)
-        .maybeSingle();
-      const task = requireFound(taskRow, "task");
+      // The task this file hangs on, if any, and the plan either way. Both reads go through
+      // RLS, so naming something outside your workspace is a not-found.
+      let task: { id: string; plan_id: string } | null = null;
+      let planId: string;
+      if (data.taskId) {
+        const { data: taskRow } = await supabase
+          .from("plan_tasks")
+          .select("id, plan_id")
+          .eq("id", data.taskId)
+          .maybeSingle();
+        task = requireFound(taskRow, "task");
+        planId = task.plan_id;
+      } else {
+        const { data: planRow } = await supabase
+          .from("plans")
+          .select("id")
+          .eq("id", data.planId!)
+          .maybeSingle();
+        planId = requireFound(planRow, "plan").id;
+      }
 
       const problem = validateFileMeta({
         name: data.fileName,
@@ -1876,8 +1897,8 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
       if (
         !isPlanAttachmentPath(data.storagePath, {
           userId,
-          planId: task.plan_id,
-          taskId: task.id,
+          planId,
+          taskId: task?.id ?? null,
         })
       ) {
         throw new AppError("upload_invalid", "That file was uploaded to the wrong place.", {
@@ -1887,7 +1908,7 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
 
       // A marked-up copy of a file on a note stays on that note.
       let commentId: string | null = null;
-      if (data.sourceAttachmentId) {
+      if (data.sourceAttachmentId && task) {
         const { data: source } = await supabase
           .from("plan_task_attachments")
           .select("comment_id")
@@ -1900,7 +1921,8 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
       const { data: row, error } = await supabase
         .from("plan_task_attachments")
         .insert({
-          task_id: task.id,
+          task_id: task?.id ?? null,
+          plan_id: planId,
           comment_id: commentId,
           uploader_id: userId,
           storage_path: data.storagePath,
@@ -1921,8 +1943,8 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
 
       if (!data.quiet) {
         await logPlanEvent(supabase, userId, {
-          planId: task.plan_id,
-          taskId: task.id,
+          planId,
+          taskId: task?.id ?? null,
           kind: "attachment_added",
           newValue: data.fileName,
         });

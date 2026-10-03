@@ -160,9 +160,10 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
   {
     name: "get_plan",
     group: "Orient",
-    summary: "A plan with its sections, tasks, features, steps and questions, and its work_target.",
+    summary:
+      "A plan with its sections, tasks, features, steps and questions, its own files and its work_target.",
     description:
-      "Get a plan with its sections (goals, intentions, tags, colour) and tasks (tags as labels, colour, ai_context, features, steps with feature_id, questions with who asked and answered). work_target says where commits go: repo, base, branch, mode and a summary.",
+      "Get a plan with its sections (goals, intentions, tags, colour) and tasks (tags as labels, colour, ai_context, features, steps with feature_id, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
     rest: { method: "GET", path: "plans/:plan_id" },
     params: [PLAN_ID],
   },
@@ -208,6 +209,34 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         type: "string",
         required: true,
         description: "The ID of the attachment, from list_task_attachments",
+      },
+    ],
+  },
+
+  {
+    name: "list_plan_attachments",
+    group: "Orient",
+    summary: "Files the team shared with agents on the plan itself.",
+    description:
+      "Files the team shared with agents on the plan as a whole (a brief, a spec, a design), as opposed to on one task. Read these before you start: they apply to every task. Hidden files are never listed. URLs expire in an hour.",
+    rest: { method: "GET", path: "plans/:plan_id/attachments" },
+    params: [PLAN_ID],
+  },
+  {
+    name: "view_plan_attachment",
+    group: "Orient",
+    summary: "Look at a file on the plan itself: images come back as images.",
+    description:
+      "Look at a shared file on the plan itself. Images come back as images; other files come back as a signed URL to download.",
+    rest: { method: "GET", path: "plans/:plan_id/attachments/:attachment_id" },
+    notes: "Downloads an image under 5 MB and returns it inline.",
+    params: [
+      PLAN_ID,
+      {
+        name: "attachment_id",
+        type: "string",
+        required: true,
+        description: "The ID of the attachment, from list_plan_attachments",
       },
     ],
   },

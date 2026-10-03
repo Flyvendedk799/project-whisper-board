@@ -20,7 +20,7 @@ import {
   setPlanAttachmentShared,
   signPlanAttachmentDownload,
 } from "@/lib/planner.functions";
-import { groupAttachmentsByTask, visibleAttachments } from "./plan-model";
+import { groupAttachmentsByTask, planLevelAttachments, visibleAttachments } from "./plan-model";
 import { usePlanUploads, type UploadItem } from "./use-plan-uploads";
 
 export const FILE_UNDO_MS = 5000;
@@ -29,6 +29,8 @@ interface PlanMediaValue {
   /** Files that are showing: a marked-up copy stands in for its original. */
   visible: PlanAttachmentWithUrl[];
   byTask: Map<string, PlanAttachmentWithUrl[]>;
+  /** Files on the plan itself, which belong to no task. */
+  planFiles: PlanAttachmentWithUrl[];
   /** Every file on the task including superseded originals, for look-ups by id. */
   lookup: (id: string) => PlanAttachmentWithUrl | undefined;
   uploads: UploadItem[];
@@ -86,6 +88,7 @@ export function PlanMediaProvider({
   );
   const visible = useMemo(() => visibleAttachments(all), [all]);
   const byTask = useMemo(() => groupAttachmentsByTask(all), [all]);
+  const planFiles = useMemo(() => planLevelAttachments(all), [all]);
 
   const commit = useCallback(
     async (id: string) => {
@@ -193,6 +196,7 @@ export function PlanMediaProvider({
     () => ({
       visible,
       byTask,
+      planFiles,
       lookup,
       uploads,
       upload,
@@ -205,6 +209,7 @@ export function PlanMediaProvider({
     [
       visible,
       byTask,
+      planFiles,
       lookup,
       uploads,
       upload,

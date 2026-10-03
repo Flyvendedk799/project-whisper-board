@@ -191,6 +191,19 @@ describe("plan attachments", () => {
     ).toBe(false);
   });
 
+  it("files on the plan itself get a path that cannot pass for a task's", () => {
+    const path = planAttachmentPath("u1", "p1", null, "Brief.pdf");
+    expect(path.split("/").slice(0, 3)).toEqual(["u1", "p1", "plan"]);
+    expect(isPlanAttachmentPath(path, { userId: "u1", planId: "p1", taskId: null })).toBe(true);
+    // The two kinds are not interchangeable, either way round.
+    expect(isPlanAttachmentPath(path, { userId: "u1", planId: "p1", taskId: "t1" })).toBe(false);
+    const taskPath = planAttachmentPath("u1", "p1", "t1", "Brief.pdf");
+    expect(isPlanAttachmentPath(taskPath, { userId: "u1", planId: "p1", taskId: null })).toBe(
+      false,
+    );
+    expect(isPlanAttachmentPath(path, { userId: "u1", planId: "p2", taskId: null })).toBe(false);
+  });
+
   it("labels files and names marked-up copies", () => {
     expect(fileExtensionLabel("report.final.pdf")).toBe("PDF");
     expect(fileExtensionLabel("README")).toBe("FILE");

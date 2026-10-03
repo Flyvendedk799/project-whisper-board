@@ -12,7 +12,8 @@ import { uploadPlanFile } from "./plan-upload";
 
 export interface UploadItem {
   id: string;
-  taskId: string;
+  /** The task the file is going onto; null for a file on the plan itself. */
+  taskId: string | null;
   name: string;
   size: number;
   type: string;
@@ -39,8 +40,8 @@ export interface UploadOptions {
 
 interface UploadsValue {
   uploads: UploadItem[];
-  /** Resolves with the ids of the attachments that were saved. */
-  upload: (taskId: string, files: File[], options?: UploadOptions) => Promise<string[]>;
+  /** Resolves with the ids of the attachments that were saved. A null `taskId` puts them on the plan itself. */
+  upload: (taskId: string | null, files: File[], options?: UploadOptions) => Promise<string[]>;
   dismiss: (id: string) => void;
 }
 
@@ -128,7 +129,7 @@ export function PlanUploadsProvider({
             patch(id, { status: "saving", progress: 100 });
             const row = await register({
               data: {
-                taskId,
+                ...(taskId ? { taskId } : { planId }),
                 storagePath: path,
                 fileName: name,
                 mimeType: file.type || null,

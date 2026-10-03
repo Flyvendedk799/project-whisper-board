@@ -15,7 +15,7 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
   {
     id: "read",
     title: "Read the task before you touch anything",
-    body: "list_plans, get_plan, list_available_tasks, then get_task. A task carries its description, acceptance criteria, features (what it must deliver), steps (how), open questions, shared files and tags. The plan carries work_target: where commits go.",
+    body: "list_plans, get_plan, list_available_tasks, then get_task. A task carries its description, acceptance criteria, features (what it must deliver), steps (how), open questions, shared files and tags. The plan carries work_target: where commits go. It can also carry its own files (a brief, a spec) that apply to every task: they are the plan's attachments in get_plan, and list_plan_attachments and view_plan_attachment open them. Read them before you start.",
   },
   {
     id: "tickets",

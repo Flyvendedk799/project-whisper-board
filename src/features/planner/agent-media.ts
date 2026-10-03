@@ -1,5 +1,5 @@
 /**
- * What the agent API and the MCP server may see of a task's files.
+ * What the agent API and the MCP server may see of a plan's and a task's files.
  *
  * Only attachments with `shared_with_agents = true` ever leave the building,
  * and each comes with a signed URL that expires in an hour. The filter is in
@@ -15,7 +15,8 @@ export const AGENT_URL_SECONDS = 60 * 60;
 
 export interface AgentAttachment {
   id: string;
-  task_id: string;
+  /** The task it is on, or null for a file on the plan itself. */
+  task_id: string | null;
   comment_id: string | null;
   file_name: string;
   mime_type: string | null;
@@ -33,7 +34,7 @@ const COLUMNS =
 
 export async function sharedAttachments(
   admin: Admin,
-  filter: { planId?: string; taskId?: string; attachmentId?: string },
+  filter: { planId?: string; taskId?: string; planLevel?: boolean; attachmentId?: string },
 ): Promise<AgentAttachment[]> {
   let query = admin
     .from("plan_task_attachments")
@@ -42,6 +43,8 @@ export async function sharedAttachments(
     .order("created_at", { ascending: true });
   if (filter.planId) query = query.eq("plan_id", filter.planId);
   if (filter.taskId) query = query.eq("task_id", filter.taskId);
+  // Only the files on the plan itself, not those of its tasks.
+  if (filter.planLevel) query = query.is("task_id", null);
   if (filter.attachmentId) query = query.eq("id", filter.attachmentId);
 
   const { data: rows, error } = await query;
@@ -66,19 +69,27 @@ export async function sharedAttachments(
   }));
 }
 
+/** The files of each task, by task id. Files on the plan itself have no task and are left out. */
+export function groupByTask(
+  attachments: readonly AgentAttachment[],
+): Map<string, AgentAttachment[]> {
+  const byTask = new Map<string, AgentAttachment[]>();
+  for (const attachment of attachments) {
+    if (!attachment.task_id) continue;
+    const list = byTask.get(attachment.task_id) ?? [];
+    list.push(attachment);
+    byTask.set(attachment.task_id, list);
+  }
+  return byTask;
+}
+
 /** Adds `attachments` (shared only) to each task of a plan, in place of a join. */
 export async function withSharedAttachments<T extends { id: string }>(
   admin: Admin,
   planId: string,
   tasks: readonly T[],
 ): Promise<Array<T & { attachments: AgentAttachment[] }>> {
-  const all = await sharedAttachments(admin, { planId });
-  const byTask = new Map<string, AgentAttachment[]>();
-  for (const attachment of all) {
-    const list = byTask.get(attachment.task_id) ?? [];
-    list.push(attachment);
-    byTask.set(attachment.task_id, list);
-  }
+  const byTask = groupByTask(await sharedAttachments(admin, { planId }));
   return tasks.map((task) => ({ ...task, attachments: byTask.get(task.id) ?? [] }));
 }
 
@@ -87,17 +98,17 @@ type PlanWithTasks = {
   plan_sections?: Array<{ plan_tasks?: Array<{ id: string }> | null }> | null;
 };
 
-/** Decorates a `plans?select=*,plan_sections(*,plan_tasks(*))` row with shared files. */
+/**
+ * Decorates a `plans?select=*,plan_sections(*,plan_tasks(*))` row with shared files:
+ * `attachments` on each task, and on the plan itself the files that belong to the
+ * whole plan.
+ */
 export async function decoratePlanForAgents<T extends PlanWithTasks>(admin: Admin, plan: T) {
   const all = await sharedAttachments(admin, { planId: plan.id });
-  const byTask = new Map<string, AgentAttachment[]>();
-  for (const attachment of all) {
-    const list = byTask.get(attachment.task_id) ?? [];
-    list.push(attachment);
-    byTask.set(attachment.task_id, list);
-  }
+  const byTask = groupByTask(all);
   return {
     ...plan,
+    attachments: all.filter((attachment) => !attachment.task_id),
     plan_sections: (plan.plan_sections ?? []).map((section) => ({
       ...section,
       plan_tasks: (section.plan_tasks ?? []).map((task) => ({
