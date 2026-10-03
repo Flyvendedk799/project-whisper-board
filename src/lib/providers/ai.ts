@@ -357,25 +357,27 @@ function createAntigravityProvider(
               refreshToken: null,
               expiresAt: 0,
               email: null,
-              projectId: auth.projectId,
-              // Left at the default on purpose: that selects the `daily` Cloud Code host, where
-              // personal-account tokens succeed. `isDogfood: false` selects the prod host, which
-              // answers a healthy account with a 429 RESOURCE_EXHAUSTED.
+              // No project, same as AirEddy: a personal account's stored project would go out as
+              // `x-goog-user-project` and in the body, and Cloud Code answers personal accounts
+              // best without either.
+              projectId: "",
+              // `true` selects the `daily` Cloud Code host, where personal-account tokens succeed.
+              // `false` selects prod, which answers a healthy account with a 429
+              // RESOURCE_EXHAUSTED ("The AI service is busy").
+              isDogfood: true,
             },
             baseUrl !== WIRE_BASE_URL.gemini ? baseUrl : undefined,
           );
 
           const req = toCodeAssistRequest(
-            model,
+            // Cloud Code has one flash id, whatever minor version the UI names.
+            model.replace(/gemini-3\.\d+-flash.*/i, "gemini-3-flash"),
             // Gemini calls the assistant's turns "model"; "assistant" is not a role it knows.
             turns.map((m) => ({
               role: m.role === "assistant" ? ("model" as const) : ("user" as const),
               parts: [{ text: contentToText(m.content) }],
             })),
-            {
-              projectId: auth.projectId || undefined,
-              systemInstruction: systemPrompt || undefined,
-            },
+            { systemInstruction: systemPrompt || undefined },
           );
 
           // The method hangs off the version with a colon, as in `v1internal:generateContent`.

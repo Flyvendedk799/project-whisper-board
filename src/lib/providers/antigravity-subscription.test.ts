@@ -71,6 +71,25 @@ describe("a connected Antigravity subscription", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer agy-token");
   });
 
+  it("sends no project, even when the account has one, like AirEddy", async () => {
+    status.mockResolvedValue({ connected: true, projectId: "my-project-123" });
+    const fetchMock = stubFetch(wrapped({ text: "ok" }));
+    const ai = await getAiProviderFor("user-1");
+    await ai.chat([{ role: "user", content: "hi" }]);
+
+    const { init, body } = sent(fetchMock);
+    expect(body.project).toBeUndefined();
+    expect(init.headers as Record<string, string>).not.toHaveProperty("x-goog-user-project");
+  });
+
+  it("asks for the one flash id Cloud Code knows", async () => {
+    process.env.ANTIGRAVITY_SUBSCRIPTION_MODEL = "gemini-3.1-flash";
+    const fetchMock = stubFetch(wrapped({ text: "ok" }));
+    const ai = await getAiProviderFor("user-1");
+    await ai.chat([{ role: "user", content: "hi" }]);
+    expect(sent(fetchMock).body.model).toBe("gemini-3-flash");
+  });
+
   it("wraps the turns in { model, request } with the system prompt beside them", async () => {
     const fetchMock = stubFetch(wrapped({ text: "ok" }));
     const ai = await getAiProviderFor("user-1");
