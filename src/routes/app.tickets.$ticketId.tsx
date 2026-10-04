@@ -1,13 +1,22 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarClock, Sparkles, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
@@ -18,13 +27,14 @@ import { AttachmentGrid } from "@/features/tickets/attachment-tile";
 import { CaptureContextPanel } from "@/features/tickets/capture-context-panel";
 import { SlaBadge } from "@/features/tickets/sla-badge";
 import { TicketDeleteDialog } from "@/features/tickets/ticket-delete-dialog";
-import { TicketSidebar } from "@/features/tickets/ticket-sidebar";
+import { TicketQuickStatus, TicketSidebar } from "@/features/tickets/ticket-sidebar";
 import { TicketTimeline } from "@/features/tickets/ticket-timeline";
 import { CaptureDropzone } from "@/features/capture/capture-dropzone";
 import { useServerAction } from "@/lib/use-server-action";
 import { addComment, editOwnTicket } from "@/lib/tickets.functions";
 import { draftReply } from "@/lib/ai.functions";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { notifyTicketComment } from "@/lib/notifications.functions";
 import { describeOutcome, newDraftId, uploadDrafts, type DraftAttachment } from "@/lib/upload";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,7 +99,7 @@ function TicketBackButton({ isAdmin, projectId }: { isAdmin: boolean; projectId?
             : ({ label: "Triage", to: "/app/triage" as const } as const);
 
   const className =
-    "text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded";
+    "text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded max-md:-ml-2 max-md:inline-flex max-md:h-11 max-md:items-center max-md:px-2 max-md:text-sm max-md:active:text-foreground";
 
   if (router.history.canGoBack()) {
     return (
@@ -125,6 +135,8 @@ function TicketPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const ticket = useQuery(ticketQuery(ticketId));
   const comments = useQuery(ticketCommentsQuery(ticketId));
@@ -170,10 +182,10 @@ function TicketPage() {
   return (
     <QueryState query={ticket} errorTitle="Couldn't load this ticket">
       {(t) => (
-        <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-8">
+        <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-8 max-md:pb-4 max-md:pt-1">
           <TicketBackButton isAdmin={isAdmin} projectId={t.project_id} />
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2.5 max-md:mt-1 max-md:gap-2">
             <span className="font-mono text-muted-foreground">#{t.ticket_number}</span>
             <StatusPill tone={TICKET_STATUS_TONE[t.status]}>
               {TICKET_STATUS_LABEL[t.status]}
@@ -205,7 +217,7 @@ function TicketPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="ml-auto h-7 text-xs text-destructive hover:text-destructive"
+                className="ml-auto h-7 text-xs text-destructive hover:text-destructive max-md:-mr-2"
                 onClick={() => setDeleting(true)}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
@@ -223,20 +235,49 @@ function TicketPage() {
                 : router.navigate({ to: "/app/triage" })
             }
           />
-          <h1 className="mt-2.5 max-w-[820px] font-display text-[38px] font-normal leading-[1.15]">
+          <h1 className="mt-2.5 max-w-[820px] font-display text-[38px] font-normal leading-[1.15] max-md:mt-2 max-md:break-words max-md:text-[28px] max-md:leading-tight">
             {t.title}
           </h1>
           {user?.id === t.reporter_id && (
             <TicketEditButton ticketId={t.id} title={t.title} description={t.description} />
           )}
 
-          <div className="mt-7 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 space-y-8">
+          {isMobile && (
+            <div className="mt-4 space-y-3">
+              {isAdmin && <TicketQuickStatus ticket={t} />}
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                aria-haspopup="dialog"
+                className="flex h-12 w-full items-center gap-2.5 rounded-xl border bg-surface px-4 text-left text-sm transition-colors active:bg-muted"
+              >
+                <SlidersHorizontal
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="font-medium">Details</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {isAdmin
+                    ? "Assignee, dates, labels, time"
+                    : t.eta_date
+                      ? `Aiming for ${formatDate(t.eta_date)}`
+                      : "ETA not set yet"}
+                </span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          )}
+
+          <div className="mt-7 grid items-start gap-8 max-md:mt-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0 space-y-8 max-md:space-y-6">
               <section aria-labelledby="sent">
-                <h2 id="sent" className="mb-2.5 font-display text-2xl font-normal">
+                <h2 id="sent" className="mb-2.5 font-display text-2xl font-normal max-md:text-xl">
                   What they sent
                 </h2>
-                <div className="rounded-xl border bg-card px-5 py-[18px] leading-relaxed">
+                <div className="rounded-xl border bg-card px-5 py-[18px] leading-relaxed max-md:px-4 max-md:py-4">
                   <div className="mb-2 text-[13px] text-muted-foreground">
                     {t.reporter?.full_name ?? t.reporter?.email ?? "Someone"}
                   </div>
@@ -281,7 +322,10 @@ function TicketPage() {
               )}
 
               <section className="space-y-3.5" aria-labelledby="conversation">
-                <h2 id="conversation" className="font-display text-[26px] font-normal">
+                <h2
+                  id="conversation"
+                  className="font-display text-[26px] font-normal max-md:text-xl"
+                >
                   Conversation
                 </h2>
                 <SectionBoundary label="timeline">
@@ -296,15 +340,36 @@ function TicketPage() {
               </section>
             </div>
 
-            <aside>
-              <SectionBoundary label="ticket-sidebar">
-                {isAdmin && user ? (
-                  <TicketSidebar ticket={t} userId={user.id} />
-                ) : (
-                  <ClientProperties ticket={t} />
-                )}
-              </SectionBoundary>
-            </aside>
+            {isMobile ? (
+              <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <SheetContent
+                  side="bottom"
+                  className="gap-0 px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-11"
+                >
+                  <SheetTitle className="mb-3 font-display text-xl font-normal">Details</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Properties, dates, labels and links for this ticket.
+                  </SheetDescription>
+                  <SectionBoundary label="ticket-sidebar">
+                    {isAdmin && user ? (
+                      <TicketSidebar ticket={t} userId={user.id} />
+                    ) : (
+                      <ClientProperties ticket={t} />
+                    )}
+                  </SectionBoundary>
+                </SheetContent>
+              </Sheet>
+            ) : (
+              <aside>
+                <SectionBoundary label="ticket-sidebar">
+                  {isAdmin && user ? (
+                    <TicketSidebar ticket={t} userId={user.id} />
+                  ) : (
+                    <ClientProperties ticket={t} />
+                  )}
+                </SectionBoundary>
+              </aside>
+            )}
           </div>
         </div>
       )}
@@ -334,7 +399,12 @@ function TicketEditButton({
   });
   return (
     <>
-      <Button variant="outline" size="sm" className="mt-3" onClick={() => setOpen(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-3 max-md:w-full"
+        onClick={() => setOpen(true)}
+      >
         Edit my ticket
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -367,7 +437,7 @@ function TicketEditButton({
                 onChange={setDescription}
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 max-md:flex-col-reverse max-md:[&>button]:w-full">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
@@ -447,6 +517,10 @@ function CommentBox({
   const [mentions, setMentions] = useState<string[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const mentionBoxRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  // On a phone the composer lives pinned above the tab bar, and starts as a
+  // single line so the conversation keeps the screen until someone replies.
+  const [expanded, setExpanded] = useState(false);
 
   const people = useQuery(workspacePeopleQuery(workspaceId));
 
@@ -542,11 +616,18 @@ function CommentBox({
     setInternal(false);
     setFollowUpKind("");
     setMentions([]);
+    setExpanded(false);
     try {
       sessionStorage.removeItem(replyDraftKey(ticketId));
     } catch {
       /* ignore */
     }
+  };
+
+  const expand = () => {
+    // Focus inside the tap, or iOS will not raise the keyboard.
+    flushSync(() => setExpanded(true));
+    document.getElementById("reply")?.focus();
   };
 
   const busy = post.busy || uploading;
@@ -556,110 +637,149 @@ function CommentBox({
     [isAdmin],
   );
 
+  const collapsed = isMobile && !expanded;
+
   return (
     <form
       onSubmit={send}
-      className={`space-y-3 rounded-xl border p-3 transition-colors ${
+      className={`space-y-3 rounded-xl border p-3 transition-colors max-md:sticky max-md:bottom-[calc(var(--mobile-tabbar-h)+var(--mobile-timer-h))] max-md:z-30 max-md:-mx-4 max-md:max-h-[min(72dvh,34rem)] max-md:space-y-2.5 max-md:overflow-y-auto max-md:overscroll-contain max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:px-4 max-md:shadow-[0_-10px_24px_-14px_rgba(0,0,0,0.3)] ${
         internal ? "border-warning/40 bg-warning/10" : "bg-card"
       }`}
     >
-      <div className="relative space-y-1.5" ref={mentionBoxRef}>
-        <Label htmlFor="reply" className="sr-only">
-          Your reply
-        </Label>
-        <RichTextEditor id="reply" value={body} onChange={setBody} placeholder={placeholder} />
-        {mentionCandidates.length > 0 && (
-          <ul
-            className="absolute bottom-full z-20 mb-1 max-h-48 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md"
-            role="listbox"
-          >
-            {mentionCandidates.map((person) => (
-              <li key={person.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  onClick={() => insertMention(person)}
-                >
-                  <span className="truncate font-medium">{person.full_name ?? person.email}</span>
-                  {person.full_name && person.email && (
-                    <span className="truncate text-xs text-muted-foreground">{person.email}</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <CaptureDropzone
-        drafts={drafts}
-        onAdd={(files) =>
-          setDrafts((prev) => [
-            ...prev,
-            ...files.map<DraftAttachment>((file) => ({
-              id: newDraftId(),
-              file,
-              bucket: file.type.startsWith("video/") ? "recordings" : "attachments",
-              kind: file.type.startsWith("image/") ? "image" : "file",
-            })),
-          ])
-        }
-        onRemove={(id) => setDrafts((prev) => prev.filter((d) => d.id !== id))}
-        label="Attach something"
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        {isAdmin && aiEnabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            disabled={draft.busy}
-            onClick={() => draft.fire({ ticketId })}
-          >
-            {draft.busy ? "Drafting…" : "Draft with AI"}
-          </Button>
-        )}
-        {isAdmin && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-pressed={internal}
-            className={`h-8 text-xs ${internal ? "border-warning/50 bg-warning/20" : ""}`}
-            onClick={() => {
-              setInternal((value) => !value);
-              setFollowUpKind("");
-            }}
-          >
-            Internal note
-          </Button>
-        )}
-        {!internal && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Follow-up</span>
-            <select
-              className="rounded-md border bg-background px-2 py-1.5"
-              value={followUpKind}
-              onChange={(event) => setFollowUpKind(event.target.value as typeof followUpKind)}
-            >
-              <option value="">None</option>
-              <option value="improvement">Open for improvement</option>
-              <option value="fix">Open for fix</option>
-            </select>
-          </label>
-        )}
-        <span className="flex-1" />
-        <Button
-          type="submit"
-          disabled={
-            busy || (followUpKind ? !plainText(body) : !plainText(body) && drafts.length === 0)
-          }
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={expand}
+          className="flex h-12 w-full items-center rounded-full border bg-background px-4 text-left text-base text-muted-foreground active:bg-muted"
         >
-          {busy ? "Sending…" : internal ? "Add note" : "Send reply"}
-        </Button>
-      </div>
+          <span className="min-w-0 truncate">
+            {plainText(body) ? "Continue your reply…" : placeholder}
+          </span>
+        </button>
+      ) : (
+        <>
+          {isMobile && (
+            <div className="-mt-1 flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {internal ? "Internal note" : isAdmin ? "Reply to the client" : "Reply"}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="-mr-2"
+                aria-label="Collapse reply box"
+                onClick={() => setExpanded(false)}
+              >
+                <ChevronDown className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </div>
+          )}
+          <div className="relative space-y-1.5" ref={mentionBoxRef}>
+            <Label htmlFor="reply" className="sr-only">
+              Your reply
+            </Label>
+            <RichTextEditor id="reply" value={body} onChange={setBody} placeholder={placeholder} />
+            {mentionCandidates.length > 0 && (
+              <ul
+                className="absolute bottom-full z-20 mb-1 max-h-48 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md max-md:static max-md:mb-0 max-md:mt-1.5"
+                role="listbox"
+              >
+                {mentionCandidates.map((person) => (
+                  <li key={person.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent max-md:min-h-11"
+                      onClick={() => insertMention(person)}
+                    >
+                      <span className="truncate font-medium">
+                        {person.full_name ?? person.email}
+                      </span>
+                      {person.full_name && person.email && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {person.email}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <CaptureDropzone
+            drafts={drafts}
+            onAdd={(files) =>
+              setDrafts((prev) => [
+                ...prev,
+                ...files.map<DraftAttachment>((file) => ({
+                  id: newDraftId(),
+                  file,
+                  bucket: file.type.startsWith("video/") ? "recordings" : "attachments",
+                  kind: file.type.startsWith("image/") ? "image" : "file",
+                })),
+              ])
+            }
+            onRemove={(id) => setDrafts((prev) => prev.filter((d) => d.id !== id))}
+            label="Attach something"
+            compact
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && aiEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={draft.busy}
+                onClick={() => draft.fire({ ticketId })}
+              >
+                {draft.busy ? "Drafting…" : "Draft with AI"}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={internal}
+                className={`h-8 text-xs ${internal ? "border-warning/50 bg-warning/20" : ""}`}
+                onClick={() => {
+                  setInternal((value) => !value);
+                  setFollowUpKind("");
+                }}
+              >
+                Internal note
+              </Button>
+            )}
+            {!internal && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground max-md:w-full max-md:text-sm">
+                <span>Follow-up</span>
+                <select
+                  className="rounded-md border bg-background px-2 py-1.5 max-md:h-11 max-md:flex-1"
+                  value={followUpKind}
+                  onChange={(event) => setFollowUpKind(event.target.value as typeof followUpKind)}
+                >
+                  <option value="">None</option>
+                  <option value="improvement">Open for improvement</option>
+                  <option value="fix">Open for fix</option>
+                </select>
+              </label>
+            )}
+            <span className="flex-1 max-md:hidden" />
+            <Button
+              type="submit"
+              className="max-md:h-12 max-md:w-full max-md:text-base"
+              disabled={
+                busy || (followUpKind ? !plainText(body) : !plainText(body) && drafts.length === 0)
+              }
+            >
+              {busy ? "Sending…" : internal ? "Add note" : "Send reply"}
+            </Button>
+          </div>
+        </>
+      )}
     </form>
   );
 }

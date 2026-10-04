@@ -61,7 +61,12 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
           Add to plan
         </Button>
       </div>
-      <Button variant="outline" size="sm" onClick={() => setNewPlanOpen(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="max-md:w-full"
+        onClick={() => setNewPlanOpen(true)}
+      >
         New plan from this ticket
       </Button>
       <CreatePlanFromTicketsDialog
@@ -77,7 +82,7 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
       ) : (
         <ul className="space-y-2">
           {tasks.map((task) => (
-            <li key={task.id} className="rounded-md border p-2">
+            <li key={task.id} className="rounded-md border p-2 max-md:p-3">
               <Link
                 to="/app/planner/$planId"
                 params={{ planId: task.plan_id }}
@@ -96,7 +101,7 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
                   href={task.pr_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-1 inline-block text-xs underline underline-offset-2"
+                  className="mt-1 inline-block text-xs underline underline-offset-2 max-md:mt-0 max-md:inline-flex max-md:min-h-10 max-md:items-center max-md:text-[13px]"
                 >
                   {task.pr_status === "merged" ? "Merged pull request" : "Pull request"}
                 </a>

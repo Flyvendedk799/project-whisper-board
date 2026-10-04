@@ -93,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const tabBarHidden = focusedFlow || keyboardOpen;
   const chromeVars = {
     ...branded,
+    "--mobile-topbar-h": focusedFlow ? "var(--safe-top)" : undefined,
     "--mobile-tabbar-h": tabBarHidden ? "var(--safe-bottom)" : "calc(3.5rem + var(--safe-bottom))",
     "--mobile-timer-h": timerRaised ? "3.75rem" : "0rem",
   } as React.CSSProperties;
@@ -104,11 +105,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
         </aside>
 
-        <MobileTopBar
-          branded={branded}
-          workspaceName={workspace?.name ?? "Workspace"}
-          logoUrl={workspace?.logo_url}
-        />
+        {!focusedFlow && (
+          <MobileTopBar
+            branded={branded}
+            workspaceName={workspace?.name ?? "Workspace"}
+            logoUrl={workspace?.logo_url}
+          />
+        )}
 
         <main
           id="main"

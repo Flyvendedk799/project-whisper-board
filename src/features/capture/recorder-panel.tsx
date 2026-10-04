@@ -24,8 +24,10 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
   const { state, elapsed, warning } = recorder;
 
   if (!isScreenRecordingSupported()) {
+    // Phone browsers cannot record a screen, and the photo and camera buttons
+    // beside this already say what to do instead, so it just steps aside there.
     return (
-      <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px]">
+      <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px] max-md:hidden">
         <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <p className="mt-1.5 text-sm font-medium">Record your screen</p>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
@@ -42,7 +44,7 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
   const isLive = state.status === "recording" || state.status === "paused";
 
   return (
-    <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px]">
+    <div className="rounded-[14px] border-[1.5px] border-dashed bg-card p-[22px] max-md:p-4">
       {!isLive ? (
         <div className="flex flex-wrap items-center gap-3">
           <div className="w-full">
@@ -51,12 +53,17 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
               Show it happening. Add your voice if you like.
             </p>
           </div>
-          <Button type="button" variant="outline" onClick={() => void recorder.start(micEnabled)}>
+          <Button
+            type="button"
+            variant="outline"
+            className="max-md:w-full"
+            onClick={() => void recorder.start(micEnabled)}
+          >
             <Circle className="mr-1.5 h-4 w-4 fill-current text-destructive" aria-hidden="true" />
             Record my screen
           </Button>
 
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <Switch checked={micEnabled} onCheckedChange={setMicEnabled} id="mic" />
             <span className="flex items-center gap-1.5">
               {micEnabled ? (
@@ -104,7 +111,7 @@ export function RecorderPanel({ onRecorded }: { onRecorded: (result: RecordingRe
             )}
             {state.status === "paused" && <StatusPill tone="warning">Paused</StatusPill>}
 
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-2 max-md:w-full max-md:[&>button]:flex-1">
               {state.status === "recording" ? (
                 <Button type="button" variant="outline" size="sm" onClick={recorder.pause}>
                   <Pause className="mr-1.5 h-4 w-4" aria-hidden="true" />

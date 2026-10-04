@@ -145,7 +145,8 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
   const startRef = useRef<Point | null>(null);
 
   const onPointerDown = (event: React.PointerEvent) => {
-    if (event.button !== 0) return;
+    // A second finger (a pinch or a resting palm) must not start another shape.
+    if (event.button !== 0 || !event.isPrimary) return;
     (event.target as Element).setPointerCapture(event.pointerId);
     const point = pointFromEvent(event);
 
@@ -166,7 +167,7 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
 
   const onPointerMove = (event: React.PointerEvent) => {
     const start = startRef.current;
-    if (!start || !draft) return;
+    if (!start || !draft || !event.isPrimary) return;
     const point = pointFromEvent(event);
 
     setDraft((current) => {
@@ -252,131 +253,150 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
   );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 max-md:flex max-md:h-full max-md:min-h-0 max-md:flex-col max-md:space-y-0">
       <div
-        className="flex flex-wrap items-center gap-1.5"
+        className="flex flex-wrap items-center gap-1.5 max-md:order-last max-md:flex-col max-md:items-stretch max-md:gap-1 max-md:border-t max-md:bg-background max-md:px-4 max-md:pb-[calc(0.5rem+var(--safe-bottom))] max-md:pt-2"
         role="toolbar"
         aria-label="Annotation tools"
       >
-        {TOOLS.map((item) => (
-          <Button
-            key={item.kind}
-            type="button"
-            size="icon"
-            variant={tool === item.kind ? "default" : "outline"}
-            onClick={() => setTool(item.kind)}
-            aria-pressed={tool === item.kind}
-            aria-label={`${item.label} (${item.key})`}
-            title={`${item.label} — press ${item.key}`}
-            className="h-8 w-8"
-          >
-            <item.icon className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        ))}
+        <div className="no-scrollbar max-md:flex max-md:snap-x max-md:gap-2 max-md:overflow-x-auto max-md:overscroll-x-contain md:contents">
+          {TOOLS.map((item) => (
+            <Button
+              key={item.kind}
+              type="button"
+              size="icon"
+              variant={tool === item.kind ? "default" : "outline"}
+              onClick={() => setTool(item.kind)}
+              aria-pressed={tool === item.kind}
+              aria-label={`${item.label} (${item.key})`}
+              title={`${item.label} — press ${item.key}`}
+              className="h-8 w-8 max-md:shrink-0 max-md:snap-start"
+            >
+              <item.icon className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          ))}
+        </div>
 
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        <span className="mx-1 h-5 w-px bg-border max-md:hidden" aria-hidden="true" />
 
-        {PALETTE.map((swatch) => (
-          <button
-            key={swatch.value}
-            type="button"
-            onClick={() => setColor(swatch.value)}
-            aria-label={swatch.label}
-            aria-pressed={color === swatch.value}
-            style={{ backgroundColor: swatch.value }}
-            className={`h-6 w-6 rounded-full border transition-transform ${
-              color === swatch.value ? "scale-110 ring-2 ring-ring ring-offset-1" : ""
-            }`}
-          />
-        ))}
+        <div className="max-md:flex max-md:items-center max-md:justify-between max-md:px-2 md:contents">
+          {PALETTE.map((swatch) => (
+            <button
+              key={swatch.value}
+              type="button"
+              onClick={() => setColor(swatch.value)}
+              aria-label={swatch.label}
+              aria-pressed={color === swatch.value}
+              style={{ backgroundColor: swatch.value }}
+              className={`h-6 w-6 rounded-full border transition-transform max-md:relative max-md:h-7 max-md:w-7 max-md:before:absolute max-md:before:-inset-2 ${
+                color === swatch.value ? "scale-110 ring-2 ring-ring ring-offset-1" : ""
+              }`}
+            />
+          ))}
+        </div>
 
-        <label className="ml-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="sr-only sm:not-sr-only">Thickness</span>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            value={strokeWidth}
-            onChange={(e) => setStrokeWidth(Number(e.target.value))}
-            aria-label="Line thickness"
-            className="w-16"
-          />
-        </label>
+        <div className="max-md:flex max-md:items-center max-md:gap-3 md:contents">
+          <label className="ml-1 flex items-center gap-1.5 text-xs text-muted-foreground max-md:order-last max-md:ml-0 max-md:min-w-0 max-md:flex-1 max-md:text-[13px]">
+            <span className="sr-only max-md:not-sr-only sm:not-sr-only">Thickness</span>
+            <input
+              type="range"
+              min={1}
+              max={10}
+              value={strokeWidth}
+              onChange={(e) => setStrokeWidth(Number(e.target.value))}
+              aria-label="Line thickness"
+              className="w-16 max-md:h-11 max-md:min-w-0 max-md:flex-1"
+            />
+          </label>
 
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+          <span className="mx-1 h-5 w-px bg-border max-md:hidden" aria-hidden="true" />
 
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-8 w-8"
-          disabled={!canUndo(history)}
-          aria-label="Undo"
-          onClick={() =>
-            setHistory((h) => {
-              const next = undo(h);
-              onChange(next.present);
-              return next;
-            })
-          }
-        >
-          <Undo2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-8 w-8"
-          disabled={!canRedo(history)}
-          aria-label="Redo"
-          onClick={() =>
-            setHistory((h) => {
-              const next = redo(h);
-              onChange(next.present);
-              return next;
-            })
-          }
-        >
-          <Redo2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-8 w-8"
-          disabled={!selectedId}
-          aria-label="Delete selected"
-          onClick={removeSelected}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
+          <div className="max-md:flex max-md:gap-2 md:contents">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              disabled={!canUndo(history)}
+              aria-label="Undo"
+              onClick={() =>
+                setHistory((h) => {
+                  const next = undo(h);
+                  onChange(next.present);
+                  return next;
+                })
+              }
+            >
+              <Undo2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              disabled={!canRedo(history)}
+              aria-label="Redo"
+              onClick={() =>
+                setHistory((h) => {
+                  const next = redo(h);
+                  onChange(next.present);
+                  return next;
+                })
+              }
+            >
+              <Redo2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              disabled={!selectedId}
+              aria-label="Delete selected"
+              onClick={removeSelected}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div
-        ref={wrapRef}
-        role="application"
-        aria-label="Screenshot annotator. Number keys pick a tool, Tab cycles shapes, arrows move the selected one."
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        className="relative overflow-hidden rounded-lg border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ aspectRatio: aspect, touchAction: "none" }}
-      >
-        <canvas ref={baseRef} className="absolute inset-0 h-full w-full" />
-        <canvas
-          ref={overlayRef}
-          className="absolute inset-0 h-full w-full"
-          style={{ cursor: tool === "select" ? "default" : "crosshair" }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        />
+      {/* On a phone the picture is fitted to the room left between the header and
+          the toolbar, so nothing here has to scroll and the canvas can own touch. */}
+      <div className="max-md:grid max-md:min-h-[40dvh] max-md:flex-1 max-md:place-items-center max-md:overflow-hidden max-md:bg-muted/40 max-md:p-2 max-md:[container-type:size]">
+        <div
+          ref={wrapRef}
+          role="application"
+          aria-label="Screenshot annotator. Number keys pick a tool, Tab cycles shapes, arrows move the selected one."
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          className="relative overflow-hidden rounded-lg border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:w-[min(100cqw,calc(100cqh*var(--ar)))]"
+          style={
+            {
+              aspectRatio: aspect,
+              touchAction: "none",
+              "--ar": doc.sourceWidth / doc.sourceHeight,
+            } as React.CSSProperties
+          }
+        >
+          <canvas ref={baseRef} className="absolute inset-0 h-full w-full" />
+          <canvas
+            ref={overlayRef}
+            className="absolute inset-0 h-full w-full select-none [-webkit-touch-callout:none]"
+            style={{ cursor: tool === "select" ? "default" : "crosshair", touchAction: "none" }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onContextMenu={(event) => event.preventDefault()}
+          />
+        </div>
       </div>
 
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground max-md:hidden">
         Drag to draw. Use <strong>Blur out</strong> to hide anything private before sending — the
         original is never uploaded once you do.
       </p>
@@ -428,6 +448,8 @@ export function ScreenshotAnnotator({ image, initialDoc, onChange }: AnnotatorPr
                   setTextDraft((prev) => (prev ? { ...prev, value: e.target.value } : prev))
                 }
                 autoFocus
+                autoComplete="off"
+                enterKeyHint="done"
                 placeholder="What should they look at?"
               />
             </div>

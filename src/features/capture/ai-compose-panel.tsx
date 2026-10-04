@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- the panel and its draft helpers are one feature */
 import { Check, Sparkles, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/app-shell";
@@ -54,7 +55,7 @@ export function AiComposePanel({
   onRegenerate: () => void;
 }) {
   return (
-    <div className="space-y-3 rounded-lg border bg-accent/30 p-4">
+    <div className="space-y-3 rounded-lg border bg-accent/30 p-4 max-md:p-3">
       <div className="flex flex-wrap items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
         <h3 className="text-sm font-medium">Here&rsquo;s a draft from what you sent</h3>
@@ -65,7 +66,7 @@ export function AiComposePanel({
           type="button"
           variant="ghost"
           size="sm"
-          className="ml-auto"
+          className="ml-auto max-md:-mr-2"
           onClick={onRegenerate}
           disabled={busy}
         >
@@ -78,11 +79,13 @@ export function AiComposePanel({
       </div>
 
       <Field label="Title" onUse={onUseTitle}>
-        <p className="text-sm font-medium">{draft.title}</p>
+        <p className="text-sm font-medium max-md:break-words">{draft.title}</p>
       </Field>
 
       <Field label="Description" onUse={onUseDescription}>
-        <p className="whitespace-pre-wrap text-sm">{composeDescription(draft)}</p>
+        <p className="whitespace-pre-wrap text-sm max-md:break-words">
+          {composeDescription(draft)}
+        </p>
       </Field>
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -91,7 +94,13 @@ export function AiComposePanel({
         <StatusPill>{TICKET_PRIORITY_LABEL[draft.priority]}</StatusPill>
       </div>
 
-      <Button type="button" size="sm" onClick={onUseAll} disabled={busy} className="w-full">
+      <Button
+        type="button"
+        size="sm"
+        onClick={onUseAll}
+        disabled={busy}
+        className="w-full max-md:h-11"
+      >
         <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />
         Use all of this
       </Button>
@@ -121,7 +130,7 @@ function Field({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-xs max-md:-mr-2 max-md:px-3"
           onClick={onUse}
         >
           Use

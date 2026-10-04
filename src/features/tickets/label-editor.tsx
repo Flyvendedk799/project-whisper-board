@@ -53,7 +53,7 @@ export function LabelEditor({ ticket }: { ticket: TicketDetail }) {
           return (
             <span
               key={label}
-              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs max-md:h-10 max-md:gap-1.5 max-md:pl-3.5 max-md:pr-0.5 max-md:text-sm"
             >
               <span
                 className="h-2 w-2 rounded-full"
@@ -64,7 +64,7 @@ export function LabelEditor({ ticket }: { ticket: TicketDetail }) {
               <button
                 type="button"
                 aria-label={`Remove ${label}`}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground max-md:grid max-md:h-9 max-md:w-9 max-md:place-items-center max-md:rounded-full max-md:active:bg-muted"
                 onClick={() => apply(ticket.labels.filter((item) => item !== label))}
               >
                 <X className="h-3 w-3" aria-hidden />
@@ -85,6 +85,8 @@ export function LabelEditor({ ticket }: { ticket: TicketDetail }) {
           list="workspace-label-options"
           aria-label="Add a label"
           placeholder="Add a label"
+          autoComplete="off"
+          enterKeyHint="done"
           onChange={(event) => setValue(event.target.value)}
         />
         <datalist id="workspace-label-options">
@@ -94,7 +96,13 @@ export function LabelEditor({ ticket }: { ticket: TicketDetail }) {
               <option key={label.id} value={label.name} />
             ))}
         </datalist>
-        <Button type="submit" size="sm" variant="outline" disabled={update.busy}>
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          className="max-md:h-11 max-md:px-5"
+          disabled={update.busy}
+        >
           Add
         </Button>
       </form>

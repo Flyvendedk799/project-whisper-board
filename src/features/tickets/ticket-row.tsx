@@ -31,22 +31,26 @@ export function TicketListHeader({
   showProject?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 bg-surface px-4 py-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+    <div
+      className={`flex items-center gap-3 bg-surface px-4 py-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground max-md:gap-2 max-md:border-b max-md:py-0 ${
+        selectable ? "" : "max-md:hidden"
+      }`}
+    >
       {selectable && (
         <button
           type="button"
           onClick={onSelectAll}
-          className="w-[54px] shrink-0 text-left uppercase hover:text-foreground"
+          className="w-[54px] shrink-0 text-left uppercase hover:text-foreground max-md:h-11 max-md:w-auto max-md:pr-4"
         >
           {allSelected ? "Clear" : "Select all"}
         </button>
       )}
-      <span className="w-10 shrink-0">#</span>
-      <span className="min-w-0 flex-1">Ticket</span>
+      <span className="w-10 shrink-0 max-md:hidden">#</span>
+      <span className="min-w-0 flex-1 max-md:hidden">Ticket</span>
       {showProject && <span className="hidden w-24 shrink-0 lg:block">Project</span>}
       <span className="hidden w-[104px] shrink-0 md:block">SLA</span>
-      <span className="w-24 shrink-0">Status</span>
-      <span className="hidden w-6 shrink-0 sm:block" />
+      <span className="w-24 shrink-0 max-md:hidden">Status</span>
+      <span className="hidden w-6 shrink-0 md:block" />
     </div>
   );
 }
@@ -77,12 +81,12 @@ export const TicketRow = memo(function TicketRow({
 
   return (
     <div
-      className={`group flex items-center gap-3 border-t px-4 py-[11px] transition-colors first:border-t-0 ${
+      className={`group flex items-center gap-3 border-t px-4 py-[11px] transition-colors first:border-t-0 max-md:gap-1 max-md:py-2.5 ${
         selected ? "bg-accent/50" : active ? "bg-accent/40" : "hover:bg-surface"
       }`}
     >
       {onSelectedChange && (
-        <span className="flex w-[54px] shrink-0 items-center">
+        <span className="flex w-[54px] shrink-0 items-center max-md:-ml-3 max-md:w-11 max-md:justify-center max-md:self-stretch">
           <Checkbox
             checked={selected}
             onCheckedChange={(next) => onSelectedChange(next === true)}
@@ -95,17 +99,42 @@ export const TicketRow = memo(function TicketRow({
         to="/app/tickets/$ticketId"
         params={{ ticketId: ticket.id }}
         search={search}
-        className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:flex-col max-md:items-stretch max-md:gap-1.5 max-md:py-0.5 max-md:pl-2"
       >
-        <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground">
+        <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground max-md:hidden">
           #{ticket.ticket_number}
         </span>
 
-        <StatusPill tone={TICKET_PRIORITY_TONE[ticket.priority]} className="shrink-0">
+        <StatusPill tone={TICKET_PRIORITY_TONE[ticket.priority]} className="shrink-0 max-md:hidden">
           {TICKET_PRIORITY_LABEL[ticket.priority]}
         </StatusPill>
 
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{ticket.title}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium max-md:flex-none max-md:line-clamp-2 max-md:whitespace-normal max-md:text-[15px] max-md:leading-snug">
+          {ticket.title}
+        </span>
+
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5 md:hidden">
+          <span className="font-mono text-xs text-muted-foreground">#{ticket.ticket_number}</span>
+          <StatusPill tone={TICKET_PRIORITY_TONE[ticket.priority]}>
+            {TICKET_PRIORITY_LABEL[ticket.priority]}
+          </StatusPill>
+          <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
+            {TICKET_STATUS_LABEL[ticket.status]}
+          </StatusPill>
+          <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
+          {showProject && ticket.project ? (
+            <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
+              {ticket.project.title}
+            </span>
+          ) : null}
+          <span className="text-xs text-muted-foreground">{formatRelative(ticket.updated_at)}</span>
+          <span
+            className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold"
+            title={ticket.assignee ? (who?.full_name ?? who?.email ?? "Assigned") : "Unassigned"}
+          >
+            {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
+          </span>
+        </span>
       </Link>
 
       {showProject && (
@@ -127,14 +156,14 @@ export const TicketRow = memo(function TicketRow({
         <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
       </span>
 
-      <span className="w-24 shrink-0">
+      <span className="w-24 shrink-0 max-md:hidden">
         <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
           {TICKET_STATUS_LABEL[ticket.status]}
         </StatusPill>
       </span>
 
       <span
-        className="hidden h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold sm:grid"
+        className="hidden h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold md:grid"
         title={ticket.assignee ? (who?.full_name ?? who?.email ?? "Assigned") : "Unassigned"}
       >
         {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
@@ -156,15 +185,17 @@ export const TicketCard = memo(function TicketCard({
       to="/app/tickets/$ticketId"
       params={{ ticketId: ticket.id }}
       search={origin ?? {}}
-      className="flex flex-col gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50"
+      className="flex flex-col gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50 max-md:gap-2.5 max-md:p-3.5"
     >
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2 text-xs max-md:pr-9">
         <span className="font-mono text-muted-foreground">#{ticket.ticket_number}</span>
         <StatusPill tone={TICKET_PRIORITY_TONE[ticket.priority]}>
           {TICKET_PRIORITY_LABEL[ticket.priority]}
         </StatusPill>
       </div>
-      <p className="line-clamp-3 text-sm font-medium leading-snug">{ticket.title}</p>
+      <p className="line-clamp-3 text-sm font-medium leading-snug max-md:text-[15px]">
+        {ticket.title}
+      </p>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
           {ticket.project?.title ?? formatRelative(ticket.updated_at)}

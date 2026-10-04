@@ -68,15 +68,23 @@ export function CreatePlanFromTicketsDialog({
               onChange={(event) => setTitle(event.target.value)}
               maxLength={200}
               required
+              autoComplete="off"
+              enterKeyHint="done"
               placeholder="What should this work deliver?"
             />
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-2 max-md:flex-col-reverse">
+            <Button
+              type="button"
+              variant="outline"
+              className="max-md:w-full"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button
               type="submit"
+              className="max-md:w-full"
               disabled={create.busy || !workspaceId || !ticketIds.length || !title.trim()}
             >
               {create.busy ? "Creating…" : "Create plan"}

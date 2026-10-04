@@ -60,9 +60,10 @@ function MyTicketsPage() {
         title="My tickets"
         description="Everything you've reported, and where it's got to."
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 max-md:w-full">
             <Button
               variant="outline"
+              className="max-md:w-full"
               aria-pressed={showClosed}
               onClick={() =>
                 void navigate({
@@ -75,7 +76,7 @@ function MyTicketsPage() {
             >
               {showClosed ? "Show open" : "Show closed"}
             </Button>
-            <Button asChild>
+            <Button asChild className="max-md:hidden">
               <Link to="/app/report">
                 <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
                 Report something
@@ -85,7 +86,7 @@ function MyTicketsPage() {
         }
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-7">
+      <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-7">
         <QueryState
           query={tickets}
           errorTitle="Couldn't load your tickets"
@@ -121,6 +122,7 @@ function MyTicketsPage() {
                 <div className="mt-4 text-center">
                   <Button
                     variant="outline"
+                    className="max-md:w-full"
                     onClick={() => void tickets.fetchNextPage()}
                     disabled={tickets.isFetchingNextPage}
                   >
@@ -146,7 +148,7 @@ function MyTicketsPage() {
 function TicketsTable({ rows }: { rows: TicketListRow[] }) {
   return (
     <div className="overflow-hidden rounded-[14px] border bg-card">
-      <div className="flex gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground">
+      <div className="flex gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground max-md:hidden">
         <span className="w-12 shrink-0">#</span>
         <span className="min-w-0 flex-[4]">Ticket</span>
         <span className="hidden min-w-0 flex-[1.6] md:block">Project</span>
@@ -161,27 +163,40 @@ function TicketsTable({ rows }: { rows: TicketListRow[] }) {
               to="/app/tickets/$ticketId"
               params={{ ticketId: ticket.id }}
               search={{ from: "tickets" }}
-              className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:flex-wrap max-md:gap-x-2.5 max-md:gap-y-2 max-md:py-3.5"
             >
-              <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground">
+              <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground max-md:order-1 max-md:w-auto">
                 #{ticket.ticket_number}
               </span>
-              <span className="flex min-w-0 flex-[4] items-center gap-2">
-                <span className="truncate font-medium">{ticket.title}</span>
-                <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
+              <span className="flex min-w-0 flex-[4] items-center gap-2 max-md:contents">
+                <span className="truncate font-medium max-md:order-first max-md:line-clamp-2 max-md:basis-full max-md:whitespace-normal max-md:text-[15px] max-md:leading-snug">
+                  {ticket.title}
+                </span>
+                <SlaBadge
+                  dueAt={ticket.sla_due_at}
+                  status={ticket.status}
+                  className="max-md:order-3"
+                />
               </span>
-              <span className="hidden min-w-0 flex-[1.6] truncate text-muted-foreground md:block">
+              <span
+                className={`hidden min-w-0 flex-[1.6] truncate text-muted-foreground md:block max-md:order-4 max-md:max-w-[9rem] max-md:text-xs ${ticket.project ? "max-md:block" : ""}`}
+              >
                 {ticket.project?.title ?? ""}
               </span>
-              <span className="min-w-0 flex-[1.2]">
+              <span className="min-w-0 flex-[1.2] max-md:order-2 max-md:flex-none">
                 <StatusPill tone={TICKET_STATUS_TONE[ticket.status]}>
                   {TICKET_STATUS_LABEL[ticket.status]}
                 </StatusPill>
               </span>
-              <span className="hidden min-w-0 flex-[0.8] text-muted-foreground sm:block">
+              <span
+                className={`hidden min-w-0 flex-[0.8] text-muted-foreground sm:block max-md:order-5 max-md:flex-none max-md:text-xs ${
+                  ticket.eta_date ? "max-md:block" : "max-md:hidden"
+                }`}
+              >
+                <span className="md:hidden">ETA </span>
                 {ticket.eta_date ? formatDate(ticket.eta_date) : "—"}
               </span>
-              <span className="hidden min-w-0 flex-[0.9] text-right text-muted-foreground sm:block">
+              <span className="hidden min-w-0 flex-[0.9] text-right text-muted-foreground sm:block max-md:order-6 max-md:ml-auto max-md:block max-md:flex-none max-md:text-xs">
                 {formatRelative(ticket.updated_at)}
               </span>
             </Link>
