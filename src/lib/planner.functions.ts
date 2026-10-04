@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import {
   OPEN_TICKET_STATUSES,
+  linkedTaskRow,
   taskDescriptionFromTicket,
   taskTitleFromTicket,
   ticketPriorityToTask,
@@ -253,6 +254,100 @@ export const createPlan = createServerFn({ method: "POST" })
       });
 
       return { id: plan.id };
+    }),
+  );
+
+/** Make one plan from a triage selection, grouping tasks by source project. */
+export const createPlanFromTickets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        title: z.string().trim().min(1).max(200),
+        ticketIds: z.array(z.string().uuid()).min(1).max(100),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("plans.createFromTickets", async () => {
+      const { supabase, userId } = context;
+      const membership = await resolveWorkspaceMembership(supabase, userId, data.workspaceId);
+      const ids = [...new Set(data.ticketIds)];
+      const { data: tickets, error: ticketError } = await supabase
+        .from("tickets")
+        .select("id, project_id, ticket_number, title, description, type, priority, status")
+        .eq("workspace_id", membership.workspace_id)
+        .in("id", ids);
+      if (ticketError) throw ticketError;
+      if ((tickets ?? []).length !== ids.length)
+        throw new AppError("tickets_missing", "Some selected tickets are not available.");
+      const projectIds = [...new Set((tickets ?? []).map((ticket) => ticket.project_id))];
+      const { data: projects, error: projectError } = await supabase
+        .from("projects")
+        .select("id, title, github_repo, github_default_branch")
+        .eq("workspace_id", membership.workspace_id)
+        .in("id", projectIds);
+      if (projectError) throw projectError;
+      if ((projects ?? []).length !== projectIds.length)
+        throw new AppError("projects_missing", "A selected project is not available.");
+      const oneProject = projectIds.length === 1 ? projects![0] : null;
+      const { data: plan, error: planError } = await supabase
+        .from("plans")
+        .insert({
+          workspace_id: membership.workspace_id,
+          title: data.title,
+          description: `Created from ${ids.length} selected ticket${ids.length === 1 ? "" : "s"}.`,
+          project_id: oneProject?.id ?? null,
+          github_repo: oneProject?.github_repo ?? null,
+          github_base: oneProject?.github_default_branch ?? null,
+          created_by: userId,
+        })
+        .select("id")
+        .single();
+      if (planError) throw planError;
+      try {
+        for (const [index, project] of (projects ?? []).entries()) {
+          const { data: section, error: sectionError } = await supabase
+            .from("plan_sections")
+            .insert({
+              plan_id: plan.id,
+              title: project.title,
+              position: index + 1,
+              tags: [`project:${project.id}`],
+            })
+            .select("id")
+            .single();
+          if (sectionError) throw sectionError;
+          const projectTickets = (tickets ?? []).filter(
+            (ticket) => ticket.project_id === project.id,
+          );
+          const { error: taskError } = await supabase.from("plan_tasks").insert(
+            projectTickets.map((ticket, position) =>
+              linkedTaskRow({
+                planId: plan.id,
+                sectionId: section.id,
+                position: position + 1,
+                title: taskTitleFromTicket(ticket.title),
+                description: taskDescriptionFromTicket(ticket),
+                ticketId: ticket.id,
+                priority: ticketPriorityToTask(ticket.priority),
+                labels: [ticket.type],
+              }),
+            ),
+          );
+          if (taskError) throw taskError;
+        }
+      } catch (error) {
+        await supabase.from("plans").delete().eq("id", plan.id);
+        throw error;
+      }
+      await logPlanEvent(supabase, userId, { planId: plan.id, kind: "plan_created" });
+      await logPlanEvent(supabase, userId, { planId: plan.id, kind: "task_created" });
+      for (const ticket of tickets ?? []) {
+        await noteTicketPlannerEvent(supabase, userId, ticket.id, "planner_linked", data.title);
+      }
+      return { id: plan.id, count: ids.length, crossProject: projectIds.length > 1 };
     }),
   );
 
@@ -1379,17 +1474,20 @@ export const createTaskFromTicket = createServerFn({ method: "POST" })
 
       const { data: ticket } = await supabase
         .from("tickets")
-        .select("id, ticket_number, title, description, type, priority, project_id")
+        .select("id, ticket_number, title, description, type, priority, project_id, workspace_id")
         .eq("id", data.ticketId)
         .maybeSingle();
       const found = requireFound(ticket, "ticket");
 
       const { data: plan } = await supabase
         .from("plans")
-        .select("id, project_id")
+        .select("id, project_id, workspace_id")
         .eq("id", data.planId)
         .maybeSingle();
       const foundPlan = requireFound(plan, "plan");
+      if (foundPlan.workspace_id !== found.workspace_id) {
+        throw new AppError("plan_workspace", "The ticket and plan must share a workspace.");
+      }
       if (foundPlan.project_id && foundPlan.project_id !== found.project_id) {
         throw new AppError("plan_project", "That plan belongs to a different project.");
       }
@@ -1402,7 +1500,58 @@ export const createTaskFromTicket = createServerFn({ method: "POST" })
         .maybeSingle();
       if (existing) return { id: existing.id, created: false };
 
-      const sectionId = await sectionForPlan(supabase, data.planId, data.sectionId);
+      let sectionId: string;
+      if (!data.sectionId && !foundPlan.project_id) {
+        const projectTag = `project:${found.project_id}`;
+        const { data: tagged } = await supabase
+          .from("plan_sections")
+          .select("id")
+          .eq("plan_id", data.planId)
+          .contains("tags", [projectTag])
+          .limit(1)
+          .maybeSingle();
+        if (tagged) {
+          sectionId = tagged.id;
+        } else {
+          const { data: project } = await supabase
+            .from("projects")
+            .select("title")
+            .eq("id", found.project_id)
+            .maybeSingle();
+          const { data: sections } = await supabase
+            .from("plan_sections")
+            .select("id, title, position, tags")
+            .eq("plan_id", data.planId)
+            .order("position");
+          const matching = (sections ?? []).find(
+            (section) =>
+              section.title === project?.title &&
+              !section.tags.some((tag) => tag.startsWith("project:")),
+          );
+          if (matching) {
+            sectionId = matching.id;
+            await supabase
+              .from("plan_sections")
+              .update({ tags: [...matching.tags, projectTag] })
+              .eq("id", matching.id);
+          } else {
+            const { data: created, error: sectionError } = await supabase
+              .from("plan_sections")
+              .insert({
+                plan_id: data.planId,
+                title: project?.title ?? "Project",
+                position: (sections?.at(-1)?.position ?? 0) + 1,
+                tags: [projectTag],
+              })
+              .select("id")
+              .single();
+            if (sectionError) throw sectionError;
+            sectionId = created.id;
+          }
+        }
+      } else {
+        sectionId = await sectionForPlan(supabase, data.planId, data.sectionId);
+      }
       const { data: maxPosTask } = await supabase
         .from("plan_tasks")
         .select("position")

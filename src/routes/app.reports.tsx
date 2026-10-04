@@ -26,6 +26,7 @@ import {
 } from "@/data/reports";
 import { formatMinutes } from "@/data/time";
 import { formatCents, formatDate } from "@/lib/utils-format";
+import { ProjectChangeReport } from "@/features/reports/project-change-report";
 
 export const Route = createFileRoute("/app/reports")({
   head: () => ({ meta: [{ title: "Reports · Boared" }] }),
@@ -81,6 +82,7 @@ function ReportsPage() {
         }
       />
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8 md:py-7">
+        <ProjectChangeReport workspaceId={workspaceId} />
         <QueryState query={report} errorTitle="Couldn't load reports">
           {(data) => <ReportBody data={data} />}
         </QueryState>

@@ -86,6 +86,7 @@ export const qk = {
   /** Whether GitHub is connected for the signed-in person: shared by Settings and the plan screen. */
   githubStatus: () => [...qk.all, "integrations", "github"] as const,
   planPulls: (id: string) => [...qk.plans(), "pulls", id] as const,
+  planPatches: (id: string) => [...qk.plans(), "patches", id] as const,
   taskComments: (id: string) => [...qk.all, "task-comments", id] as const,
   apiKeys: () => [...qk.all, "api-keys"] as const,
   /** The signed-in person's own AI switches (the automatic mode). */

@@ -12,6 +12,7 @@ import {
 } from "@/lib/planner.functions";
 import { getPlanPullRequests } from "@/lib/plan-pulls.functions";
 import { getAiSettings } from "@/lib/ai-planner.functions";
+import { listPlanPatches } from "@/lib/plan-patches.functions";
 
 export const planListQuery = (workspaceId?: string | null, projectId?: string) =>
   queryOptions({
@@ -77,6 +78,12 @@ export const planPullsQuery = (planId: string) =>
     queryFn: () => getPlanPullRequests({ data: { planId } }),
     enabled: Boolean(planId),
     staleTime: 60_000,
+  });
+
+export const planPatchesQuery = (planId: string) =>
+  queryOptions({
+    queryKey: qk.planPatches(planId),
+    queryFn: () => listPlanPatches({ data: { planId } }),
   });
 
 /** Every file on a plan with signed URLs. Refetched before the hour is up. */

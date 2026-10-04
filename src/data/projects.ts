@@ -32,6 +32,80 @@ export function projectListQuery(workspaceId: string | null | undefined) {
   });
 }
 
+/** Lightweight live counts for each project card. RLS limits both sets to visible rows. */
+export function projectActivityQuery(workspaceId: string | null | undefined) {
+  return queryOptions({
+    queryKey: [...qk.projects(), "activity", workspaceId ?? "none"] as const,
+    enabled: Boolean(workspaceId),
+    queryFn: async () => {
+      const [plans, tickets] = await Promise.all([
+        supabase
+          .from("plans")
+          .select("id, project_id, status")
+          .eq("workspace_id", workspaceId!)
+          .not("status", "in", "(completed,archived)"),
+        supabase
+          .from("tickets")
+          .select("project_id, status")
+          .eq("workspace_id", workspaceId!)
+          .not("status", "in", "(done,wont_fix)"),
+      ]);
+      if (plans.error) throw new DataError("projects.planActivity", plans.error);
+      if (tickets.error) throw new DataError("projects.ticketActivity", tickets.error);
+      const counts: Record<string, { plans: number; tickets: number }> = {};
+      const planIdsByProject = new Map<string, Set<string>>();
+      for (const plan of plans.data ?? []) {
+        if (!plan.project_id) continue;
+        const set = planIdsByProject.get(plan.project_id) ?? new Set<string>();
+        set.add(plan.id);
+        planIdsByProject.set(plan.project_id, set);
+      }
+      const crossPlanIds = (plans.data ?? [])
+        .filter((plan) => !plan.project_id)
+        .map((plan) => plan.id);
+      if (crossPlanIds.length) {
+        const { data: links, error: linkError } = await supabase
+          .from("plan_tasks")
+          .select("plan_id, ticket_id")
+          .in("plan_id", crossPlanIds)
+          .not("ticket_id", "is", null);
+        if (linkError) throw new DataError("projects.crossPlanLinks", linkError);
+        const ticketIds = [
+          ...new Set(
+            (links ?? []).map((link) => link.ticket_id).filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        if (ticketIds.length) {
+          const { data: linkedTickets, error: ticketError } = await supabase
+            .from("tickets")
+            .select("id, project_id")
+            .in("id", ticketIds);
+          if (ticketError) throw new DataError("projects.crossPlanTickets", ticketError);
+          const projectByTicket = new Map(
+            (linkedTickets ?? []).map((ticket) => [ticket.id, ticket.project_id]),
+          );
+          for (const link of links ?? []) {
+            const projectId = link.ticket_id && projectByTicket.get(link.ticket_id);
+            if (!projectId) continue;
+            const set = planIdsByProject.get(projectId) ?? new Set<string>();
+            set.add(link.plan_id);
+            planIdsByProject.set(projectId, set);
+          }
+        }
+      }
+      for (const [projectId, planIds] of planIdsByProject) {
+        counts[projectId] ??= { plans: 0, tickets: 0 };
+        counts[projectId].plans = planIds.size;
+      }
+      for (const ticket of tickets.data ?? []) {
+        counts[ticket.project_id] ??= { plans: 0, tickets: 0 };
+        counts[ticket.project_id].tickets += 1;
+      }
+      return counts;
+    },
+  });
+}
+
 export function projectQuery(projectId: string) {
   return queryOptions({
     queryKey: qk.project(projectId),

@@ -6,6 +6,8 @@ import { CalendarClock, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
@@ -20,7 +22,7 @@ import { TicketSidebar } from "@/features/tickets/ticket-sidebar";
 import { TicketTimeline } from "@/features/tickets/ticket-timeline";
 import { CaptureDropzone } from "@/features/capture/capture-dropzone";
 import { useServerAction } from "@/lib/use-server-action";
-import { addComment } from "@/lib/tickets.functions";
+import { addComment, editOwnTicket } from "@/lib/tickets.functions";
 import { draftReply } from "@/lib/ai.functions";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { notifyTicketComment } from "@/lib/notifications.functions";
@@ -176,6 +178,9 @@ function TicketPage() {
             <StatusPill tone={TICKET_STATUS_TONE[t.status]}>
               {TICKET_STATUS_LABEL[t.status]}
             </StatusPill>
+            {t.status === "open" && t.follow_up_kind && (
+              <StatusPill tone="warning">Follow-up: {t.follow_up_kind}</StatusPill>
+            )}
             <StatusPill tone={TICKET_PRIORITY_TONE[t.priority]}>
               {TICKET_PRIORITY_LABEL[t.priority]}
             </StatusPill>
@@ -221,6 +226,9 @@ function TicketPage() {
           <h1 className="mt-2.5 max-w-[820px] font-display text-[38px] font-normal leading-[1.15]">
             {t.title}
           </h1>
+          {user?.id === t.reporter_id && (
+            <TicketEditButton ticketId={t.id} title={t.title} description={t.description} />
+          )}
 
           <div className="mt-7 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="min-w-0 space-y-8">
@@ -304,6 +312,76 @@ function TicketPage() {
   );
 }
 
+function TicketEditButton({
+  ticketId,
+  title: originalTitle,
+  description: originalDescription,
+}: {
+  ticketId: string;
+  title: string;
+  description: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(originalTitle);
+  const [description, setDescription] = useState(originalDescription ?? "");
+  const save = useServerAction(useServerFn(editOwnTicket), {
+    label: "tickets.editOwn",
+    invalidate: [qk.ticket(ticketId), qk.ticketEvents(ticketId), qk.tickets()],
+    onSuccess: () => {
+      setOpen(false);
+      toast.success("Ticket updated");
+    },
+  });
+  return (
+    <>
+      <Button variant="outline" size="sm" className="mt-3" onClick={() => setOpen(true)}>
+        Edit my ticket
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit your ticket</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save.fire({ ticketId, title, description });
+            }}
+          >
+            <div className="space-y-1">
+              <Label htmlFor="ticket-edit-title">Title</Label>
+              <Input
+                id="ticket-edit-title"
+                value={title}
+                maxLength={200}
+                required
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ticket-edit-description">Description</Label>
+              <RichTextEditor
+                id="ticket-edit-description"
+                value={description}
+                onChange={setDescription}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={save.busy || !title.trim()}>
+                {save.busy ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /** What a client can see about their ticket. Read-only: only the agency changes these. */
 function ClientProperties({ ticket: t }: { ticket: TicketDetail }) {
   const rows: Array<[string, React.ReactNode]> = [
@@ -363,6 +441,7 @@ function CommentBox({
     }
   });
   const [internal, setInternal] = useState(false);
+  const [followUpKind, setFollowUpKind] = useState<"improvement" | "fix" | "">("");
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [mentions, setMentions] = useState<string[]>([]);
@@ -402,7 +481,12 @@ function CommentBox({
 
   const post = useServerAction(useServerFn(addComment), {
     label: "tickets.addComment",
-    invalidate: [qk.ticket(ticketId), qk.tickets()],
+    invalidate: [
+      qk.ticket(ticketId),
+      qk.ticketComments(ticketId),
+      qk.ticketEvents(ticketId),
+      qk.tickets(),
+    ],
   });
 
   const draft = useServerAction(useServerFn(draftReply), {
@@ -435,6 +519,7 @@ function CommentBox({
         body: body.trim(),
         isInternal: internal,
         mentions,
+        followUpKind: followUpKind || undefined,
       });
     }
 
@@ -455,6 +540,7 @@ function CommentBox({
     setBody("");
     setDrafts([]);
     setInternal(false);
+    setFollowUpKind("");
     setMentions([]);
     try {
       sessionStorage.removeItem(replyDraftKey(ticketId));
@@ -542,13 +628,35 @@ function CommentBox({
             size="sm"
             aria-pressed={internal}
             className={`h-8 text-xs ${internal ? "border-warning/50 bg-warning/20" : ""}`}
-            onClick={() => setInternal((value) => !value)}
+            onClick={() => {
+              setInternal((value) => !value);
+              setFollowUpKind("");
+            }}
           >
             Internal note
           </Button>
         )}
+        {!internal && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Follow-up</span>
+            <select
+              className="rounded-md border bg-background px-2 py-1.5"
+              value={followUpKind}
+              onChange={(event) => setFollowUpKind(event.target.value as typeof followUpKind)}
+            >
+              <option value="">None</option>
+              <option value="improvement">Open for improvement</option>
+              <option value="fix">Open for fix</option>
+            </select>
+          </label>
+        )}
         <span className="flex-1" />
-        <Button type="submit" disabled={busy || (!plainText(body) && drafts.length === 0)}>
+        <Button
+          type="submit"
+          disabled={
+            busy || (followUpKind ? !plainText(body) : !plainText(body) && drafts.length === 0)
+          }
+        >
           {busy ? "Sending…" : internal ? "Add note" : "Send reply"}
         </Button>
       </div>

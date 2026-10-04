@@ -21,7 +21,7 @@ import {
   type WhoFilter,
 } from "./plan-model";
 
-export type PlanLayout = "columns" | "outline" | "files" | "prs" | "questions";
+export type PlanLayout = "columns" | "outline" | "files" | "prs" | "questions" | "patches";
 
 function FilterMenu({
   label,
@@ -89,6 +89,7 @@ export const PlanToolbar = forwardRef<
     layout: PlanLayout;
     onLayout: (layout: PlanLayout) => void;
     fileCount: number;
+    hasRepo?: boolean;
     /** Pull requests the plan's tasks point at. The tab is only offered when there are some. */
     prCount?: number;
     /** Questions on the plan: open ones need an answer. The tab is offered when there are any. */
@@ -108,6 +109,7 @@ export const PlanToolbar = forwardRef<
     layout,
     onLayout,
     fileCount,
+    hasRepo = false,
     prCount = 0,
     questions = { open: 0, total: 0 },
     tags = [],
@@ -146,6 +148,9 @@ export const PlanToolbar = forwardRef<
             ),
             ariaLabel: "Files",
           },
+          ...(hasRepo
+            ? [{ value: "patches" as const, label: "Patches", ariaLabel: "Patches" }]
+            : []),
           ...(questions.total > 0 || layout === "questions"
             ? [
                 {

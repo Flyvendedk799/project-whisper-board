@@ -1,5 +1,55 @@
 import { describe, expect, it } from "vitest";
-import { billingCsvRows, isoWeekNumber, rowsToCsv } from "./reports";
+import { billingCsvRows, compileProjectChanges, isoWeekNumber, rowsToCsv } from "./reports";
+
+describe("project change report", () => {
+  const tickets = [
+    {
+      id: "bug",
+      title: "Repair order",
+      type: "bug",
+      status: "done",
+      updated_at: "2026-10-02T12:00:00Z",
+      follow_up_kind: "fix",
+    },
+    {
+      id: "feature",
+      title: "Add chat",
+      type: "feature",
+      status: "in_review",
+      updated_at: "2026-10-03T12:00:00Z",
+      follow_up_kind: null,
+    },
+  ];
+  const tasks = [
+    {
+      id: "task",
+      title: "Update docs",
+      completed_at: "2026-10-04T12:00:00Z",
+      plan_id: "plan",
+      status: "done",
+    },
+  ];
+
+  it("classifies tickets and includes standalone completed plan work", () => {
+    const rows = compileProjectChanges(
+      tickets,
+      [{ id: "linked", ticket_id: "bug", plan_id: "plan" }],
+      tasks,
+      { bugs: true, features: true, source: "all", completedOnly: false },
+    );
+    expect(rows.map((row) => row.category)).toEqual(["Change", "Addition", "Fix"]);
+  });
+
+  it("filters by type, plan connection and completion", () => {
+    const rows = compileProjectChanges(
+      tickets,
+      [{ id: "linked", ticket_id: "bug", plan_id: "plan" }],
+      tasks,
+      { bugs: true, features: false, source: "with_plan", completedOnly: true },
+    );
+    expect(rows.map((row) => row.title)).toEqual(["Update docs", "Repair order"]);
+  });
+});
 
 describe("rowsToCsv", () => {
   it("returns nothing for no rows", () => {

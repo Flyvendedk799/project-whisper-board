@@ -31,7 +31,7 @@ import { CardActionsMenu } from "@/components/card-actions-menu";
 import { ProjectDeleteDialog } from "@/features/projects/project-delete-dialog";
 import { setProjectStatus } from "@/lib/tickets.functions";
 import { useDataMutation, useServerAction } from "@/lib/use-server-action";
-import { organizationsQuery, projectListQuery } from "@/data/projects";
+import { organizationsQuery, projectActivityQuery, projectListQuery } from "@/data/projects";
 import { createOrganization, createProject } from "@/data/mutations";
 import { qk } from "@/data/keys";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE } from "@/data/enums";
@@ -46,6 +46,7 @@ export const Route = createFileRoute("/app/projects/")({
 function ProjectsPage() {
   const { isAdmin, workspaceId } = useAuth();
   const projects = useQuery(projectListQuery(workspaceId));
+  const activity = useQuery(projectActivityQuery(workspaceId));
   const [showArchived, setShowArchived] = useState(false);
   const [deleting, setDeleting] = useState<ProjectWithOrg | null>(null);
   const setStatus = useServerAction(useServerFn(setProjectStatus), {
@@ -156,6 +157,10 @@ function ProjectsPage() {
                         <h2 className="font-display text-2xl leading-tight">{project.title}</h2>
                         <p className="text-xs text-muted-foreground">
                           {project.organization?.name ?? "Internal"}
+                        </p>
+                        <p className="text-xs text-muted-foreground" aria-label="Open project work">
+                          {activity.data?.[project.id]?.plans ?? 0} open plans ·{" "}
+                          {activity.data?.[project.id]?.tickets ?? 0} open tickets
                         </p>
                         {project.description && (
                           <p className="line-clamp-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">
