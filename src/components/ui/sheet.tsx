@@ -83,7 +83,7 @@ const SheetContent = React.forwardRef<
         ) : null}
         <SheetPrimitive.Close
           ref={closeRef}
-          className="absolute right-4 top-4 max-md:right-2 max-md:top-[calc(0.5rem+env(safe-area-inset-top,0px))] max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center max-md:rounded-full rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
+          className="absolute right-4 top-4 max-md:right-2 max-md:top-[calc(0.5rem+env(safe-area-inset-top,0px))] max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center max-md:rounded-full max-md:focus:ring-0 max-md:focus-visible:ring-2 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

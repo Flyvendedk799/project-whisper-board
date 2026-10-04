@@ -49,7 +49,7 @@ export function RunningTimerBar() {
         className="flex items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg max-md:h-[3.25rem] max-md:w-full max-md:pr-2"
       >
         <Timer className="h-4 w-4 shrink-0 animate-pulse text-primary" aria-hidden="true" />
-        <div className="min-w-0 flex-1 truncate text-sm">
+        <div className="min-w-0 text-sm max-md:flex-1 max-md:truncate">
           <span className="font-medium tabular-nums">{elapsed}</span>
           {running.ticket && (
             <>
@@ -70,7 +70,7 @@ export function RunningTimerBar() {
           variant="secondary"
           disabled={stop.busy}
           onClick={() => stop.fire({})}
-          className="h-7 shrink-0 max-md:h-9"
+          className="h-7 max-md:h-9 max-md:shrink-0"
         >
           <Square className="mr-1 h-3 w-3" aria-hidden="true" />
           Stop

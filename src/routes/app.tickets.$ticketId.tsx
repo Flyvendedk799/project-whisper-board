@@ -321,7 +321,7 @@ function TicketPage() {
                 </Card>
               )}
 
-              <section className="space-y-3.5" aria-labelledby="conversation">
+              <section className="space-y-3.5 max-md:pb-20" aria-labelledby="conversation">
                 <h2
                   id="conversation"
                   className="font-display text-[26px] font-normal max-md:text-xl"
@@ -642,7 +642,7 @@ function CommentBox({
   return (
     <form
       onSubmit={send}
-      className={`space-y-3 rounded-xl border p-3 transition-colors max-md:sticky max-md:bottom-[calc(var(--mobile-tabbar-h)+var(--mobile-timer-h))] max-md:z-30 max-md:-mx-4 max-md:max-h-[min(72dvh,34rem)] max-md:space-y-2.5 max-md:overflow-y-auto max-md:overscroll-contain max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:px-4 max-md:shadow-[0_-10px_24px_-14px_rgba(0,0,0,0.3)] ${
+      className={`space-y-3 rounded-xl border p-3 transition-colors max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--mobile-tabbar-h)+var(--mobile-timer-h))] max-md:z-30 max-md:mt-0 max-md:max-h-[min(72dvh,34rem)] max-md:space-y-2.5 max-md:overflow-y-auto max-md:overscroll-contain max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:px-4 max-md:shadow-[0_-10px_24px_-14px_rgba(0,0,0,0.3)] ${
         internal ? "border-warning/40 bg-warning/10" : "bg-card"
       }`}
     >

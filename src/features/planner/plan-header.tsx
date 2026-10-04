@@ -149,7 +149,7 @@ export function PlanHeader({
               </DropdownMenu>
             </div>
             {plan.description ? (
-              <p className="mt-1.5 max-w-[660px] leading-normal max-md:break-words text-muted-foreground">
+              <p className="mt-1.5 max-w-[660px] leading-normal max-md:line-clamp-2 max-md:break-words text-muted-foreground">
                 {plan.description}
               </p>
             ) : null}
@@ -304,7 +304,7 @@ export function PlanHeader({
 
           <ul
             aria-label="Roadmap"
-            className="flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5 max-md:no-scrollbar max-md:-mx-4 max-md:snap-x max-md:snap-proximity max-md:scroll-px-4 max-md:overscroll-x-contain max-md:px-4"
+            className="max-md:hidden flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5 max-md:no-scrollbar max-md:-mx-4 max-md:snap-x max-md:snap-proximity max-md:scroll-px-4 max-md:overscroll-x-contain max-md:px-4"
           >
             {plan.sections.map((section, index) => {
               const mine = sortedTasks(section.tasks ?? []);

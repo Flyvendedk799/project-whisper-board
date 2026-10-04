@@ -281,7 +281,7 @@ function MoreSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="gap-0 p-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-9"
+        className="gap-0 p-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-14"
       >
         <SheetTitle className="sr-only">More</SheetTitle>
         <SheetDescription className="sr-only">
@@ -348,7 +348,7 @@ function MoreSheet({
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted">
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <span className="min-w-0 flex-1 leading-tight">{item.label}</span>
                 {item.badge ? (
                   <span
                     className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground"
