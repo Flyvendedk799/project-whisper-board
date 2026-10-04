@@ -27,8 +27,8 @@ export function PublicAgentsPage({
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 md:px-6">
+    <div className="min-h-screen max-md:min-h-dvh max-md:overflow-x-clip">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 md:px-6 max-md:pb-3 max-md:pt-[calc(1rem+var(--safe-top))]">
         <Link to="/" className="font-display text-2xl">
           Boared
         </Link>
@@ -50,11 +50,11 @@ export function PublicAgentsPage({
         </div>
       </nav>
 
-      <header className="mx-auto max-w-4xl px-4 pb-10 pt-10 text-center md:px-6 md:pb-14 md:pt-16">
+      <header className="mx-auto max-w-4xl px-4 pb-10 pt-10 text-center md:px-6 md:pb-14 md:pt-16 max-md:pt-6">
         <p className="mb-5 text-xs uppercase tracking-widest text-muted-foreground md:text-sm">
           MCP server · Skill · REST API
         </p>
-        <h1 className="font-display text-4xl leading-[1.05] tracking-[-0.02em] md:text-7xl">
+        <h1 className="font-display text-4xl leading-[1.05] tracking-[-0.02em] md:text-7xl max-md:text-balance">
           Put an AI agent on your board.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl px-2 text-base text-muted-foreground md:text-lg">
@@ -93,11 +93,11 @@ export function PublicAgentsPage({
       </header>
 
       <main className="border-t bg-surface">
-        <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-10">
+        <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-10 max-md:pb-[calc(2rem+var(--safe-bottom))]">
           <div
             role="tablist"
             aria-label="Documentation"
-            className="mb-6 flex flex-wrap gap-1.5 border-b pb-3"
+            className="mb-6 flex flex-wrap gap-1.5 border-b pb-3 max-md:-mx-4 max-md:flex-nowrap max-md:snap-x max-md:overflow-x-auto max-md:overscroll-x-contain max-md:px-4 max-md:no-scrollbar"
           >
             {AGENT_TABS.map((key) => (
               <button
@@ -107,7 +107,7 @@ export function PublicAgentsPage({
                 aria-selected={tab === key}
                 onClick={() => onTabChange(key)}
                 className={cn(
-                  "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
+                  "rounded-full border px-3.5 py-1.5 text-sm transition-colors max-md:inline-flex max-md:min-h-11 max-md:shrink-0 max-md:snap-start max-md:items-center max-md:px-4",
                   tab === key
                     ? "border-primary bg-accent text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -126,7 +126,7 @@ export function PublicAgentsPage({
       </main>
 
       <footer className="border-t">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 text-sm text-muted-foreground md:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-8 text-sm text-muted-foreground md:px-6 max-md:pb-[calc(2rem+var(--safe-bottom))]">
           <Link to="/" className="font-display text-lg text-foreground">
             Boared
           </Link>
@@ -159,7 +159,7 @@ function PublicKeyAction({ signedIn }: { signedIn: boolean }) {
   }
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 max-md:flex-col">
         <Button asChild size="sm">
           <Link to="/signup">Create an account</Link>
         </Button>

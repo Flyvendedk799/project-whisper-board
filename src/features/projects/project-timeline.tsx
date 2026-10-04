@@ -41,7 +41,7 @@ export function ProjectTimeline({
 
   return (
     <div className="space-y-6">
-      <Card className="space-y-4 p-5">
+      <Card className="space-y-4 p-5 max-md:p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-display text-xl">Where we are</h2>
           <span className="text-sm text-muted-foreground">
@@ -69,7 +69,7 @@ export function ProjectTimeline({
               <Video className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="text-sm font-medium">Next call</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground max-md:break-words md:truncate">
                   {nextMeeting.title} · {formatDate(nextMeeting.scheduled_at)}
                 </p>
               </div>
@@ -87,7 +87,7 @@ export function ProjectTimeline({
                   to="/app/projects/$projectId"
                   params={{ projectId: project.id }}
                   search={{ tab: "billing" }}
-                  className="text-xs text-muted-foreground underline underline-offset-2"
+                  className="text-xs text-muted-foreground underline underline-offset-2 max-md:inline-block max-md:py-1.5"
                 >
                   Open Billing to settle it
                 </Link>
@@ -98,7 +98,7 @@ export function ProjectTimeline({
       </Card>
 
       {milestones.length > 0 && (
-        <Card className="p-5">
+        <Card className="p-5 max-md:p-4">
           <h2 className="mb-4 font-display text-xl">The plan</h2>
           <ol className="relative space-y-4 border-l pl-6">
             {milestones.map((milestone) => (
@@ -115,9 +115,9 @@ export function ProjectTimeline({
 
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={
+                    className={`min-w-0 break-words ${
                       milestone.status === "done" ? "text-muted-foreground" : "font-medium"
-                    }
+                    }`}
                   >
                     {milestone.title}
                   </span>

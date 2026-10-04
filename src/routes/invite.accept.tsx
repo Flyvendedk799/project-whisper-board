@@ -5,7 +5,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { AuthCard } from "@/features/auth/auth-card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/features/auth/password-input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
 import { projectListQuery } from "@/data/projects";
@@ -100,7 +100,7 @@ function InviteAcceptPage() {
 
   if (!ready || loading) {
     return (
-      <div className="grid min-h-screen place-items-center px-4">
+      <div className="grid min-h-screen place-items-center px-4 max-md:min-h-dvh">
         <p className="text-sm text-muted-foreground">Signing you in…</p>
       </div>
     );
@@ -127,16 +127,18 @@ function InviteAcceptPage() {
       <form onSubmit={setPasswordAndContinue} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="pw">Choose a password (optional)</Label>
-          <Input
+          <PasswordInput
             id="pw"
-            type="password"
+            name="new-password"
+            autoComplete="new-password"
+            enterKeyHint="go"
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 6 characters"
           />
         </div>
-        <Button type="submit" className="h-11 w-full" disabled={busy}>
+        <Button type="submit" className="h-11 w-full max-md:h-12" disabled={busy}>
           {busy ? "Saving…" : resolvedProjectId ? "Open project" : "Continue"}
         </Button>
       </form>

@@ -124,21 +124,21 @@ function MemberRow({
   });
 
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-surface">
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-surface max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-y-3 max-md:py-4">
       <span
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold max-md:h-10 max-md:w-10 max-md:text-xs"
         aria-hidden="true"
       >
         {initials(member.profile?.full_name ?? member.profile?.email)}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 max-md:col-span-2">
         <div className="truncate font-medium">
           {member.profile?.full_name || member.profile?.email || "Invited"}
           {isSelf ? " (you)" : ""}
         </div>
         <div className="truncate text-xs text-muted-foreground">{member.profile?.email}</div>
       </div>
-      <StatusPill>{ROLE_LABEL[member.role]}</StatusPill>
+      <StatusPill className="max-md:hidden">{ROLE_LABEL[member.role]}</StatusPill>
       <Select
         value={member.role}
         onValueChange={(role) =>
@@ -146,7 +146,10 @@ function MemberRow({
         }
         disabled={setRole.busy}
       >
-        <SelectTrigger className="h-[34px] w-36" aria-label="Role">
+        <SelectTrigger
+          className="h-[34px] w-36 max-md:col-span-2 max-md:col-start-1 max-md:w-full"
+          aria-label="Role"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -209,11 +212,20 @@ function InviteTeammateButton() {
         >
           <div className="space-y-1.5">
             <Label htmlFor="invite-name">Name</Label>
-            <Input id="invite-name" name="name" />
+            <Input id="invite-name" name="name" autoComplete="name" enterKeyHint="next" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="invite-email">Email</Label>
-            <Input id="invite-email" name="email" type="email" required />
+            <Input
+              id="invite-email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              autoCapitalize="none"
+              enterKeyHint="send"
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Role</Label>

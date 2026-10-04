@@ -26,7 +26,7 @@ export function ProjectClientCard({
   if (!org && contacts.length === 0) return null;
 
   return (
-    <section className="rounded-[14px] border bg-card p-5">
+    <section className="rounded-[14px] border bg-card p-5 max-md:p-4">
       <h2 className="font-display text-[22px] leading-tight">Client</h2>
       {org && (
         <div className="mt-3">
@@ -36,7 +36,7 @@ export function ProjectClientCard({
               href={/^https?:\/\//.test(org.website) ? org.website : `https://${org.website}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[13px] text-primary hover:underline"
+              className="break-all text-[13px] text-primary hover:underline max-md:inline-block max-md:py-1.5"
             >
               {org.website}
             </a>
@@ -61,7 +61,7 @@ export function ProjectClientCard({
                   {member.profile?.email}
                 </div>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
               </span>
             </li>

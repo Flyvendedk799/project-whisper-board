@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/features/auth/password-input";
 import { Segmented } from "@/components/status-pill";
 import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
@@ -101,7 +102,7 @@ function LoginPage() {
         label="Sign-in method"
         value={mode}
         onChange={setMode}
-        className="flex w-full [&>button]:h-8 [&>button]:flex-1"
+        className="flex w-full [&>button]:h-8 [&>button]:flex-1 max-md:[&>button]:h-11"
         options={[
           { value: "password", label: "Password" },
           { value: "magic", label: "Magic link" },
@@ -113,6 +114,13 @@ function LoginPage() {
           <Input
             id="email"
             type="email"
+            name="email"
+            autoComplete="email"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint={mode === "password" ? "next" : "send"}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -121,16 +129,18 @@ function LoginPage() {
         {mode === "password" && (
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
+              name="password"
+              autoComplete="current-password"
+              enterKeyHint="go"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
         )}
-        <Button type="submit" className="h-11 w-full" disabled={busy}>
+        <Button type="submit" className="h-11 w-full max-md:h-12" disabled={busy}>
           {busy
             ? "..."
             : mode === "password"
@@ -140,17 +150,20 @@ function LoginPage() {
               : "Send magic link"}
         </Button>
       </form>
-      <div className="text-center text-sm text-muted-foreground space-y-1">
-        <p>
+      <div className="text-center text-sm text-muted-foreground space-y-1 max-md:space-y-0">
+        <p className="max-md:flex max-md:min-h-11 max-md:items-center max-md:justify-center max-md:gap-1">
           New here?{" "}
-          <Link to="/signup" className="text-primary underline">
+          <Link
+            to="/signup"
+            className="text-primary underline max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:px-1"
+          >
             Create an account
           </Link>
         </p>
         <p>
           <button
             type="button"
-            className="text-primary underline"
+            className="text-primary underline max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:px-3"
             onClick={async () => {
               if (!email) return toast.error("Enter your email first");
               const { error } = await supabase.auth.resetPasswordForEmail(email, {

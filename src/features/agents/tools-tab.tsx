@@ -7,8 +7,8 @@ import { restUrlPath, searchTools, toolsByGroup, type CatalogTool } from "../../
 function ToolCard({ tool }: { tool: CatalogTool }) {
   return (
     <details className="group rounded-[14px] border bg-card" data-tool={tool.name}>
-      <summary className="flex cursor-pointer list-none flex-col gap-1 px-4 py-3 marker:hidden md:flex-row md:items-baseline md:gap-3">
-        <code className="shrink-0 text-sm font-medium">{tool.name}</code>
+      <summary className="flex cursor-pointer list-none flex-col gap-1 px-4 py-3 marker:hidden max-md:min-h-14 max-md:justify-center md:flex-row md:items-baseline md:gap-3">
+        <code className="shrink-0 break-all text-sm font-medium max-md:shrink">{tool.name}</code>
         <span className="min-w-0 flex-1 text-sm text-muted-foreground">{tool.summary}</span>
       </summary>
       <div className="space-y-3 border-t px-4 py-3 text-sm">
@@ -38,7 +38,9 @@ function ToolCard({ tool }: { tool: CatalogTool }) {
                   </span>
                   {param.required ? <StatusPill tone="warning">required</StatusPill> : null}
                 </dt>
-                <dd className="text-muted-foreground">{param.description}</dd>
+                <dd className="break-words text-muted-foreground max-md:mb-1">
+                  {param.description}
+                </dd>
               </div>
             ))}
           </dl>
@@ -67,6 +69,8 @@ export function ToolsTab() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search tools, parameters or paths"
           aria-label="Search tools"
+          enterKeyHint="search"
+          autoComplete="off"
           className="pl-9"
         />
       </div>

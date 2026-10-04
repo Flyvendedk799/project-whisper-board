@@ -84,7 +84,7 @@ function NewMeetingButton({ projectId }: { projectId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="max-md:w-full">
           <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           Schedule meeting
         </Button>
@@ -110,7 +110,14 @@ function NewMeetingButton({ projectId }: { projectId: string }) {
         >
           <div className="space-y-1.5">
             <Label htmlFor="m-title">Title</Label>
-            <Input id="m-title" name="title" required placeholder="Sprint review" />
+            <Input
+              id="m-title"
+              name="title"
+              required
+              placeholder="Sprint review"
+              autoComplete="off"
+              enterKeyHint="next"
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -119,12 +126,27 @@ function NewMeetingButton({ projectId }: { projectId: string }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="m-duration">Minutes</Label>
-              <Input id="m-duration" name="duration" type="number" min={5} defaultValue={30} />
+              <Input
+                id="m-duration"
+                name="duration"
+                type="number"
+                inputMode="numeric"
+                min={5}
+                defaultValue={30}
+              />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="m-url">Meeting link</Label>
-            <Input id="m-url" name="url" type="url" placeholder="https://meet.google.com/…" />
+            <Input
+              id="m-url"
+              name="url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="off"
+              placeholder="https://meet.google.com/…"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="m-agenda">Agenda</Label>
@@ -204,14 +226,14 @@ function MeetingCard({
     <Card className="space-y-3 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="font-medium">{meeting.title}</h4>
+          <h4 className="break-words font-medium">{meeting.title}</h4>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatDate(scheduled)} ·{" "}
             {scheduled.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} ·{" "}
             {meeting.duration_minutes} min
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 max-md:w-full max-md:justify-between">
           <StatusPill tone={MEETING_STATUS_TONE[meeting.status]}>
             {MEETING_STATUS_LABEL[meeting.status]}
           </StatusPill>
@@ -228,7 +250,9 @@ function MeetingCard({
       </div>
 
       {meeting.agenda && (
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">{meeting.agenda}</p>
+        <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+          {meeting.agenda}
+        </p>
       )}
 
       {meeting.meeting_action_items.length > 0 && (
@@ -243,12 +267,12 @@ function MeetingCard({
                   className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1 break-words">
                   {item.ticket_id ? (
                     <Link
                       to="/app/tickets/$ticketId"
                       params={{ ticketId: item.ticket_id }}
-                      className="underline underline-offset-2"
+                      className="underline underline-offset-2 max-md:inline-block max-md:py-1"
                     >
                       {item.title}
                     </Link>
@@ -278,7 +302,7 @@ function MeetingCard({
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-md:[&>button]:min-w-[9rem] max-md:[&>button]:flex-1">
             <Button
               size="sm"
               disabled={save.busy}
@@ -326,7 +350,7 @@ function MeetingCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="ml-auto h-6 w-6"
+                  className="ml-auto h-6 w-6 max-md:-my-2"
                   aria-label="Dismiss suggestions"
                   onClick={() => setProposal(null)}
                 >
@@ -336,7 +360,10 @@ function MeetingCard({
 
               <ul className="space-y-2">
                 {proposal.map((item, index) => (
-                  <li key={index} className="flex items-start gap-2 rounded bg-background p-2">
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 rounded bg-background p-2 max-md:gap-3 max-md:p-3"
+                  >
                     <Checkbox
                       id={`item-${meeting.id}-${index}`}
                       checked={chosen.has(index)}
@@ -367,6 +394,7 @@ function MeetingCard({
 
               <Button
                 size="sm"
+                className="max-md:h-11 max-md:w-full"
                 disabled={commit.busy || chosen.size === 0}
                 onClick={() =>
                   commit.fire({
@@ -382,13 +410,13 @@ function MeetingCard({
           )}
 
           {meeting.ai_summary && (
-            <p className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">
+            <p className="break-words border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">
               {meeting.ai_summary}
             </p>
           )}
         </>
       ) : (
-        meeting.notes && <p className="whitespace-pre-wrap text-sm">{meeting.notes}</p>
+        meeting.notes && <p className="whitespace-pre-wrap break-words text-sm">{meeting.notes}</p>
       )}
     </Card>
   );

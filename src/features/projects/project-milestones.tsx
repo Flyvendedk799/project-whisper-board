@@ -60,7 +60,7 @@ export function MilestonesPanel({
     <div className="space-y-4">
       {canEdit && (
         <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setAdding(true)}>
+          <Button variant="outline" className="max-md:w-full" onClick={() => setAdding(true)}>
             <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
             New milestone
           </Button>
@@ -97,7 +97,9 @@ export function MilestonesPanel({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium leading-snug">{milestone.title}</span>
+                    <span className="min-w-0 break-words font-medium leading-snug">
+                      {milestone.title}
+                    </span>
                     <StatusPill tone={MILESTONE_STATUS_TONE[milestone.status]}>
                       {MILESTONE_STATUS_LABEL[milestone.status]}
                     </StatusPill>
@@ -110,7 +112,7 @@ export function MilestonesPanel({
                   </div>
                 </div>
                 {canEdit && milestone.status !== "done" && (
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 max-md:w-full max-md:gap-2 max-md:[&>button]:flex-1">
                     {milestone.status === "pending" && (
                       <Button
                         variant="ghost"
@@ -139,6 +141,7 @@ export function MilestonesPanel({
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="max-md:w-full max-md:border max-md:border-input"
                     disabled={setStatus.busy}
                     onClick={() =>
                       setStatus.fire({ milestoneId: milestone.id, status: "in_progress" })
@@ -212,7 +215,7 @@ function NewMilestoneDialog({
         >
           <div className="space-y-1.5">
             <Label htmlFor="milestone-title">Title</Label>
-            <Input id="milestone-title" name="title" required />
+            <Input id="milestone-title" name="title" required enterKeyHint="next" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="milestone-due">Due</Label>
@@ -220,7 +223,13 @@ function NewMilestoneDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="milestone-amount">Amount ({currency})</Label>
-            <Input id="milestone-amount" name="amount" inputMode="decimal" placeholder="25000" />
+            <Input
+              id="milestone-amount"
+              name="amount"
+              inputMode="decimal"
+              placeholder="25000"
+              enterKeyHint="done"
+            />
             <p className="text-xs text-muted-foreground">
               When you mark the milestone done, an invoice for this amount is drafted for you to
               review.

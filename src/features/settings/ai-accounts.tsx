@@ -78,16 +78,19 @@ export function ClaudeAccountCard() {
   return (
     <QueryState query={connection} errorTitle="Couldn't check your Claude connection">
       {(data) => (
-        <Card className="space-y-4 rounded-[14px] p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
+          <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3">
+            <div className="min-w-0">
               <h2 className="font-display text-[22px] leading-tight">Claude subscription</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Sign in with your own Claude plan and the AI features here run on it. Without one,
                 AI uses whatever this workspace has configured — or stays hidden.
               </p>
             </div>
-            <StatusPill tone={data.connected ? "success" : "default"}>
+            <StatusPill
+              tone={data.connected ? "success" : "default"}
+              className="max-md:max-w-full max-md:whitespace-normal max-md:break-all"
+            >
               {data.connected ? (data.plan ?? "Connected") : "Not connected"}
             </StatusPill>
           </div>
@@ -108,6 +111,7 @@ export function ClaudeAccountCard() {
               )}
               <Button
                 variant="outline"
+                className="max-md:w-full"
                 onClick={() => remove.fire(undefined)}
                 disabled={remove.busy}
               >
@@ -117,7 +121,11 @@ export function ClaudeAccountCard() {
           )}
 
           {data.available && !data.connected && !authorizeUrl && (
-            <Button onClick={() => begin.fire(undefined)} disabled={begin.busy}>
+            <Button
+              className="max-md:w-full"
+              onClick={() => begin.fire(undefined)}
+              disabled={begin.busy}
+            >
               {begin.busy ? "Starting…" : "Connect Claude"}
             </Button>
           )}
@@ -130,7 +138,7 @@ export function ClaudeAccountCard() {
                     href={authorizeUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-foreground underline underline-offset-4"
+                    className="text-foreground underline underline-offset-4 max-md:inline-block max-md:py-2.5"
                   >
                     Open the Claude authorize page
                   </a>{" "}
@@ -147,11 +155,14 @@ export function ClaudeAccountCard() {
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Paste the code from the Claude page"
                   autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  enterKeyHint="done"
                   spellCheck={false}
                 />
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 max-md:flex-col max-md:[&>*]:w-full">
                 <Button
                   onClick={() => finish.fire({ code })}
                   disabled={finish.busy || code.trim().length === 0}
@@ -220,9 +231,9 @@ export function AntigravityAccountCard() {
   return (
     <QueryState query={connection} errorTitle="Couldn't check your Antigravity connection">
       {(data) => (
-        <Card className="space-y-4 rounded-[14px] p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
+          <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3">
+            <div className="min-w-0">
               <h2 className="font-display text-[22px] leading-tight">
                 Antigravity subscription (Google)
               </h2>
@@ -232,7 +243,10 @@ export function AntigravityAccountCard() {
                 stays hidden.
               </p>
             </div>
-            <StatusPill tone={data.connected ? "success" : "default"}>
+            <StatusPill
+              tone={data.connected ? "success" : "default"}
+              className="max-md:max-w-full max-md:whitespace-normal max-md:break-all"
+            >
               {data.connected ? (data.email ?? "Connected") : "Not connected"}
             </StatusPill>
           </div>
@@ -253,6 +267,7 @@ export function AntigravityAccountCard() {
               )}
               <Button
                 variant="outline"
+                className="max-md:w-full"
                 onClick={() => remove.fire(undefined)}
                 disabled={remove.busy}
               >
@@ -262,7 +277,11 @@ export function AntigravityAccountCard() {
           )}
 
           {data.available && !data.connected && !authorizeUrl && (
-            <Button onClick={() => begin.fire(undefined)} disabled={begin.busy}>
+            <Button
+              className="max-md:w-full"
+              onClick={() => begin.fire(undefined)}
+              disabled={begin.busy}
+            >
               {begin.busy ? "Starting…" : "Connect Antigravity"}
             </Button>
           )}
@@ -275,7 +294,7 @@ export function AntigravityAccountCard() {
                     href={authorizeUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-foreground underline underline-offset-4"
+                    className="text-foreground underline underline-offset-4 max-md:inline-block max-md:py-2.5"
                   >
                     Open the Google authorize page
                   </a>{" "}
@@ -292,11 +311,14 @@ export function AntigravityAccountCard() {
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Paste the code or URL"
                   autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  enterKeyHint="done"
                   spellCheck={false}
                 />
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 max-md:flex-col max-md:[&>*]:w-full">
                 <Button
                   onClick={() => finish.fire({ code })}
                   disabled={finish.busy || code.trim().length === 0}

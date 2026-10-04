@@ -25,7 +25,13 @@ function dollars(cents: number | null) {
   return String(cents / 100);
 }
 
-export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) {
+export function ProjectSettingsDialog({
+  project,
+  className,
+}: {
+  project: ProjectWithOrg;
+  className?: string;
+}) {
   const { workspaceId } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -69,7 +75,7 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className={className}>
             <Settings2 className="mr-1.5 h-4 w-4" aria-hidden />
             Settings
           </Button>
@@ -114,6 +120,8 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
                 id="project-title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
+                autoComplete="off"
+                enterKeyHint="next"
                 required
               />
             </div>
@@ -133,6 +141,9 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
                   id="project-currency"
                   value={currency}
                   maxLength={3}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  enterKeyHint="next"
                   onChange={(event) => setCurrency(event.target.value.toUpperCase())}
                 />
               </div>
@@ -188,7 +199,7 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
             </DialogFooter>
           </form>
 
-          <div className="flex items-center justify-between gap-4 border-t pt-4">
+          <div className="flex items-center justify-between gap-4 border-t pt-4 max-md:flex-col max-md:items-stretch">
             <div className="min-w-0">
               <p className="text-sm font-medium">Delete this project</p>
               <p className="text-xs text-muted-foreground">
@@ -199,7 +210,7 @@ export function ProjectSettingsDialog({ project }: { project: ProjectWithOrg }) 
               type="button"
               variant="outline"
               size="sm"
-              className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="shrink-0 max-md:w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => {
                 setOpen(false);
                 setDeleteOpen(true);

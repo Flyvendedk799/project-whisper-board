@@ -108,6 +108,9 @@ export function CommandPalette() {
       <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Find anything">
         <CommandInput
           placeholder="Jump to a screen or ticket"
+          enterKeyHint="search"
+          autoCapitalize="none"
+          autoCorrect="off"
           value={term}
           onValueChange={setTerm}
         />
@@ -134,7 +137,7 @@ export function CommandPalette() {
                 >
                   <Ticket className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{ticket.title}</span>
-                  <CommandShortcut>
+                  <CommandShortcut className="shrink-0 max-md:tracking-normal">
                     #{ticket.ticket_number} · {TICKET_STATUS_LABEL[ticket.status]}
                   </CommandShortcut>
                 </CommandItem>
@@ -160,7 +163,9 @@ export function CommandPalette() {
                 >
                   <FolderKanban className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{project.title}</span>
-                  <CommandShortcut>{project.progress}%</CommandShortcut>
+                  <CommandShortcut className="shrink-0 max-md:tracking-normal">
+                    {project.progress}%
+                  </CommandShortcut>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -172,7 +177,7 @@ export function CommandPalette() {
             <CommandItem value="home" onSelect={() => run(() => void navigate({ to: "/app" }))}>
               <Home className="mr-2 h-4 w-4" aria-hidden="true" />
               Home
-              <CommandShortcut>g h</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">g h</CommandShortcut>
             </CommandItem>
             {isAdmin ? (
               <CommandItem
@@ -181,7 +186,7 @@ export function CommandPalette() {
               >
                 <ListFilter className="mr-2 h-4 w-4" aria-hidden="true" />
                 Triage queue
-                <CommandShortcut>g t</CommandShortcut>
+                <CommandShortcut className="max-md:hidden">g t</CommandShortcut>
               </CommandItem>
             ) : (
               <CommandItem
@@ -190,7 +195,7 @@ export function CommandPalette() {
               >
                 <Ticket className="mr-2 h-4 w-4" aria-hidden="true" />
                 My tickets
-                <CommandShortcut>g t</CommandShortcut>
+                <CommandShortcut className="max-md:hidden">g t</CommandShortcut>
               </CommandItem>
             )}
             <CommandItem
@@ -199,7 +204,7 @@ export function CommandPalette() {
             >
               <FolderKanban className="mr-2 h-4 w-4" aria-hidden="true" />
               Projects
-              <CommandShortcut>g p</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">g p</CommandShortcut>
             </CommandItem>
             <CommandItem
               value="inbox"
@@ -207,7 +212,7 @@ export function CommandPalette() {
             >
               <Inbox className="mr-2 h-4 w-4" aria-hidden="true" />
               Inbox
-              <CommandShortcut>g i</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">g i</CommandShortcut>
             </CommandItem>
             {isAdmin && (
               <>
@@ -261,7 +266,7 @@ export function CommandPalette() {
             >
               <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
               Settings
-              <CommandShortcut>g s</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">g s</CommandShortcut>
             </CommandItem>
           </CommandGroup>
 
@@ -272,7 +277,7 @@ export function CommandPalette() {
             >
               <Bug className="mr-2 h-4 w-4" aria-hidden="true" />
               {isAdmin ? "New ticket" : "Report an issue"}
-              <CommandShortcut>c</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">c</CommandShortcut>
             </CommandItem>
             {isAdmin && (
               <CommandItem
@@ -302,10 +307,14 @@ export function CommandPalette() {
               )}
               Switch to {resolved === "dark" ? "light" : "dark"} theme
             </CommandItem>
-            <CommandItem value="shortcuts" onSelect={() => run(() => setShortcutsOpen(true))}>
+            <CommandItem
+              value="shortcuts"
+              className="max-md:hidden"
+              onSelect={() => run(() => setShortcutsOpen(true))}
+            >
               <Keyboard className="mr-2 h-4 w-4" aria-hidden="true" />
               Keyboard shortcuts
-              <CommandShortcut>?</CommandShortcut>
+              <CommandShortcut className="max-md:hidden">?</CommandShortcut>
             </CommandItem>
           </CommandGroup>
         </CommandList>

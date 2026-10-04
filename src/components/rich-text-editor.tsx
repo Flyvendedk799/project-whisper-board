@@ -42,9 +42,9 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm dark:prose-invert max-w-none min-h-[6rem] px-3 py-2 focus:outline-none",
+          "prose prose-sm dark:prose-invert max-w-none min-h-[var(--rte-min)] px-3 py-2 focus:outline-none max-md:min-h-[var(--rte-min-mobile)] max-md:px-3.5 max-md:py-3",
         ...(id ? { id } : {}),
-        style: `min-height: ${minHeight}`,
+        style: `--rte-min: ${minHeight}; --rte-min-mobile: max(${minHeight}, 8rem)`,
       },
     },
   });
@@ -61,7 +61,7 @@ export function RichTextEditor({
 
   return (
     <div className={cn("rounded-md border bg-background", className)}>
-      <div className="flex flex-wrap gap-0.5 border-b px-1 py-1">
+      <div className="flex flex-wrap gap-0.5 border-b px-1 py-1 max-md:flex-nowrap max-md:gap-1 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:no-scrollbar">
         <ToolbarButton
           label="Bold"
           active={editor.isActive("bold")}
@@ -112,7 +112,7 @@ function ToolbarButton({
       type="button"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", active && "bg-accent")}
+      className={cn("h-7 w-7 max-md:shrink-0", active && "bg-accent")}
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}

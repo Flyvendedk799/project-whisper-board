@@ -65,25 +65,28 @@ export function CodeBlock({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-[14px] border bg-card", className)}>
-      <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-        <span className="truncate text-xs text-muted-foreground">{caption ?? "Snippet"}</span>
-        <div className="flex shrink-0 gap-2">
+    <div className={cn("min-w-0 max-w-full rounded-[14px] border bg-card", className)}>
+      <div className="flex items-center justify-between gap-3 border-b px-3 py-2 max-md:flex-col max-md:items-stretch max-md:gap-2">
+        <span className="truncate text-xs text-muted-foreground max-md:text-[13px]">
+          {caption ?? "Snippet"}
+        </span>
+        <div className="flex shrink-0 gap-2 max-md:[&>*]:flex-1">
           {download ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="max-md:h-11 max-md:min-w-0"
               onClick={() => downloadText(download.filename, code, download.type)}
             >
               <Download className="h-3.5 w-3.5" aria-hidden />
               {download.filename}
             </Button>
           ) : null}
-          <CopyButton text={code} />
+          <CopyButton text={code} className="max-md:h-11" />
         </div>
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed">
+      <pre className="overflow-x-auto overscroll-x-contain p-3 text-xs leading-relaxed">
         <code>{code}</code>
       </pre>
     </div>

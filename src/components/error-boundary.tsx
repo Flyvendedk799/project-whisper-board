@@ -50,12 +50,12 @@ export class SectionBoundary extends Component<Props, State> {
     return (
       <div
         role="alert"
-        className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
+        className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center max-md:p-5"
       >
         <AlertTriangle className="mx-auto h-5 w-5 text-destructive" aria-hidden="true" />
         <p className="mt-2 font-medium">This section couldn&rsquo;t be shown</p>
         <p className="mt-1 text-sm text-muted-foreground">{toUserMessage(error)}</p>
-        <Button variant="outline" size="sm" className="mt-4" onClick={this.retry}>
+        <Button variant="outline" size="sm" className="mt-4 max-md:w-full" onClick={this.retry}>
           <RefreshCw className="mr-1.5 h-4 w-4" aria-hidden="true" />
           Try again
         </Button>

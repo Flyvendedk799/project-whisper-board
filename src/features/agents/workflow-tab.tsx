@@ -14,7 +14,7 @@ const PROGRESS_EXAMPLE = `POST /api/planner/tasks/:task_id/progress
 export function WorkflowTab() {
   return (
     <div className="space-y-5">
-      <div className="rounded-[14px] border bg-card p-4 md:p-5">
+      <div className="rounded-[14px] border bg-card p-4 md:p-5 max-md:[&_code]:break-all">
         <h2 className="font-display text-xl">How an agent works a task</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           These rules are sent to every agent as the MCP server&rsquo;s instructions and by the{" "}
@@ -22,7 +22,11 @@ export function WorkflowTab() {
           the board honest: you see who has what, what is done, and what is waiting on you.
         </p>
         <div className="mt-3">
-          <CopyButton text={agentGuideText()} label="Copy as text" />
+          <CopyButton
+            text={agentGuideText()}
+            label="Copy as text"
+            className="max-md:h-11 max-md:w-full"
+          />
         </div>
       </div>
 
@@ -34,13 +38,13 @@ export function WorkflowTab() {
             </span>
             <div className="min-w-0">
               <h3 className="font-medium">{rule.title}</h3>
-              <p className="mt-0.5 text-sm text-muted-foreground">{rule.body}</p>
+              <p className="mt-0.5 break-words text-sm text-muted-foreground">{rule.body}</p>
             </div>
           </li>
         ))}
       </ol>
 
-      <section className="space-y-2">
+      <section className="space-y-2 max-md:[&_p_code]:break-all">
         <h2 className="font-display text-xl">One call for progress</h2>
         <p className="text-sm text-muted-foreground">
           <code className="text-xs">report_progress</code> updates the status, ticks steps and marks

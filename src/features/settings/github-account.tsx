@@ -57,16 +57,22 @@ export function GitHubAccountCard() {
         const own = data.source === "user";
         const shared = data.source === "workspace";
         return (
-          <Card className="space-y-4 rounded-[14px] p-5" data-testid="github-account-card">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+          <Card
+            className="space-y-4 rounded-[14px] p-5 max-md:p-4"
+            data-testid="github-account-card"
+          >
+            <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3">
+              <div className="min-w-0">
                 <h2 className="font-display text-[22px] leading-tight">GitHub</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Connect your own GitHub token to read plan pull requests, put them in merge order,
                   and merge them from here. It acts as you, with whatever your token may do.
                 </p>
               </div>
-              <StatusPill tone={data.connected ? "success" : data.problem ? "warning" : "default"}>
+              <StatusPill
+                tone={data.connected ? "success" : data.problem ? "warning" : "default"}
+                className="max-md:max-w-full max-md:whitespace-normal max-md:break-all"
+              >
                 {data.connected
                   ? data.login
                     ? `@${data.login}`
@@ -113,6 +119,7 @@ export function GitHubAccountCard() {
             {own && (
               <Button
                 variant="outline"
+                className="max-md:w-full"
                 onClick={() => remove.fire(undefined)}
                 disabled={remove.busy}
               >
@@ -139,6 +146,9 @@ export function GitHubAccountCard() {
                     onChange={(e) => setToken(e.target.value)}
                     placeholder="github_pat_… or ghp_…"
                     autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    enterKeyHint="done"
                     spellCheck={false}
                   />
                 </div>
@@ -149,7 +159,7 @@ export function GitHubAccountCard() {
                       href={NEW_FINE_GRAINED}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-foreground underline underline-offset-4"
+                      className="inline-flex items-center gap-1 text-foreground underline underline-offset-4 max-md:py-2.5"
                     >
                       Create a fine-grained token <ExternalLink className="h-3 w-3" aria-hidden />
                     </a>{" "}
@@ -164,7 +174,7 @@ export function GitHubAccountCard() {
                       href={NEW_CLASSIC}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-foreground underline underline-offset-4"
+                      className="inline-block text-foreground underline underline-offset-4 max-md:py-2.5"
                     >
                       create a classic token
                     </a>{" "}
@@ -173,7 +183,11 @@ export function GitHubAccountCard() {
                   </p>
                 </div>
 
-                <Button type="submit" disabled={connect.busy || token.trim().length === 0}>
+                <Button
+                  type="submit"
+                  className="max-md:w-full"
+                  disabled={connect.busy || token.trim().length === 0}
+                >
                   {connect.busy ? "Checking…" : own ? "Replace token" : "Connect GitHub"}
                 </Button>
               </form>

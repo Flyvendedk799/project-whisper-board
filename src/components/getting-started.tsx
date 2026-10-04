@@ -74,12 +74,12 @@ export function GettingStartedGuide({
   if (dismissed || loading || remaining === 0) return null;
 
   return (
-    <Card className="relative mb-8 overflow-hidden p-5 sm:p-6">
+    <Card className="relative mb-8 overflow-hidden p-5 sm:p-6 max-md:mb-0">
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="absolute right-2 top-2 h-8 w-8 text-muted-foreground"
+        className="absolute right-2 top-2 h-8 w-8 text-muted-foreground max-md:right-1 max-md:top-1"
         aria-label="Dismiss getting started"
         onClick={() => {
           if (workspaceId) {
@@ -95,7 +95,7 @@ export function GettingStartedGuide({
         <X className="h-4 w-4" />
       </Button>
 
-      <div className="pr-8">
+      <div className="pr-8 max-md:pr-10">
         <h2 className="font-display text-xl">Get your first ticket</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Invite a client, open a project, then report something. Three steps — then the rest of the
@@ -103,11 +103,11 @@ export function GettingStartedGuide({
         </p>
       </div>
 
-      <ol className="mt-5 space-y-3">
+      <ol className="mt-5 space-y-3 max-md:space-y-4">
         {steps.map((step, index) => {
           const Icon = step.icon;
           return (
-            <li key={step.id} className="flex items-start gap-3">
+            <li key={step.id} className="flex items-center gap-3 sm:items-start">
               <span
                 className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs ${
                   step.done ? "bg-success/20 text-success" : "bg-primary text-primary-foreground"

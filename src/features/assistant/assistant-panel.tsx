@@ -62,6 +62,8 @@ export function AssistantPanel() {
   }, [messageCount, busy]);
 
   useEffect(() => {
+    // On a phone the keyboard would cover the starters the first time it opens.
+    if (window.innerWidth < 768) return;
     inputRef.current?.focus();
   }, []);
 
@@ -88,11 +90,11 @@ export function AssistantPanel() {
     <section
       role="dialog"
       aria-label="Assistant"
-      className="fixed bottom-3 left-3 right-3 top-16 z-50 flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-2xl md:bottom-20 md:left-auto md:right-5 md:top-auto md:h-[min(38rem,calc(100dvh-7rem))] md:w-[26rem]"
+      className="fixed bottom-3 left-3 right-3 top-16 z-50 flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-2xl max-md:inset-0 max-md:animate-in max-md:slide-in-from-bottom max-md:rounded-none max-md:border-0 max-md:duration-300 md:bottom-20 md:left-auto md:right-5 md:top-auto md:h-[min(38rem,calc(100dvh-7rem))] md:w-[26rem]"
     >
-      <header className="flex items-center gap-2 border-b px-4 py-3">
+      <header className="flex items-center gap-2 border-b px-4 py-3 max-md:pl-4 max-md:pr-2 max-md:pt-[calc(0.5rem+var(--safe-top))] max-md:pb-2">
         <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-lg leading-none">Assistant</h2>
+        <h2 className="font-display text-lg leading-none max-md:text-xl">Assistant</h2>
         <div className="ml-auto flex items-center gap-1">
           {chat.messages.length > 0 && (
             <Button
@@ -147,7 +149,7 @@ export function AssistantPanel() {
       <div
         role="log"
         aria-live="polite"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3"
       >
         {chat.messages.length === 0 ? (
           <div className="space-y-3 text-sm">
@@ -161,7 +163,7 @@ export function AssistantPanel() {
                   <li key={preset.id}>
                     <button
                       type="button"
-                      className="w-full rounded-lg border px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="w-full rounded-lg border px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-14 max-md:py-3 max-md:active:bg-accent"
                       onClick={() =>
                         void chat.send(
                           PRESETS[preset.id].message({ plan: planTitle, task: taskTitle }),
@@ -204,7 +206,7 @@ export function AssistantPanel() {
       </div>
 
       <form
-        className="flex items-end gap-2 border-t p-3"
+        className="flex items-end gap-2 border-t bg-card p-3 max-md:pb-[calc(0.75rem+var(--safe-bottom))]"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
@@ -224,6 +226,7 @@ export function AssistantPanel() {
           maxLength={4000}
           placeholder="Ask or tell me what to do…"
           aria-label="Message the assistant"
+          enterKeyHint="send"
           className="max-h-32 min-h-[44px] resize-none"
         />
         <Button
@@ -249,7 +252,7 @@ function Chip({ label, onClear }: { label: string; onClear?: () => void }) {
           type="button"
           onClick={onClear}
           aria-label={`Stop focusing on ${label}`}
-          className="rounded-full text-muted-foreground hover:text-foreground"
+          className="rounded-full text-muted-foreground hover:text-foreground max-md:-m-3.5 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center"
         >
           <X className="h-3 w-3" aria-hidden="true" />
         </button>
@@ -305,7 +308,11 @@ function Message({
               Proposed change{proposals.length === 1 ? "" : "s"} ({proposals.length})
             </span>
             {open.length > 1 && (
-              <Button size="sm" className="h-7 px-2.5 text-xs" onClick={onApplyAll}>
+              <Button
+                size="sm"
+                className="h-7 px-2.5 text-xs max-md:h-11 max-md:px-4"
+                onClick={onApplyAll}
+              >
                 Apply all ({open.length})
               </Button>
             )}
@@ -353,7 +360,7 @@ function ProposalRow({
         {proposal.summary}
       </p>
       {proposal.error && <p className="text-xs text-destructive">{proposal.error}</p>}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-md:gap-3">
         {proposal.status === "applied" && (
           <span className="inline-flex items-center gap-1 text-xs text-success">
             <Check className="h-3.5 w-3.5" aria-hidden="true" /> Applied
@@ -369,10 +376,20 @@ function ProposalRow({
         )}
         {!settled && proposal.status !== "applying" && (
           <>
-            <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onApply}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-xs max-md:h-11 max-md:px-4"
+              onClick={onApply}
+            >
               {proposal.status === "failed" ? "Retry" : "Apply"}
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={onDismiss}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2.5 text-xs max-md:h-11 max-md:px-4"
+              onClick={onDismiss}
+            >
               Dismiss
             </Button>
           </>

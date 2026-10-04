@@ -87,6 +87,9 @@ export function ConfirmDeleteDialog({
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              enterKeyHint="go"
               autoFocus
               disabled={busy}
             />

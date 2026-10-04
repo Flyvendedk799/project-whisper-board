@@ -1,3 +1,5 @@
+import { ChevronRight } from "lucide-react";
+
 /**
  * The redesign's "section": a serif title with an optional terracotta action,
  * then one white card of hairline-separated rows.
@@ -29,7 +31,11 @@ export function Section({
 }
 
 export function SectionAction({ children }: { children: React.ReactNode }) {
-  return <span className="text-[13px] text-primary">{children}</span>;
+  return (
+    <span className="text-[13px] text-primary max-md:-my-2 max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:pl-3 max-md:text-sm">
+      {children}
+    </span>
+  );
 }
 
 export function RowCard({ children }: { children: React.ReactNode }) {
@@ -39,7 +45,7 @@ export function RowCard({ children }: { children: React.ReactNode }) {
 }
 
 const ROW_CLASS =
-  "flex items-center gap-3 px-4 py-[13px] transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  "flex items-center gap-3 px-4 py-[13px] transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:min-h-14 max-md:py-3 max-md:active:bg-surface";
 
 /** One row of a `RowCard`. Pass `to` (+ params/search) to make it a link. */
 export function SectionRow({
@@ -68,7 +74,7 @@ export function SectionRow({
   const body = (
     <>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-1">
           <span
             className={`min-w-0 truncate font-medium leading-snug ${compact ? "text-[13px]" : "text-sm"}`}
           >
@@ -100,6 +106,9 @@ export function SectionRow({
       {right ? (
         <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{right}</span>
       ) : null}
+      {link ? (
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 md:hidden" aria-hidden />
+      ) : null}
     </>
   );
 
@@ -108,7 +117,14 @@ export function SectionRow({
       {link ? (
         link({ className: ROW_CLASS, children: body })
       ) : (
-        <div className={ROW_CLASS.replace("hover:bg-surface ", "")}>{body}</div>
+        <div
+          className={ROW_CLASS.replace("hover:bg-surface ", "").replace(
+            " max-md:active:bg-surface",
+            "",
+          )}
+        >
+          {body}
+        </div>
       )}
     </li>
   );

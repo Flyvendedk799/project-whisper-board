@@ -48,13 +48,13 @@ function HomePage() {
         }
         action={
           !isAdmin && (
-            <Button asChild>
+            <Button asChild className="max-md:w-full">
               <Link to="/app/report">Report something</Link>
             </Button>
           )
         }
       />
-      <div className="mx-auto max-w-[1120px] px-4 py-6 md:px-8 md:py-7">
+      <div className="mx-auto max-w-[1120px] px-4 py-6 max-md:py-4 md:px-8 md:py-7">
         {isAdmin ? <AdminHome /> : <ClientHome />}
       </div>
     </>
@@ -93,7 +93,7 @@ function AdminHome() {
   const hasTickets = recentRows.length > 0 || (counts.data?.needsTriage ?? 0) > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-md:flex max-md:flex-col max-md:gap-5 max-md:space-y-0">
       <GettingStartedGuide
         hasClient={hasClient}
         hasProject={(projects.data ?? []).length > 0}
@@ -102,8 +102,8 @@ function AdminHome() {
         loading={members.isPending || projects.isPending || recent.isPending}
       />
 
-      <section aria-label="Needs you">
-        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+      <section aria-label="Needs you" className="max-md:order-first">
+        <div className="grid grid-cols-2 gap-3.5 max-md:gap-3 lg:grid-cols-4">
           <Tile
             id="breached"
             label="Overdue"
@@ -131,7 +131,7 @@ function AdminHome() {
         </div>
       </section>
 
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-7 max-md:gap-5">
         <div className="min-w-0 flex-1 basis-[560px]">
           <Section
             id="recent-activity"
@@ -170,7 +170,7 @@ function AdminHome() {
           </Section>
         </div>
 
-        <div className="flex min-w-0 flex-1 basis-[320px] flex-col gap-6 lg:max-w-[420px]">
+        <div className="flex min-w-0 flex-1 basis-[320px] flex-col gap-6 max-md:w-full max-md:gap-5 lg:max-w-[420px]">
           <SectionBoundary label="money">
             <MoneyAndTime workspaceId={workspaceId} projects={projects.data ?? []} />
           </SectionBoundary>
@@ -376,8 +376,8 @@ function ClientHome() {
       }
     >
       {(data) => (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-6 max-md:space-y-5">
+          <div className="grid grid-cols-1 gap-4 max-md:gap-3 md:grid-cols-2">
             {data
               .filter((project) => project.status !== "archived")
               .map((project) => (
@@ -386,7 +386,7 @@ function ClientHome() {
                   to="/app/projects/$projectId"
                   params={{ projectId: project.id }}
                   search={{ tab: "overview" }}
-                  className="flex min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-0 max-md:p-4 max-md:active:bg-surface"
                 >
                   <div className="flex items-center">
                     <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
@@ -397,7 +397,9 @@ function ClientHome() {
                       {project.progress}%
                     </span>
                   </div>
-                  <h3 className="font-display text-2xl leading-tight">{project.title}</h3>
+                  <h3 className="break-words font-display text-2xl leading-tight max-md:text-xl">
+                    {project.title}
+                  </h3>
                   {project.organization?.name && (
                     <div className="text-xs text-muted-foreground">{project.organization.name}</div>
                   )}
@@ -483,6 +485,12 @@ function Tile({
   loading: boolean;
 }) {
   const view = QUEUE_VIEWS.find((v) => v.id === id)!;
+  const tint =
+    value && view.tone === "danger"
+      ? "max-md:border-destructive/30 max-md:bg-destructive/[0.04]"
+      : value && view.tone === "warning"
+        ? "max-md:border-warning/40 max-md:bg-warning/[0.06]"
+        : "";
   const ink =
     value && view.tone === "danger"
       ? "text-destructive"
@@ -494,13 +502,17 @@ function Tile({
     <Link
       to="/app/triage"
       search={queueSearch(id)}
-      className="rounded-[14px] border bg-card px-[18px] py-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`rounded-[14px] border bg-card px-[18px] py-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-[5.5rem] max-md:px-4 max-md:py-3 max-md:active:bg-surface ${tint}`}
     >
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground max-md:text-[13px] max-md:leading-snug">
+        {label}
+      </div>
       {loading ? (
         <Skeleton className="mt-2 h-9 w-12" />
       ) : (
-        <div className={`mt-1 font-display text-[40px] leading-[1.1] tabular-nums ${ink}`}>
+        <div
+          className={`mt-1 font-display text-[40px] leading-[1.1] tabular-nums max-md:text-4xl ${ink}`}
+        >
           {value ?? 0}
         </div>
       )}
