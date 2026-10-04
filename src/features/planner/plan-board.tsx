@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GripVertical, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { collapseEmptySections, type BoardLayout } from "@/lib/board-view";
 import { partitionUploadable } from "@/lib/upload";
 import { cn } from "@/lib/utils";
-import type { PlanSection, PlanWithSections, TaskWithAgent } from "@/data";
+import type { PlanSection, PlanTaskStatus, PlanWithSections, TaskWithAgent } from "@/data";
 import { CopyIdButton } from "./copy-id-button";
+import { MoveTaskSheet } from "./plan-move-sheet";
 import { PlanTaskCard } from "./plan-task-card";
 import { TagChip } from "./tag-editor";
 import { usePlanMedia } from "./plan-media";
@@ -31,7 +33,8 @@ import type { PlanActions } from "./use-plan-actions";
 type BoardActions = Pick<
   PlanActions,
   "advance" | "moveTask" | "create" | "removeSection" | "moveSection" | "shiftSection"
->;
+> &
+  Partial<Pick<PlanActions, "setStatus">>;
 
 const SECTION_DRAG = "sectionId";
 
@@ -85,6 +88,10 @@ export function PlanBoard({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [quickSection, setQuickSection] = useState<string | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
+  const isMobile = useIsMobile();
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [activeColumn, setActiveColumn] = useState<string | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const sections = plan.sections ?? [];
   const isOutline = layout === "outline";
@@ -97,6 +104,65 @@ export function PlanBoard({
     sections.find((section) => section.id === selectedSectionId) ??
     sections.find((_, index) => counts[index] > 0) ??
     sections[0];
+
+  const movingTask = movingId
+    ? (sections
+        .flatMap((section) => columns.get(section.id) ?? [])
+        .find((t) => t.id === movingId) ?? null)
+    : null;
+  const movingColumn = movingTask ? (columns.get(movingTask.section_id) ?? []) : [];
+  const movingAt = movingTask ? movingColumn.findIndex((t) => t.id === movingTask.id) : -1;
+
+  // Phones: follow the column in view so the tab strip can highlight it as the board is swiped.
+  const sectionKey = sections.map((section) => section.id).join(",");
+  useEffect(() => {
+    if (!isMobile || isOutline) return;
+    const scroller = document.getElementById("board-scroll");
+    if (!scroller) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const edge = scroller.getBoundingClientRect().left + 16;
+      let best: string | null = null;
+      let distance = Infinity;
+      for (const id of sectionKey.split(",")) {
+        const el = document.getElementById(`col-${id}`);
+        if (!el) continue;
+        const gap = Math.abs(el.getBoundingClientRect().left - edge);
+        if (gap < distance) {
+          distance = gap;
+          best = id;
+        }
+      }
+      setActiveColumn(best);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [isMobile, isOutline, sectionKey]);
+
+  useEffect(() => {
+    const strip = tabsRef.current;
+    const chip = activeColumn
+      ? strip?.querySelector<HTMLElement>(`[data-tab="${activeColumn}"]`)
+      : null;
+    if (!strip || !chip) return;
+    strip.scrollTo({
+      left: chip.offsetLeft - (strip.clientWidth - chip.clientWidth) / 2,
+      behavior: "smooth",
+    });
+  }, [activeColumn]);
+
+  const showColumn = (id: string) =>
+    document
+      .getElementById(`col-${id}`)
+      ?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
 
   const toggleIn = (setter: typeof setExpanded, id: string) =>
     setter((current) => {
@@ -258,6 +324,7 @@ export function PlanBoard({
         dropActive={overTask === task.id && Boolean(draggedTaskId === null)}
         onTagClick={onTagFilter}
         activeTag={filters.tag}
+        onMore={isMobile ? () => setMovingId(task.id) : undefined}
       />
     </div>
   );
@@ -287,10 +354,13 @@ export function PlanBoard({
       <div
         key={section.id}
         id={`col-${section.id}`}
-        style={{ ...(wide ? {} : { width: 304 }), borderTopColor: color }}
+        style={{ borderTopColor: color }}
         className={cn(
           "flex shrink-0 flex-col gap-2.5 rounded-[14px] border border-t-[3px] bg-surface p-3 transition-colors",
-          wide && "w-[min(760px,100%)]",
+          wide
+            ? "w-[min(760px,100%)]"
+            : "w-[304px] max-md:w-[calc(100vw-3.5rem)] max-md:max-w-[26rem] max-md:snap-start",
+          "max-md:scroll-mt-[calc(var(--plan-toolbar-h,0px)+4rem)]",
           hovered && "border-primary bg-accent/60",
           draggedSectionId === section.id && "opacity-50",
         )}
@@ -321,21 +391,21 @@ export function PlanBoard({
                   actions.shiftSection(section.id, event.key === "ArrowLeft" ? -1 : 1);
                 }
               }}
-              className="-ml-1 cursor-grab rounded p-0.5 text-muted-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+              className="-ml-1 cursor-grab rounded p-0.5 text-muted-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing max-md:hidden"
             >
               <GripVertical className="h-4 w-4" aria-hidden="true" />
             </button>
-            <h3 className="flex-1 font-display text-[21px] font-normal leading-tight">
+            <h3 className="min-w-0 flex-1 font-display text-[21px] font-normal leading-tight max-md:break-words">
               {section.title}
             </h3>
-            <CopyIdButton id={section.id} label="section" />
-            <span className="text-xs tabular-nums text-muted-foreground">
+            <CopyIdButton id={section.id} label="section" className="max-md:hidden" />
+            <span className="text-xs tabular-nums text-muted-foreground max-md:text-[13px]">
               {progress.done}/{progress.total}
             </span>
             {!wide && rails && isEmpty ? (
               <button
                 type="button"
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="text-xs text-muted-foreground hover:text-foreground max-md:h-11 max-md:px-2"
                 onClick={() =>
                   setOpenEmpty((current) => {
                     const next = new Set(current);
@@ -353,13 +423,13 @@ export function PlanBoard({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-[26px] w-[26px] text-muted-foreground"
+                  className="h-[26px] w-[26px] text-muted-foreground max-md:-mr-1.5"
                   aria-label={`Section options for ${section.title}`}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" collisionPadding={12} className="w-52">
                 <DropdownMenuItem onSelect={() => onEditSection?.(section)}>
                   Edit section
                 </DropdownMenuItem>
@@ -413,7 +483,7 @@ export function PlanBoard({
           ) : null}
           {hasAbout ? (
             <details className="text-muted-foreground" open={mine.length === 0}>
-              <summary className="cursor-pointer select-none text-xs hover:text-foreground">
+              <summary className="cursor-pointer select-none text-xs hover:text-foreground max-md:flex max-md:min-h-10 max-md:items-center max-md:text-[13px]">
                 About this section
               </summary>
               <dl className="mt-1.5 flex max-h-72 flex-col gap-2 overflow-auto rounded-md bg-muted/40 p-2 text-xs leading-relaxed text-foreground/80">
@@ -444,7 +514,11 @@ export function PlanBoard({
 
         {shown.length === 0 ? (
           <div className="rounded-lg border border-dashed px-2 py-[18px] text-center text-[13px] text-muted-foreground">
-            {mine.length ? "No tasks match the filters" : "Drop a task or files here"}
+            {mine.length
+              ? "No tasks match the filters"
+              : isMobile
+                ? "No tasks yet"
+                : "Drop a task or files here"}
           </div>
         ) : null}
 
@@ -468,8 +542,9 @@ export function PlanBoard({
               if (!quickTitle.trim()) setQuickSection(null);
             }}
             maxLength={200}
+            enterKeyHint="done"
             placeholder="Task title, Enter to add"
-            className="h-[38px] rounded-lg border border-primary bg-card px-3 text-sm outline-none ring-[3px] ring-primary/15"
+            className="h-[38px] rounded-lg border border-primary bg-card px-3 text-sm outline-none ring-[3px] ring-primary/15 max-md:h-12"
           />
         ) : (
           <button
@@ -478,7 +553,7 @@ export function PlanBoard({
               setQuickSection(section.id);
               setQuickTitle("");
             }}
-            className="h-[34px] rounded-lg px-1.5 text-left text-[13px] text-muted-foreground hover:bg-muted"
+            className="h-[34px] rounded-lg px-1.5 text-left text-[13px] text-muted-foreground hover:bg-muted max-md:h-12 max-md:px-3 max-md:text-sm max-md:active:bg-muted"
           >
             + Add task
           </button>
@@ -487,14 +562,38 @@ export function PlanBoard({
     );
   };
 
+  const moveSheet = isMobile ? (
+    <MoveTaskSheet
+      task={movingTask}
+      sections={sections}
+      counts={new Map(sections.map((section, index) => [section.id, counts[index]]))}
+      canMoveUp={movingAt > 0}
+      canMoveDown={movingAt >= 0 && movingAt < movingColumn.length - 1}
+      onClose={() => setMovingId(null)}
+      onMoveToSection={(task, sectionId) => {
+        setMovingId(null);
+        actions.moveTask(task.id, sectionId, null);
+      }}
+      onNudge={(task, direction) => {
+        const before = direction < 0 ? movingColumn[movingAt - 1] : movingColumn[movingAt + 2];
+        actions.moveTask(task.id, task.section_id, before?.id ?? null);
+      }}
+      onSetStatus={
+        actions.setStatus
+          ? (task, status: PlanTaskStatus) => actions.setStatus?.(task, status)
+          : undefined
+      }
+    />
+  ) : null;
+
   // ----- Layouts ----------------------------------------------------------
 
   if (isOutline) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col max-md:flex-none md:flex-row">
         <nav
           aria-label="Sections"
-          className="flex shrink-0 gap-0.5 overflow-x-auto border-b p-3 md:w-[250px] md:flex-col md:overflow-y-auto md:border-b-0 md:border-r"
+          className="no-scrollbar flex shrink-0 gap-0.5 overflow-x-auto border-b p-3 max-md:sticky max-md:top-[var(--plan-toolbar-h,0px)] max-md:z-10 max-md:snap-x max-md:gap-2 max-md:overscroll-x-contain max-md:bg-background max-md:px-4 max-md:py-2 md:w-[250px] md:flex-col md:overflow-y-auto md:border-b-0 md:border-r"
         >
           {sections.map((section, index) => {
             const active = selected?.id === section.id;
@@ -517,7 +616,7 @@ export function PlanBoard({
                 }}
                 {...overSectionProps(section.id)}
                 className={cn(
-                  "flex w-44 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-full",
+                  "flex w-44 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11 max-md:snap-start max-md:border max-md:text-sm md:w-full",
                   active ? "bg-accent" : "hover:bg-muted",
                   overSection === section.id && "bg-accent/70 ring-2 ring-primary",
                   counts[index] === 0 && "text-muted-foreground",
@@ -537,7 +636,7 @@ export function PlanBoard({
           <Button
             type="button"
             variant="outline"
-            className="mt-1 w-44 shrink-0 justify-start border-dashed bg-transparent text-muted-foreground md:w-full"
+            className="mt-1 w-44 shrink-0 justify-start border-dashed bg-transparent text-muted-foreground max-md:mt-0 max-md:snap-start md:w-full"
             onClick={onAddSection}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -545,8 +644,8 @@ export function PlanBoard({
           </Button>
         </nav>
 
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="flex min-h-full justify-center px-4 py-5 md:px-8 md:pb-8">
+        <div className="min-h-0 flex-1 overflow-auto max-md:flex-none max-md:overflow-visible">
+          <div className="flex min-h-full justify-center px-4 py-5 max-md:pb-24 md:px-8 md:pb-8">
             {selected
               ? renderSection(
                   selected,
@@ -556,62 +655,102 @@ export function PlanBoard({
               : null}
           </div>
         </div>
+        {moveSheet}
       </div>
     );
   }
 
   return (
-    <div id="board-scroll" className="min-h-0 flex-1 overflow-auto">
-      <div className="flex min-h-full items-start gap-4 px-4 py-5 md:px-8 md:pb-8">
-        {sections.map((section, index) => {
-          const mine = columns.get(section.id) ?? [];
-          const rail = rails && mine.length === 0 && !openEmpty.has(section.id);
-          return (
-            <div key={section.id} className="contents">
-              {rail ? (
-                <button
-                  type="button"
-                  id={`col-${section.id}`}
-                  title={`${section.title}, empty`}
-                  aria-label={`${section.title}, empty`}
-                  onClick={() => setOpenEmpty((current) => new Set(current).add(section.id))}
-                  onDragOver={overSectionProps(section.id).onDragOver}
-                  onDragLeave={overSectionProps(section.id).onDragLeave}
-                  onDrop={(event) => {
-                    setOpenEmpty((current) => new Set(current).add(section.id));
-                    dropOnSection(event, section.id);
-                  }}
-                  className={cn(
-                    "flex w-11 shrink-0 flex-col items-center gap-2.5 rounded-xl border bg-surface px-1 py-3 text-muted-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    overSection === section.id && "border-primary",
-                  )}
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: sectionColor(section.color, index) }}
-                  />
-                  <span className="text-xs">0</span>
-                  <span className="max-h-44 truncate text-[13px] [writing-mode:vertical-rl]">
-                    {section.title}
-                  </span>
-                </button>
-              ) : (
-                renderSection(section, index, false)
-              )}
-            </div>
-          );
-        })}
+    <>
+      {isMobile ? (
+        <div
+          ref={tabsRef}
+          role="group"
+          aria-label="Jump to section"
+          className="no-scrollbar sticky top-[var(--plan-toolbar-h,0px)] z-10 flex shrink-0 gap-2 overflow-x-auto overscroll-x-contain border-b bg-background px-4 py-2"
+        >
+          {sections.map((section, index) => {
+            const active = (activeColumn ?? sections[0]?.id) === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                data-tab={section.id}
+                aria-current={active ? "true" : undefined}
+                onClick={() => showColumn(section.id)}
+                className={cn(
+                  "flex h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 text-sm",
+                  active ? "border-primary bg-accent font-medium" : "bg-card text-muted-foreground",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: sectionColor(section.color, index) }}
+                />
+                <span className="max-w-[9rem] truncate">{section.title}</span>
+                <span className="text-xs tabular-nums text-muted-foreground">{counts[index]}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div
+        id="board-scroll"
+        className="min-h-0 flex-1 overflow-auto max-md:flex-none max-md:snap-x max-md:snap-mandatory max-md:scroll-px-4 max-md:overscroll-x-contain"
+      >
+        <div className="flex min-h-full items-start gap-4 px-4 py-5 max-md:gap-3 max-md:pb-24 md:px-8 md:pb-8">
+          {sections.map((section, index) => {
+            const mine = columns.get(section.id) ?? [];
+            const rail = rails && mine.length === 0 && !openEmpty.has(section.id);
+            return (
+              <div key={section.id} className="contents">
+                {rail ? (
+                  <button
+                    type="button"
+                    id={`col-${section.id}`}
+                    title={`${section.title}, empty`}
+                    aria-label={`${section.title}, empty`}
+                    onClick={() => setOpenEmpty((current) => new Set(current).add(section.id))}
+                    onDragOver={overSectionProps(section.id).onDragOver}
+                    onDragLeave={overSectionProps(section.id).onDragLeave}
+                    onDrop={(event) => {
+                      setOpenEmpty((current) => new Set(current).add(section.id));
+                      dropOnSection(event, section.id);
+                    }}
+                    className={cn(
+                      "flex w-11 shrink-0 flex-col items-center gap-2.5 rounded-xl border bg-surface px-1 py-3 text-muted-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:snap-start",
+                      overSection === section.id && "border-primary",
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: sectionColor(section.color, index) }}
+                    />
+                    <span className="text-xs">0</span>
+                    <span className="max-h-44 truncate text-[13px] [writing-mode:vertical-rl]">
+                      {section.title}
+                    </span>
+                  </button>
+                ) : (
+                  renderSection(section, index, false)
+                )}
+              </div>
+            );
+          })}
 
-        <div className="w-[200px] shrink-0">
-          <button
-            type="button"
-            onClick={onAddSection}
-            className="h-10 w-full rounded-[10px] border border-dashed px-3.5 text-left text-[13px] text-muted-foreground hover:bg-muted/60"
-          >
-            + Add section
-          </button>
+          <div className="w-[200px] shrink-0 max-md:w-[calc(100vw-3.5rem)] max-md:max-w-[26rem] max-md:snap-start">
+            <button
+              type="button"
+              onClick={onAddSection}
+              className="h-10 w-full rounded-[10px] border border-dashed px-3.5 text-left text-[13px] text-muted-foreground hover:bg-muted/60 max-md:h-12 max-md:text-sm"
+            >
+              + Add section
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      {moveSheet}
+    </>
   );
 }

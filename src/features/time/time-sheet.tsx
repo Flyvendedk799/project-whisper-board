@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -25,6 +31,7 @@ import { DIALOG_CONTENT_CLASS, DIALOG_TITLE_CLASS } from "@/components/dialog-st
 import { TimerCard } from "@/features/time/timer-card";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useServerAction } from "@/lib/use-server-action";
 import { deleteTimeEntry, logTime, updateTimeEntry } from "@/lib/time.functions";
 import { projectListQuery } from "@/data/projects";
@@ -61,6 +68,7 @@ export function TimeSheet({
   );
   const [logging, setLogging] = useState(initialLogOpen);
   const [editing, setEditing] = useState<TimeSheetEntry | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (initialLogOpen) setLogging(true);
@@ -102,7 +110,7 @@ export function TimeSheet({
         <PageHeader
           title="Time"
           description={`${isThisWeek ? "This week" : rangeLabel} · ${summary}`}
-          action={logButton}
+          action={<span className="max-md:hidden">{logButton}</span>}
         />
       )}
 
@@ -113,8 +121,20 @@ export function TimeSheet({
       >
         {page && <TimerCard />}
 
+        {page && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full md:hidden"
+            onClick={() => setLogging(true)}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Log time after the fact
+          </Button>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:w-full">
             <Button
               type="button"
               variant="outline"
@@ -124,7 +144,9 @@ export function TimeSheet({
             >
               <ChevronLeft className="h-4 w-4" aria-hidden />
             </Button>
-            <div className="min-w-40 text-center text-sm font-medium">{rangeLabel}</div>
+            <div className="min-w-40 text-center text-sm font-medium max-md:min-w-0 max-md:flex-1">
+              {rangeLabel}
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -146,8 +168,8 @@ export function TimeSheet({
             )}
           </div>
           {!page && (
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-muted-foreground">{summary}</span>
+            <div className="flex items-center gap-3 text-sm max-md:w-full max-md:justify-between">
+              <span className="min-w-0 text-muted-foreground">{summary}</span>
               {logButton}
             </div>
           )}
@@ -165,11 +187,13 @@ export function TimeSheet({
               <div className="space-y-6">
                 {grouped.map((group) => (
                   <section key={group.key} aria-label={dayLabel(group.key)}>
-                    <h2 className="mb-2.5 font-display text-[22px] font-normal leading-tight">
+                    <h2
+                      className={`mb-2.5 font-display text-[22px] font-normal leading-tight ${page ? "max-md:sticky max-md:top-[var(--mobile-topbar-h)] max-md:z-10 max-md:-mx-4 max-md:mb-0 max-md:border-b max-md:bg-background/95 max-md:px-4 max-md:py-2.5 max-md:backdrop-blur" : ""}`}
+                    >
                       {dayLabel(group.key)} · {formatMinutes(group.minutes)}
                     </h2>
-                    <div className="overflow-hidden rounded-[14px] border bg-card">
-                      <div className="flex gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground">
+                    <div className="overflow-hidden rounded-[14px] border bg-card max-md:mt-2.5">
+                      <div className="flex gap-3 bg-surface max-md:hidden px-4 py-2.5 text-xs text-muted-foreground">
                         <span className="min-w-0 flex-[2]">Project</span>
                         <span className="hidden min-w-0 flex-[0.7] sm:block">Ticket</span>
                         <span className="min-w-0 flex-[3]">Note</span>
@@ -181,46 +205,89 @@ export function TimeSheet({
                         {group.entries.map((entry) => (
                           <li
                             key={entry.id}
-                            className="flex items-center gap-3 border-t px-4 py-2.5 text-sm"
+                            className="flex items-center gap-3 border-t px-4 py-2.5 text-sm max-md:first:border-t-0 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto_auto] max-md:items-center max-md:gap-x-3 max-md:gap-y-1 max-md:py-3"
                           >
-                            <span className="min-w-0 flex-[2] truncate font-medium">
+                            <span className="min-w-0 flex-[2] truncate font-medium max-md:col-start-1 max-md:row-start-1">
                               {entry.project?.title ?? "Project"}
                             </span>
-                            <span className="hidden min-w-0 flex-[0.7] truncate font-mono text-xs text-muted-foreground sm:block">
+                            <span className="hidden min-w-0 flex-[0.7] truncate font-mono text-xs text-muted-foreground md:block">
                               {entry.ticket ? `#${entry.ticket.ticket_number}` : ""}
                             </span>
-                            <span className="min-w-0 flex-[3] truncate">
+                            <span className="min-w-0 flex-[3] truncate max-md:col-start-1 max-md:row-start-2 max-md:whitespace-normal max-md:break-words max-md:line-clamp-2">
                               {entry.note ?? entry.ticket?.title ?? ""}
                             </span>
                             <span className="hidden min-w-0 flex-1 truncate text-muted-foreground md:block">
                               {entry.user?.full_name ?? entry.user?.email ?? "Someone"}
                             </span>
-                            <span className="min-w-0 flex-[0.9] text-right font-mono text-xs tabular-nums">
+                            {(entry.ticket || !projectId) && (
+                              <span className="truncate text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 md:hidden">
+                                {[
+                                  entry.ticket ? `#${entry.ticket.ticket_number}` : "",
+                                  entry.user?.full_name ?? entry.user?.email ?? "Someone",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-[0.9] text-right font-mono text-xs tabular-nums max-md:col-start-2 max-md:row-start-1 max-md:text-sm max-md:font-medium">
                               {entry.ended_at ? formatMinutes(entry.duration_minutes) : "Running"}
                               {entry.billable ? "" : " · n/b"}
                             </span>
-                            <span className="flex w-[84px] shrink-0 justify-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-[13px]"
-                                onClick={() => setEditing(entry)}
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                aria-label="Delete time entry"
-                                disabled={Boolean(entry.invoice_id) || remove.busy}
-                                onClick={() => remove.fire({ entryId: entry.id })}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                              </Button>
-                            </span>
+                            {isMobile ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Entry actions"
+                                    className="col-start-3 row-span-3 row-start-1 self-center"
+                                  >
+                                    <MoreHorizontal className="h-5 w-5" aria-hidden />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="min-w-40">
+                                  <DropdownMenuItem
+                                    className="h-11 gap-2"
+                                    onSelect={() => setEditing(entry)}
+                                  >
+                                    <Pencil className="h-4 w-4" aria-hidden />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="h-11 gap-2 text-destructive focus:text-destructive"
+                                    disabled={Boolean(entry.invoice_id) || remove.busy}
+                                    onSelect={() => remove.fire({ entryId: entry.id })}
+                                  >
+                                    <Trash2 className="h-4 w-4" aria-hidden />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <span className="flex w-[84px] shrink-0 justify-end">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-[13px]"
+                                  onClick={() => setEditing(entry)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  aria-label="Delete time entry"
+                                  disabled={Boolean(entry.invoice_id) || remove.busy}
+                                  onClick={() => remove.fire({ entryId: entry.id })}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                                </Button>
+                              </span>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -336,7 +403,15 @@ function LogTimeDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="log-minutes">Minutes</Label>
-              <Input id="log-minutes" name="minutes" type="number" min={1} max={1440} required />
+              <Input
+                id="log-minutes"
+                name="minutes"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={1440}
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="log-date">Date</Label>
@@ -350,9 +425,9 @@ function LogTimeDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="log-note">What did you do?</Label>
-            <Input id="log-note" name="note" maxLength={500} />
+            <Input id="log-note" name="note" maxLength={500} enterKeyHint="done" />
           </div>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 max-md:min-h-12">
             <Label htmlFor="log-billable">Billable</Label>
             <Switch id="log-billable" checked={billable} onCheckedChange={setBillable} />
           </div>
@@ -419,6 +494,7 @@ function EditTimeDialog({
                 id="edit-minutes"
                 name="minutes"
                 type="number"
+                inputMode="numeric"
                 min={1}
                 max={1440}
                 defaultValue={entry.duration_minutes ?? ""}
@@ -427,9 +503,15 @@ function EditTimeDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-note">Note</Label>
-              <Input id="edit-note" name="note" defaultValue={entry.note ?? ""} maxLength={500} />
+              <Input
+                id="edit-note"
+                name="note"
+                defaultValue={entry.note ?? ""}
+                maxLength={500}
+                enterKeyHint="done"
+              />
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 max-md:min-h-12">
               <Label htmlFor="edit-billable">Billable</Label>
               <Switch id="edit-billable" checked={billable} onCheckedChange={setBillable} />
             </div>

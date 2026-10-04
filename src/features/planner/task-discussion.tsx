@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { X } from "lucide-react";
+import { Paperclip, X } from "lucide-react";
 import { taskCommentsQuery } from "@/data/planner";
 import { qk } from "@/data/keys";
 import type { PlanAttachmentWithUrl } from "@/data";
@@ -28,7 +28,7 @@ function FileChip({
     <button
       type="button"
       onClick={onOpen}
-      className="flex max-w-60 items-center gap-2 rounded-lg border bg-card py-1 pl-1 pr-2.5 text-xs hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex max-w-60 items-center gap-2 rounded-lg border bg-card py-1 pl-1 pr-2.5 text-xs hover:border-primary/50 max-md:min-h-11 max-md:max-w-full max-md:text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-muted font-mono text-[10px]">
         {image ? (
@@ -105,77 +105,80 @@ export function TaskDiscussion({
 
   return (
     <section
-      className="flex flex-col gap-3.5 border-t pt-[22px]"
+      className="flex flex-col gap-3.5 border-t pt-[22px] max-md:contents"
       aria-labelledby={`discussion-${taskId}`}
     >
-      <h3 id={`discussion-${taskId}`} className="font-display text-[22px] leading-none">
-        Discussion
-      </h3>
+      <div className="contents max-md:flex max-md:flex-col max-md:gap-3.5 max-md:border-t max-md:pt-5">
+        <h3 id={`discussion-${taskId}`} className="font-display text-[22px] leading-none">
+          Discussion
+        </h3>
 
-      <ul className="flex flex-col gap-3.5">
-        {rows.map((entry) => {
-          const agent = entry.agent as AgentRef;
-          const author = entry.author as Author;
-          const name = agent?.name ?? author?.full_name ?? author?.email ?? "Someone";
-          const files = filesByComment.get(entry.id) ?? [];
-          const showBody =
-            entry.body.trim().length > 0 && !(files.length > 0 && entry.body === "Attached files");
-          return (
-            <li key={entry.id} className="flex gap-2.5">
-              <div
-                aria-hidden="true"
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                  agent ? "bg-chart-5/20" : "bg-accent"
-                }`}
-              >
-                {agent ? "AI" : initials(name)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-muted-foreground">
-                  <b className="font-medium text-foreground">{name}</b> ·{" "}
-                  {timeAgo(entry.created_at)}
+        <ul className="flex flex-col gap-3.5">
+          {rows.map((entry) => {
+            const agent = entry.agent as AgentRef;
+            const author = entry.author as Author;
+            const name = agent?.name ?? author?.full_name ?? author?.email ?? "Someone";
+            const files = filesByComment.get(entry.id) ?? [];
+            const showBody =
+              entry.body.trim().length > 0 &&
+              !(files.length > 0 && entry.body === "Attached files");
+            return (
+              <li key={entry.id} className="flex gap-2.5">
+                <div
+                  aria-hidden="true"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                    agent ? "bg-chart-5/20" : "bg-accent"
+                  }`}
+                >
+                  {agent ? "AI" : initials(name)}
                 </div>
-                {showBody ? (
-                  <div className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
-                    {entry.body}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-muted-foreground">
+                    <b className="font-medium text-foreground">{name}</b> ·{" "}
+                    {timeAgo(entry.created_at)}
                   </div>
-                ) : null}
-                {files.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {files.map((file) => (
-                      <FileChip
-                        key={file.id}
-                        attachment={file}
-                        onOpen={() => onOpenFile(file.id)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                  {showBody ? (
+                    <div className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed max-md:break-words">
+                      {entry.body}
+                    </div>
+                  ) : null}
+                  {files.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {files.map((file) => (
+                        <FileChip
+                          key={file.id}
+                          attachment={file}
+                          onOpen={() => onOpenFile(file.id)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
 
-      {rows.length === 0 && !comments.isPending ? (
-        <p className="text-[13px] text-muted-foreground">
-          No notes yet. Notes and their files are read by agents working on this task.
-        </p>
-      ) : null}
+        {rows.length === 0 && !comments.isPending ? (
+          <p className="text-[13px] text-muted-foreground">
+            No notes yet. Notes and their files are read by agents working on this task.
+          </p>
+        ) : null}
+      </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-4 max-md:border-t max-md:bg-background/95 max-md:px-4 max-md:pb-[calc(0.75rem+var(--safe-bottom))] max-md:pt-3 max-md:backdrop-blur">
         {pendingFiles.length > 0 || composerUploads.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Files on this note">
+          <ul className="flex flex-wrap gap-1.5 max-md:gap-2" aria-label="Files on this note">
             {pendingFiles.map((file) => (
               <li
                 key={file.id}
-                className="flex items-center gap-2 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-xs"
+                className="flex items-center gap-2 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-xs max-md:max-w-full"
               >
-                {file.file_name}
+                <span className="max-md:min-w-0 max-md:truncate">{file.file_name}</span>
                 <button
                   type="button"
                   aria-label={`Remove ${file.file_name}`}
-                  className="px-1 text-sm leading-none"
+                  className="px-1 text-sm leading-none max-md:-my-2.5 max-md:-mr-2 max-md:grid max-md:h-10 max-md:w-10 max-md:shrink-0 max-md:place-items-center"
                   onClick={() => {
                     setPendingIds((current) => current.filter((id) => id !== file.id));
                     media.remove(file);
@@ -190,9 +193,9 @@ export function TaskDiscussion({
               .map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center gap-2 rounded-full bg-muted px-2.5 py-1 text-xs"
+                  className="flex items-center gap-2 rounded-full bg-muted px-2.5 py-1 text-xs max-md:max-w-full"
                 >
-                  {item.name}
+                  <span className="max-md:min-w-0 max-md:truncate">{item.name}</span>
                   <span className="text-muted-foreground">
                     {item.status === "error" ? "failed" : `${item.progress}%`}
                   </span>
@@ -201,7 +204,7 @@ export function TaskDiscussion({
           </ul>
         ) : null}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 max-md:items-end">
           <Textarea
             ref={composerRef}
             value={body}
@@ -214,14 +217,16 @@ export function TaskDiscussion({
             }}
             rows={1}
             aria-label="Leave a note"
+            enterKeyHint="send"
             placeholder="Leave a note. Paste a screenshot to attach it."
-            className="min-h-[38px] flex-1 resize-y text-sm"
+            className="min-h-[38px] flex-1 resize-y text-sm max-md:max-h-40 max-md:min-h-11 max-md:resize-none max-md:[field-sizing:content]"
           />
           <label
             htmlFor={inputId}
-            className="flex h-[38px] cursor-pointer items-center rounded-lg border px-3.5 text-[13px] hover:bg-muted/60 focus-within:ring-2 focus-within:ring-ring"
+            className="flex h-[38px] cursor-pointer items-center rounded-lg border px-3.5 text-[13px] hover:bg-muted/60 focus-within:ring-2 focus-within:ring-ring max-md:h-11 max-md:w-11 max-md:shrink-0 max-md:justify-center max-md:px-0"
           >
-            Attach
+            <Paperclip className="h-5 w-5 md:hidden" aria-hidden="true" />
+            <span className="max-md:sr-only">Attach</span>
             <input
               id={inputId}
               type="file"
@@ -237,7 +242,7 @@ export function TaskDiscussion({
           </label>
           <Button
             type="button"
-            className="h-[38px] bg-foreground px-4 text-[13px] text-background hover:bg-foreground/90"
+            className="h-[38px] bg-foreground px-4 text-[13px] text-background hover:bg-foreground/90 max-md:shrink-0"
             disabled={post.busy || (!body.trim() && pendingIds.length === 0)}
             onClick={submit}
           >

@@ -30,9 +30,12 @@ export function AttachmentGrid({ attachments }: { attachments: TicketAttachment[
 
   return (
     <>
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 max-md:no-scrollbar max-md:-mb-1 max-md:flex max-md:snap-x max-md:snap-mandatory max-md:overflow-x-auto max-md:overscroll-x-contain max-md:pb-1">
         {visible.map((attachment) => (
-          <li key={attachment.id}>
+          <li
+            key={attachment.id}
+            className="max-md:w-[72%] max-md:max-w-[260px] max-md:shrink-0 max-md:snap-start"
+          >
             <AttachmentTile attachment={attachment} onOpen={() => setOpen(attachment)} />
           </li>
         ))}
@@ -40,7 +43,7 @@ export function AttachmentGrid({ attachments }: { attachments: TicketAttachment[
 
       <Dialog open={Boolean(open)} onOpenChange={(next) => !next && setOpen(null)}>
         <DialogContent className="max-w-4xl">
-          <DialogTitle className="truncate text-base">{open?.file_name}</DialogTitle>
+          <DialogTitle className="truncate text-base max-md:pr-10">{open?.file_name}</DialogTitle>
           {open && <AttachmentViewer attachment={open} />}
         </DialogContent>
       </Dialog>
@@ -92,7 +95,13 @@ function AttachmentTile({
           <img src={url} alt={attachment.file_name} className="h-full w-full object-cover" />
         ) : isVideo ? (
           <>
-            <video src={url} className="h-full w-full object-cover" preload="metadata" />
+            <video
+              src={url}
+              className="h-full w-full object-cover"
+              preload="metadata"
+              playsInline
+              muted
+            />
             <span className="absolute inset-0 grid place-items-center bg-foreground/25">
               <Play className="h-7 w-7 fill-current text-background" aria-hidden="true" />
             </span>
@@ -138,12 +147,18 @@ function AttachmentViewer({ attachment }: { attachment: TicketAttachment }) {
 
   if (attachment.mime_type?.startsWith("image/")) {
     return (
-      <img src={url} alt={attachment.file_name} className="max-h-[70vh] w-full object-contain" />
+      <img
+        src={url}
+        alt={attachment.file_name}
+        className="max-h-[70vh] w-full object-contain max-md:max-h-[70dvh]"
+      />
     );
   }
 
   if (attachment.mime_type?.startsWith("video/") || attachment.is_recording) {
-    return <video src={url} controls autoPlay className="max-h-[70vh] w-full" />;
+    return (
+      <video src={url} controls autoPlay className="max-h-[70vh] w-full max-md:max-h-[70dvh]" />
+    );
   }
 
   return (
@@ -151,7 +166,7 @@ function AttachmentViewer({ attachment }: { attachment: TicketAttachment }) {
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="block py-8 text-center text-sm underline"
+      className="block py-8 text-center text-sm underline max-md:break-all max-md:py-10"
     >
       Open {attachment.file_name}
     </a>

@@ -1,11 +1,10 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bug, ChevronsUpDown, Menu, Moon, Plus, Sun } from "lucide-react";
+import { Bug, ChevronsUpDown, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -15,7 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationBell } from "@/components/notification-bell";
+import { MobileTabBar, MobileTopBar } from "@/components/mobile-nav";
+import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { unreadCountQuery } from "@/data/notifications";
 import { ticketCountsQuery } from "@/data/tickets";
 import { RunningTimerBar } from "@/features/time/running-timer-bar";
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, loading, rolesStatus, refetchRoles, needsWorkspace, workspace } =
     useAuth();
   const branded = brandStyle(workspace?.brand_color);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const keyboardOpen = useKeyboardOpen();
   const onCreateWorkspace = location.pathname.startsWith("/app/create-workspace");
 
   const timer = useQuery({
@@ -87,66 +87,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen bg-background">{children}</div>;
   }
 
+  // Focused flows own the whole screen on a phone: the report composer has its
+  // own submit bar, and a raised keyboard needs every pixel it can get.
+  const focusedFlow = location.pathname === "/app/report";
+  const tabBarHidden = focusedFlow || keyboardOpen;
+  const chromeVars = {
+    ...branded,
+    "--mobile-topbar-h": focusedFlow ? "var(--safe-top)" : undefined,
+    "--mobile-tabbar-h": tabBarHidden ? "var(--safe-bottom)" : "calc(3.5rem + var(--safe-bottom))",
+    "--mobile-timer-h": timerRaised ? "3.75rem" : "0rem",
+  } as React.CSSProperties;
+
   return (
     <AssistantProvider>
-      <div className="flex min-h-screen bg-background" style={branded}>
+      <div className="flex min-h-screen bg-background" style={chromeVars}>
         <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col border-r bg-sidebar md:flex">
           <SidebarInner isAdmin={isAdmin} onNavigate={() => {}} />
         </aside>
 
-        <div
-          className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-3 backdrop-blur md:hidden"
-          style={branded}
-        >
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Open navigation"
-                className="h-11 w-11"
-              >
-                <Menu className="h-5 w-5" aria-hidden="true" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-sidebar p-0">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SidebarInner isAdmin={isAdmin} onNavigate={() => setMobileOpen(false)} />
-            </SheetContent>
-          </Sheet>
-          <Link to="/app" className="flex min-w-0 items-center gap-2 font-display text-xl">
-            {workspace?.logo_url ? (
-              <img src={workspace.logo_url} alt="" className="h-6 w-6 rounded object-contain" />
-            ) : null}
-            <span className="truncate">{workspace?.name ?? "Workspace"}</span>
-          </Link>
-          <NotificationBell />
-        </div>
+        {!focusedFlow && (
+          <MobileTopBar
+            branded={branded}
+            workspaceName={workspace?.name ?? "Workspace"}
+            logoUrl={workspace?.logo_url}
+          />
+        )}
 
-        <main id="main" className="min-w-0 flex-1 pt-14 pb-24 md:pt-0 md:pb-0">
+        <main
+          id="main"
+          className="min-w-0 flex-1 max-md:pt-[var(--mobile-topbar-h)] max-md:pb-[calc(var(--mobile-tabbar-h)+var(--mobile-timer-h))]"
+        >
           {children}
         </main>
+
+        {!tabBarHidden && (
+          <MobileTabBar isAdmin={isAdmin} workspaceSlot={<WorkspaceSwitcher compact />} />
+        )}
 
         <CommandPalette />
         {/* The Time screen has its own, larger timer card. */}
         {!location.pathname.startsWith("/app/time") && <RunningTimerBar />}
-        {!location.pathname.startsWith("/app/projects/") &&
-          location.pathname !== "/app/report" &&
-          (isAdmin ? <AdminReportFab raised={timerRaised} /> : <ReportFab raised={timerRaised} />)}
-        {/* Above the mobile Report button, which is raised when the timer bar is up. */}
-        <AssistantRoot raised={timerRaised} />
+        {/* Above the tab bar on a phone, and above the timer bar when it is up. */}
+        <AssistantRoot hidden={tabBarHidden} />
       </div>
     </AssistantProvider>
   );
 }
 
-function WorkspaceSwitcher() {
+function WorkspaceSwitcher({ compact = false }: { compact?: boolean } = {}) {
   const { workspace, workspaces, setActiveWorkspace, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   if (!workspace) return null;
 
   if (workspaces.length <= 1) {
+    // In the phone "More" sheet the workspace is already named in the top bar.
+    if (compact) return null;
     return (
       <div className="border-b px-5 pb-4 pt-5">
         <Link to="/app" className="flex items-center gap-2 font-display text-[28px] leading-[1.1]">
@@ -361,41 +357,6 @@ export function ThemeToggle() {
       ) : (
         <Moon className="h-4 w-4" aria-hidden="true" />
       )}
-    </Button>
-  );
-}
-
-function ReportFab({ raised = false }: { raised?: boolean }) {
-  return (
-    <Button
-      asChild
-      size="lg"
-      className={`fixed right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden ${
-        raised ? "bottom-24" : "bottom-5"
-      }`}
-    >
-      <Link to="/app/report">
-        <Bug className="mr-2 h-5 w-5" aria-hidden="true" />
-        Report
-      </Link>
-    </Button>
-  );
-}
-
-function AdminReportFab({ raised = false }: { raised?: boolean }) {
-  return (
-    <Button
-      asChild
-      size="lg"
-      variant="outline"
-      className={`fixed right-5 z-30 h-14 rounded-full px-5 shadow-lg md:hidden ${
-        raised ? "bottom-24" : "bottom-5"
-      }`}
-    >
-      <Link to="/app/report">
-        <Plus className="mr-2 h-5 w-5" aria-hidden="true" />
-        New ticket
-      </Link>
     </Button>
   );
 }

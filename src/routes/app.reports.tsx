@@ -101,8 +101,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[14px] border bg-card p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <section className="rounded-[14px] border bg-card p-5 max-md:p-4">
+      <div className="mb-3 flex items-center justify-between gap-2 max-md:min-h-11">
         <h2 className="font-display text-[22px] leading-tight">{title}</h2>
         {action}
       </div>
@@ -117,7 +117,7 @@ function ReportBody({ data }: { data: ReportSnapshot }) {
 
   return (
     <>
-      <section className="rounded-[14px] border bg-card px-[22px] py-5">
+      <section className="rounded-[14px] border bg-card px-[22px] py-5 max-md:p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-[22px] leading-tight">Ticket velocity</h2>
           <span className="flex gap-3.5 text-xs text-muted-foreground">
@@ -131,7 +131,11 @@ function ReportBody({ data }: { data: ReportSnapshot }) {
             </span>
           </span>
         </div>
-        <div className="h-64" role="img" aria-label="Tickets opened and closed per week">
+        <div
+          className="h-64 max-md:h-56"
+          role="img"
+          aria-label="Tickets opened and closed per week"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeks} barGap={3}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -175,7 +179,7 @@ function ReportBody({ data }: { data: ReportSnapshot }) {
         </div>
       </section>
 
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3.5 max-md:grid-cols-2 max-md:gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="SLA overdue" value={data.sla.breached} tone="destructive" />
         <Tile label="SLA due soon" value={data.sla.atRisk} tone="warning" />
         <Tile label="SLA on track" value={data.sla.ok} />
@@ -275,7 +279,11 @@ function BillingCurrency({ row }: { row: ReportSnapshot["billing"][number] }) {
         Outstanding {formatCents(row.outstandingCents, row.currency)} · Paid this month{" "}
         {formatCents(row.paidThisMonthCents, row.currency)}
       </div>
-      <div className="h-36" role="img" aria-label={`Outstanding ${row.currency} invoices by age`}>
+      <div
+        className="h-36 max-md:h-44"
+        role="img"
+        aria-label={`Outstanding ${row.currency} invoices by age`}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={buckets} margin={{ top: 8 }}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -305,7 +313,7 @@ function BillingCurrency({ row }: { row: ReportSnapshot["billing"][number] }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="text-xs text-muted-foreground">
+      <div className="break-words text-xs text-muted-foreground">
         Aging: current {formatCents(row.aging.current, row.currency)} · 1–30 days{" "}
         {formatCents(row.aging.d30, row.currency)} · 31–60 days{" "}
         {formatCents(row.aging.d60, row.currency)} · older{" "}
@@ -327,7 +335,7 @@ function DataTable({
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
   return (
     <div className="overflow-hidden rounded-lg border">
-      <div className="grid grid-cols-[3fr_1fr_1fr] gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground">
+      <div className="grid grid-cols-[3fr_1fr_1fr] gap-3 bg-surface px-4 py-2.5 text-xs text-muted-foreground max-md:grid-cols-[minmax(0,1fr)_4.5rem_5rem] max-md:gap-2 max-md:px-3">
         <span>{head[0]}</span>
         <span className="text-right">{head[1]}</span>
         <span className="text-right">{head[2]}</span>
@@ -335,9 +343,11 @@ function DataTable({
       {rows.map((row) => (
         <div
           key={row.key}
-          className="grid grid-cols-[3fr_1fr_1fr] items-center gap-3 border-t px-4 py-2.5 text-sm"
+          className="grid grid-cols-[3fr_1fr_1fr] items-center gap-3 border-t px-4 py-2.5 text-sm max-md:grid-cols-[minmax(0,1fr)_4.5rem_5rem] max-md:gap-2 max-md:px-3 max-md:py-3"
         >
-          <span className="truncate font-medium">{row.cells[0]}</span>
+          <span className="truncate font-medium max-md:whitespace-normal max-md:break-words">
+            {row.cells[0]}
+          </span>
           <span className="text-right tabular-nums">{row.cells[1]}</span>
           <span className="text-right font-mono text-xs tabular-nums">{row.cells[2]}</span>
         </div>
@@ -362,9 +372,11 @@ function Tile({
         ? "text-warning"
         : "text-foreground";
   return (
-    <div className="rounded-[14px] border bg-card px-[18px] py-4">
+    <div className="rounded-[14px] border bg-card px-[18px] py-4 max-md:px-4 max-md:py-3.5">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`mt-1 font-display text-[40px] leading-[1.1] tabular-nums ${ink}`}>
+      <div
+        className={`mt-1 font-display text-[40px] leading-[1.1] tabular-nums max-md:text-[34px] ${ink}`}
+      >
         {value}
       </div>
     </div>

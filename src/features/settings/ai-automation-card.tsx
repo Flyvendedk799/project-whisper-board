@@ -31,7 +31,7 @@ export function AiAutomationCard() {
   // No AI, no AI controls. Say why instead of showing a switch that does nothing.
   if (!aiEnabled) {
     return (
-      <Card className="space-y-2 rounded-[14px] p-5">
+      <Card className="space-y-2 rounded-[14px] p-5 max-md:p-4">
         <h2 className="font-display text-[22px] leading-tight">AI automation</h2>
         <p className="text-sm text-muted-foreground">
           This appears once AI is set up for the workspace. Until then there is nothing to switch
@@ -44,7 +44,7 @@ export function AiAutomationCard() {
   return (
     <QueryState query={settings} errorTitle="Couldn't load your AI settings">
       {(data) => (
-        <Card className="space-y-4 rounded-[14px] p-5">
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
           <div>
             <h2 className="font-display text-[22px] leading-tight">AI automation</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -52,7 +52,7 @@ export function AiAutomationCard() {
             </p>
           </div>
 
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 max-md:min-h-14">
             <div className="min-w-0 space-y-1">
               <Label htmlFor="ai-auto-enrich" className="text-sm font-medium">
                 Assess and enrich tasks automatically
@@ -66,6 +66,7 @@ export function AiAutomationCard() {
             </div>
             <Switch
               id="ai-auto-enrich"
+              className="max-md:mt-1"
               checked={data.autoEnrich}
               disabled={save.busy}
               onCheckedChange={(next) => save.fire({ autoEnrich: next })}

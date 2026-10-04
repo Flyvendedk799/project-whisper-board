@@ -42,7 +42,12 @@ export function ProjectRepoControl({
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Github className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       {href ? (
-        <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="min-w-0 break-all underline underline-offset-2 max-md:inline-flex max-md:min-h-10 max-md:items-center"
+        >
           {repo}
           {branch ? <span className="text-muted-foreground"> · {branch}</span> : null}
         </a>
@@ -52,7 +57,7 @@ export function ProjectRepoControl({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 px-2"
+        className="h-7 px-2 max-md:h-10"
         onClick={() => {
           setGithubRepo(repo ?? "");
           setGithubBranch(branch ?? "");
@@ -89,6 +94,10 @@ export function ProjectRepoControl({
                 value={githubBranch}
                 onChange={(event) => setGithubBranch(event.target.value)}
                 placeholder="main"
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                enterKeyHint="done"
               />
             </div>
             <DialogFooter>

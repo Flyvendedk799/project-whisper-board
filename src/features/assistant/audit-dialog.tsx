@@ -52,7 +52,7 @@ export function AuditDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88dvh] max-w-2xl flex-col gap-3 overflow-hidden">
+      <DialogContent className="flex max-h-[88dvh] max-w-2xl flex-col gap-3 overflow-hidden max-md:overflow-hidden">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">
             Audit{planTitle ? `: ${planTitle}` : " plan"}
@@ -86,7 +86,10 @@ function AuditBody({ planId, onClose }: { planId: string; onClose: () => void })
 
   if (audit.isPending || audit.isFetching) {
     return (
-      <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground" role="status">
+      <div
+        className="flex items-center gap-2 py-10 text-sm text-muted-foreground max-md:py-14"
+        role="status"
+      >
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Reading the plan… this can take a minute.
       </div>
@@ -100,7 +103,7 @@ function AuditBody({ planId, onClose }: { planId: string; onClose: () => void })
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {toUserMessage(audit.error, "The audit couldn't run. Try again.")}
         </p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 max-md:flex-col [&>button]:max-md:h-11">
           <Button size="sm" onClick={() => void audit.refetch()}>
             Try again
           </Button>
@@ -178,7 +181,7 @@ function AuditBody({ planId, onClose }: { planId: string; onClose: () => void })
             ))}
           </ol>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3 max-md:flex-col-reverse max-md:flex-nowrap [&>button]:max-md:w-full">
           <Button variant="ghost" onClick={() => setPhase("review")}>
             Back
           </Button>
@@ -230,7 +233,7 @@ function AuditBody({ planId, onClose }: { planId: string; onClose: () => void })
             ))}
           </ul>
         </div>
-        <div className="flex justify-end border-t pt-3">
+        <div className="flex justify-end border-t pt-3 [&>button]:max-md:w-full">
           <Button onClick={onClose} disabled={phase === "applying"}>
             Close
           </Button>
@@ -265,11 +268,11 @@ function AuditBody({ planId, onClose }: { planId: string; onClose: () => void })
           </p>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 max-md:flex-col-reverse max-md:flex-nowrap max-md:items-stretch">
         <Button variant="ghost" size="sm" onClick={() => void audit.refetch()}>
           Run again
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-md:flex-col-reverse max-md:items-stretch">
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>

@@ -64,7 +64,7 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
   };
 
   return (
-    <section className="rounded-[14px] border bg-card p-5">
+    <section className="rounded-[14px] border bg-card p-5 max-md:p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-[22px]">Project change report</h2>
@@ -72,16 +72,21 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
             Compile ticket fixes, improvements, additions and finished plan work.
           </p>
         </div>
-        <Button variant="outline" disabled={!projectId || changes.isLoading} onClick={exportReport}>
+        <Button
+          variant="outline"
+          className="max-md:w-full"
+          disabled={!projectId || changes.isLoading}
+          onClick={exportReport}
+        >
           Export Markdown
         </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1">
+      <div className="grid gap-3 max-md:grid-cols-2 sm:grid-cols-3">
+        <div className="space-y-1 max-md:col-span-2">
           <Label htmlFor="report-project">Project</Label>
           <select
             id="report-project"
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm max-md:h-11"
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
           >
@@ -98,7 +103,7 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
           <input
             id="report-from"
             type="date"
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm max-md:h-11"
             value={from}
             max={to}
             onChange={(event) => setFrom(event.target.value)}
@@ -109,42 +114,45 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
           <input
             id="report-to"
             type="date"
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm max-md:h-11"
             value={to}
             min={from}
             onChange={(event) => setTo(event.target.value)}
           />
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-        <label className="flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm max-md:flex-col max-md:items-stretch max-md:gap-0">
+        <label className="flex items-center gap-2 max-md:min-h-11 max-md:gap-3">
           <input
             type="checkbox"
+            className="max-md:h-5 max-md:w-5"
             checked={filters.bugs}
             onChange={(event) => setFilters({ ...filters, bugs: event.target.checked })}
           />
           Bugs / fixes
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 max-md:min-h-11 max-md:gap-3">
           <input
             type="checkbox"
+            className="max-md:h-5 max-md:w-5"
             checked={filters.features}
             onChange={(event) => setFilters({ ...filters, features: event.target.checked })}
           />
           Features / additions
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 max-md:min-h-11 max-md:gap-3">
           <input
             type="checkbox"
+            className="max-md:h-5 max-md:w-5"
             checked={filters.completedOnly}
             onChange={(event) => setFilters({ ...filters, completedOnly: event.target.checked })}
           />
           Completed only
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 max-md:flex-col max-md:items-stretch max-md:gap-1.5 max-md:pt-2">
           Source
           <select
-            className="rounded-md border bg-background px-2 py-1.5"
+            className="rounded-md border bg-background px-2 py-1.5 max-md:h-11 max-md:w-full max-md:px-3"
             value={filters.source}
             onChange={(event) =>
               setFilters({ ...filters, source: event.target.value as ChangeFilters["source"] })
@@ -176,13 +184,18 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
           ) : (
             <ul className="mt-3 divide-y">
               {rows.map((row) => (
-                <li key={row.id} className="flex flex-wrap items-center gap-2 py-3 text-sm">
-                  <span className="rounded-full border px-2 py-0.5 text-xs">{row.category}</span>
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center gap-2 py-3 text-sm max-md:gap-y-1.5"
+                >
+                  <span className="rounded-full border px-2 py-0.5 text-xs max-md:order-1">
+                    {row.category}
+                  </span>
                   {row.ticketId ? (
                     <Link
                       to="/app/tickets/$ticketId"
                       params={{ ticketId: row.ticketId }}
-                      className="min-w-0 flex-1 font-medium hover:underline"
+                      className="min-w-0 flex-1 break-words font-medium hover:underline max-md:order-3 max-md:basis-full"
                     >
                       {row.title}
                     </Link>
@@ -191,12 +204,12 @@ export function ProjectChangeReport({ workspaceId }: { workspaceId: string | nul
                       to="/app/planner/$planId"
                       params={{ planId: row.planId! }}
                       search={{}}
-                      className="min-w-0 flex-1 font-medium hover:underline"
+                      className="min-w-0 flex-1 break-words font-medium hover:underline max-md:order-3 max-md:basis-full"
                     >
                       {row.title}
                     </Link>
                   )}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground max-md:order-2 max-md:ml-auto">
                     {row.withPlan ? "Plan" : "Ticket"} · {formatDate(row.date)}
                   </span>
                 </li>

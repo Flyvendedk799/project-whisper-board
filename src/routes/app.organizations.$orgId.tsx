@@ -113,14 +113,19 @@ function OrganizationPage() {
           <>
             <PageHeader
               back={
-                <Link to="/app/organizations" className="hover:text-foreground">
+                <Link
+                  to="/app/organizations"
+                  className="hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center"
+                >
                   ← Clients
                 </Link>
               }
               title={org.name}
-              description={org.website ?? undefined}
+              description={
+                org.website ? <span className="break-all">{org.website}</span> : undefined
+              }
             />
-            <div className="mx-auto grid max-w-6xl gap-8 px-4 py-6 md:grid-cols-[1fr_20rem] md:px-8 md:py-7">
+            <div className="mx-auto grid max-w-6xl gap-8 px-4 py-6 max-md:gap-6 max-md:py-4 md:grid-cols-[1fr_20rem] md:px-8 md:py-7">
               <div className="space-y-6">
                 <section>
                   <h2 className="mb-2.5 font-display text-[22px] leading-tight">Projects</h2>
@@ -136,11 +141,13 @@ function OrganizationPage() {
                             to="/app/projects/$projectId"
                             params={{ projectId: project.id }}
                             search={{ tab: undefined, paid: undefined }}
-                            className="block px-4 py-3.5 hover:bg-surface"
+                            className="block px-4 py-3.5 hover:bg-surface max-md:min-h-14 max-md:py-3 max-md:active:bg-surface"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{project.title}</span>
-                              <span className="flex items-center gap-3">
+                              <span className="min-w-0 break-words font-medium">
+                                {project.title}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-3">
                                 <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
                                   {PROJECT_STATUS_LABEL[project.status]}
                                 </StatusPill>
@@ -211,7 +218,7 @@ function OrganizationPage() {
                               {person.profile?.email}
                             </div>
                           </div>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="shrink-0 text-xs text-muted-foreground">
                             {ROLE_LABEL[person.role]}
                           </span>
                           <Button
@@ -236,7 +243,7 @@ function OrganizationPage() {
                 </section>
               </div>
 
-              <Card className="h-fit space-y-4 rounded-[14px] p-5">
+              <Card className="h-fit space-y-4 rounded-[14px] p-5 max-md:p-4">
                 <h2 className="font-display text-xl">Details</h2>
                 <form
                   className="space-y-3"
@@ -255,6 +262,7 @@ function OrganizationPage() {
                     <Label htmlFor="edit-org-name">Name</Label>
                     <Input
                       id="edit-org-name"
+                      autoComplete="organization"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
                       required
@@ -265,6 +273,9 @@ function OrganizationPage() {
                     <Input
                       id="edit-org-website"
                       value={website}
+                      inputMode="url"
+                      autoComplete="off"
+                      autoCapitalize="off"
                       onChange={(event) => setWebsite(event.target.value)}
                     />
                   </div>
@@ -273,6 +284,9 @@ function OrganizationPage() {
                     <Input
                       id="edit-org-logo"
                       value={logoUrl}
+                      inputMode="url"
+                      autoComplete="off"
+                      autoCapitalize="off"
                       onChange={(event) => setLogoUrl(event.target.value)}
                     />
                   </div>
@@ -285,7 +299,7 @@ function OrganizationPage() {
                       onChange={(event) => setNotes(event.target.value)}
                     />
                   </div>
-                  <Button type="submit" size="sm" disabled={save.busy}>
+                  <Button type="submit" size="sm" className="max-md:w-full" disabled={save.busy}>
                     Save
                   </Button>
                 </form>
@@ -309,6 +323,7 @@ function OrganizationPage() {
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="max-md:w-full"
                       disabled={!mergeInto || merge.busy}
                       onClick={() => merge.fire({ fromId: org.id, toId: mergeInto })}
                     >
@@ -322,7 +337,7 @@ function OrganizationPage() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive max-md:w-full max-md:border max-md:border-destructive/30"
                     onClick={() => setConfirmDelete(true)}
                   >
                     Delete client…

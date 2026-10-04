@@ -14,16 +14,19 @@ export function SlaBadge({
   dueAt,
   status,
   showOk = false,
+  className,
 }: {
   dueAt: string | null;
   status: TicketStatus;
   showOk?: boolean;
+  className?: string;
 }) {
   const label = slaLabel(dueAt, status, Date.now(), showOk);
   if (!label) return null;
 
   return (
     <StatusPill
+      className={className}
       tone={
         label.state === "breached"
           ? "destructive"

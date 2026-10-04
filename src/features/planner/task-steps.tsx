@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bot, Link2, MoreHorizontal, X } from "lucide-react";
+import { Bot, Link2, MoreHorizontal, Plus, X } from "lucide-react";
 import type { PlanTaskFeature, PlanTaskStep, TaskWithAgent } from "@/data";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,7 +56,10 @@ function StepRow({
   };
 
   return (
-    <li className="group flex items-center gap-2.5 py-1.5" style={{ paddingLeft: step.depth * 20 }}>
+    <li
+      className="group flex items-center gap-2.5 py-1.5 max-md:min-h-12 max-md:gap-3 max-md:border-b max-md:border-border/50 max-md:py-0.5 max-md:last:border-b-0"
+      style={{ paddingLeft: step.depth * 20 }}
+    >
       <button
         type="button"
         role="checkbox"
@@ -64,7 +67,7 @@ function StepRow({
         aria-label={`${step.done ? "Reopen" : "Finish"} ${step.text}`}
         onClick={() => actions.toggleStep(task.id, step.id, !step.done)}
         className={cn(
-          "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[11px] leading-none text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[11px] leading-none text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:relative max-md:h-6 max-md:w-6 max-md:rounded-md max-md:text-sm max-md:after:absolute max-md:after:-inset-3 max-md:after:content-['']",
           step.done ? "border-success bg-success" : "border-border bg-transparent",
         )}
       >
@@ -86,7 +89,7 @@ function StepRow({
               setEditing(false);
             }
           }}
-          className="h-7 min-w-0 flex-1 rounded-md border border-primary bg-card px-2 text-sm outline-none"
+          className="h-7 min-w-0 flex-1 rounded-md border border-primary bg-card px-2 text-sm outline-none max-md:h-11"
         />
       ) : (
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -98,7 +101,7 @@ function StepRow({
               setEditing(true);
             }}
             className={cn(
-              "rounded-md px-1 text-left text-sm leading-snug hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "rounded-md px-1 text-left text-sm leading-snug hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:flex max-md:min-h-11 max-md:items-center max-md:break-words",
               step.done && "text-muted-foreground line-through",
             )}
           >
@@ -132,7 +135,7 @@ function StepRow({
           <button
             type="button"
             aria-label={`Options for sub-step ${step.text}`}
-            className="rounded p-0.5 text-muted-foreground/70 opacity-0 hover:text-foreground focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="rounded p-0.5 text-muted-foreground/70 opacity-0 hover:text-foreground focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 max-md:grid max-md:h-11 max-md:w-11 max-md:shrink-0 max-md:place-items-center max-md:opacity-100"
           >
             <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -161,6 +164,12 @@ function StepRow({
             onSelect={() => actions.setStepDepth(task.id, step.id, step.depth - 1)}
           >
             Outdent
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive md:hidden"
+            onSelect={() => actions.deleteStep(task.id, step.id)}
+          >
+            Remove sub-step
           </DropdownMenuItem>
           {features.length > 0 ? (
             <>
@@ -198,7 +207,7 @@ function StepRow({
         type="button"
         aria-label={`Remove sub-step ${step.text}`}
         onClick={() => actions.deleteStep(task.id, step.id)}
-        className="text-muted-foreground/70 hover:text-foreground"
+        className="text-muted-foreground/70 hover:text-foreground max-md:hidden"
       >
         <X className="h-4 w-4" />
       </button>
@@ -271,7 +280,7 @@ export function TaskSteps({ task, actions }: { task: TaskWithAgent; actions: Pla
               ? "1 feature has no sub-step yet:"
               : `${coverage.uncovered.length} features have no sub-step yet:`}
           </span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 max-md:gap-2">
             {coverage.uncovered.map((id) => {
               const index = features.findIndex((feature) => feature.id === id);
               return (
@@ -280,7 +289,7 @@ export function TaskSteps({ task, actions }: { task: TaskWithAgent; actions: Pla
                   type="button"
                   onClick={() => setFeatureId(id)}
                   className={cn(
-                    "max-w-full truncate rounded-full border bg-card px-2 py-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "max-w-full truncate rounded-full border bg-card px-2 py-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-10 max-md:px-3.5 max-md:py-1.5",
                     featureId === id && "border-primary bg-accent",
                   )}
                   title="Add sub-steps for this feature"
@@ -308,31 +317,44 @@ export function TaskSteps({ task, actions }: { task: TaskWithAgent; actions: Pla
       </ul>
 
       <div className="flex flex-col gap-1.5">
-        <Textarea
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              add();
+        <div className="flex items-start gap-2">
+          <Textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                add();
+              }
+            }}
+            rows={1}
+            enterKeyHint="enter"
+            placeholder={
+              selectedFeature
+                ? `Sub-step for "${selectedFeature.text}", press Enter`
+                : "Add a sub-step, press Enter"
             }
-          }}
-          rows={1}
-          placeholder={
-            selectedFeature
-              ? `Sub-step for "${selectedFeature.text}", press Enter`
-              : "Add a sub-step, press Enter"
-          }
-          aria-label="Add a sub-step"
-          className="min-h-9 resize-y bg-background py-2 text-[13px]"
-        />
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            aria-label="Add a sub-step"
+            className="min-h-9 min-w-0 flex-1 resize-y bg-background py-2 text-[13px] max-md:min-h-11 max-md:resize-none max-md:[field-sizing:content]"
+          />
+          <Button
+            type="button"
+            size="icon"
+            aria-label="Add sub-step"
+            disabled={!text.trim() || actions.addStep.busy || actions.addSteps.busy}
+            onClick={add}
+            className="shrink-0 md:hidden"
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground max-md:gap-x-3">
           {features.length > 0 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex max-w-[260px] items-center gap-1 rounded-full border bg-card px-2 py-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex max-w-[260px] items-center gap-1 rounded-full border bg-card px-2 py-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-10 max-md:max-w-full max-md:px-3.5 max-md:text-[13px]"
                 >
                   <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
                   <span className="truncate">
@@ -360,7 +382,7 @@ export function TaskSteps({ task, actions }: { task: TaskWithAgent; actions: Pla
       </div>
 
       {steps.length === 0 && legacy > 0 ? (
-        <div className="flex items-center gap-2.5 rounded-lg bg-muted/60 px-3.5 py-2.5 text-[13px]">
+        <div className="flex items-center gap-2.5 rounded-lg bg-muted/60 px-3.5 py-2.5 text-[13px] max-md:flex-col max-md:items-stretch max-md:text-sm">
           <span className="flex-1">
             The brief has a list in it. Turn it into {legacy} checkable sub-step
             {legacy === 1 ? "" : "s"}?
@@ -379,7 +401,7 @@ export function TaskSteps({ task, actions }: { task: TaskWithAgent; actions: Pla
       ) : null}
 
       {canReview ? (
-        <div className="flex items-center gap-2.5 rounded-[10px] bg-success/15 px-3.5 py-2.5 text-[13px]">
+        <div className="flex items-center gap-2.5 rounded-[10px] bg-success/15 px-3.5 py-2.5 text-[13px] max-md:flex-col max-md:items-stretch max-md:text-sm">
           <span className="flex-1">Every sub-step is done.</span>
           <Button
             type="button"

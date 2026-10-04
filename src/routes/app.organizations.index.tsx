@@ -88,7 +88,7 @@ function OrganizationsPage() {
         description="The same client logins as Team, grouped here with their company when you have one."
         action={<NewOrganizationButton />}
       />
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8 md:py-7">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-4 md:px-8 md:py-7">
         {clientPeople.length > 0 && (
           <section>
             <h2 className="mb-2.5 font-display text-[22px] leading-tight">People</h2>
@@ -124,7 +124,7 @@ function OrganizationsPage() {
           }
         >
           {(rows) => (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 md:gap-4">
               {rows.map((org) => (
                 <Link
                   key={org.id}
@@ -132,8 +132,10 @@ function OrganizationsPage() {
                   params={{ orgId: org.id }}
                   className="rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <article className="flex h-full min-h-[120px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
-                    <h2 className="font-display text-2xl leading-tight">{org.name}</h2>
+                  <article className="flex h-full min-h-[120px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md max-md:min-h-0 max-md:p-4 max-md:active:bg-surface">
+                    <h2 className="break-words font-display text-2xl leading-tight max-md:text-xl">
+                      {org.name}
+                    </h2>
                     {org.website && (
                       <p className="truncate text-xs text-muted-foreground">{org.website}</p>
                     )}
@@ -174,7 +176,7 @@ function PersonRow({
   });
 
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface">
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface max-md:gap-x-3 max-md:gap-y-2">
       <span
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
         aria-hidden="true"
@@ -198,7 +200,10 @@ function PersonRow({
           })
         }
       >
-        <SelectTrigger className="h-[34px] w-44" aria-label="Company">
+        <SelectTrigger
+          className="h-[34px] w-44 max-md:order-last max-md:w-full"
+          aria-label="Company"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -210,7 +215,7 @@ function PersonRow({
           ))}
         </SelectContent>
       </Select>
-      <span className="w-24 text-right text-xs text-muted-foreground">
+      <span className="w-24 text-right text-xs text-muted-foreground max-md:w-auto max-md:shrink-0">
         {ROLE_LABEL[member.role]}
       </span>
     </li>
@@ -253,11 +258,26 @@ function NewOrganizationButton() {
         >
           <div className="space-y-1.5">
             <Label htmlFor="org-name">Name</Label>
-            <Input id="org-name" name="name" required />
+            <Input
+              id="org-name"
+              name="name"
+              required
+              autoComplete="organization"
+              enterKeyHint="next"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="org-website">Website</Label>
-            <Input id="org-website" name="website" type="url" placeholder="https://" />
+            <Input
+              id="org-website"
+              name="website"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
+              autoCapitalize="off"
+              enterKeyHint="done"
+              placeholder="https://"
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

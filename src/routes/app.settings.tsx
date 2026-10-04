@@ -108,7 +108,7 @@ function SettingsPage() {
             }),
         }))}
       />
-      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-7">
+      <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-7 max-md:py-4">
         {tab === "you" && (
           <div className="space-y-6">
             <ProfileCard />
@@ -174,7 +174,7 @@ function SettingsPage() {
         )}
         {isAdmin && tab === "api" && (
           <SectionBoundary label="api-keys">
-            <Card className="space-y-4 rounded-[14px] p-5">
+            <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
               <h2 className="font-display text-[22px] leading-tight">API keys</h2>
               <ApiKeyManager kind="account" />
             </Card>
@@ -219,7 +219,7 @@ function ProfileCard() {
   };
 
   return (
-    <Card className="space-y-4 rounded-[14px] p-5">
+    <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
       <h2 className="font-display text-[22px] leading-tight">Your details</h2>
 
       <form
@@ -231,13 +231,19 @@ function ProfileCard() {
       >
         <div className="space-y-1.5">
           <Label htmlFor="full-name">Name</Label>
-          <Input id="full-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input
+            id="full-name"
+            value={name}
+            autoComplete="name"
+            enterKeyHint="done"
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
           <Input id="email" value={user?.email ?? ""} disabled />
         </div>
-        <Button type="submit" size="sm" disabled={save.busy}>
+        <Button type="submit" size="sm" className="max-md:h-11 max-md:w-full" disabled={save.busy}>
           {save.busy ? "Saving…" : "Save"}
         </Button>
       </form>
@@ -256,7 +262,13 @@ function ProfileCard() {
       </div>
 
       <div className="border-t pt-4">
-        <Button variant="outline" size="sm" onClick={() => void sendReset()} disabled={sending}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="max-md:h-11 max-md:w-full"
+          onClick={() => void sendReset()}
+          disabled={sending}
+        >
           {sending ? "Sending…" : "Send me a password reset link"}
         </Button>
       </div>
@@ -267,12 +279,12 @@ function ProfileCard() {
 function AppearanceCard() {
   const { theme, setTheme } = useTheme();
   return (
-    <Card className="space-y-3 rounded-[14px] p-5">
+    <Card className="space-y-3 rounded-[14px] p-5 max-md:p-4">
       <h2 className="font-display text-[22px] leading-tight">Appearance</h2>
       <div className="space-y-1.5">
         <Label htmlFor="theme">Theme</Label>
         <Select value={theme} onValueChange={(value) => setTheme(value as Theme)}>
-          <SelectTrigger id="theme" className="max-w-52">
+          <SelectTrigger id="theme" className="max-w-52 max-md:max-w-none">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -316,7 +328,7 @@ function WorkspaceCard() {
   if (!workspace || !workspaceId) return null;
 
   return (
-    <Card className="space-y-4 rounded-[14px] p-5">
+    <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
       <div>
         <h2 className="font-display text-[22px] leading-tight">Workspace</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -341,13 +353,23 @@ function WorkspaceCard() {
       >
         <div className="space-y-1.5">
           <Label htmlFor="ws-name">Name</Label>
-          <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input
+            id="ws-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            enterKeyHint="next"
+            required
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="ws-support-email">Support email</Label>
           <Input
             id="ws-support-email"
             type="email"
+            inputMode="email"
+            autoComplete="off"
+            autoCapitalize="none"
+            enterKeyHint="next"
             value={supportEmail}
             onChange={(e) => setSupportEmail(e.target.value)}
             placeholder="support@example.com"
@@ -358,6 +380,10 @@ function WorkspaceCard() {
           <Input
             id="ws-website"
             type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            enterKeyHint="next"
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="https://example.com"
@@ -368,6 +394,9 @@ function WorkspaceCard() {
             <Label htmlFor="ws-logo">Logo URL</Label>
             <Input
               id="ws-logo"
+              inputMode="url"
+              autoCapitalize="none"
+              enterKeyHint="next"
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://…/logo.png"
@@ -393,7 +422,11 @@ function WorkspaceCard() {
                 onChange={(e) => setBrandColor(e.target.value)}
               />
             </div>
-            <div className="flex gap-2.5 pt-1" role="group" aria-label="Brand colour presets">
+            <div
+              className="flex gap-2.5 pt-1 max-md:gap-3.5 max-md:py-1.5"
+              role="group"
+              aria-label="Brand colour presets"
+            >
               {BRAND_SWATCHES.map((hex) => (
                 <button
                   key={hex}
@@ -402,7 +435,7 @@ function WorkspaceCard() {
                   aria-pressed={brandColor.toLowerCase() === hex}
                   onClick={() => setBrandColor(hex)}
                   style={{ backgroundColor: hex }}
-                  className={`h-7 w-7 rounded-full ${
+                  className={`h-7 w-7 rounded-full max-md:h-11 max-md:w-11 ${
                     brandColor.toLowerCase() === hex
                       ? "ring-2 ring-foreground ring-offset-2 ring-offset-card"
                       : ""
@@ -418,13 +451,15 @@ function WorkspaceCard() {
             <Label htmlFor="ws-invoice-prefix">Invoice prefix</Label>
             <Input
               id="ws-invoice-prefix"
+              autoCapitalize="characters"
+              enterKeyHint="done"
               value={invoicePrefix}
               onChange={(e) => setInvoicePrefix(e.target.value)}
               placeholder="INV"
             />
           </div>
         </div>
-        <Button type="submit" size="sm" disabled={save.busy}>
+        <Button type="submit" size="sm" className="max-md:h-11 max-md:w-full" disabled={save.busy}>
           {save.busy ? "Saving…" : "Save workspace"}
         </Button>
       </form>
@@ -463,7 +498,7 @@ function NotificationsCard() {
   return (
     <QueryState query={prefs} errorTitle="Couldn't load your preferences">
       {(row) => (
-        <Card className="space-y-5 rounded-[14px] p-5">
+        <Card className="space-y-5 rounded-[14px] p-5 max-md:p-4">
           <div>
             <h2 className="font-display text-[22px] leading-tight">What we tell you about</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -476,16 +511,18 @@ function NotificationsCard() {
             {KINDS.map((kind) => (
               <li
                 key={kind}
-                className="flex flex-wrap items-start gap-3 border-b pb-3 last:border-0"
+                className="flex flex-wrap items-start gap-3 border-b pb-3 last:border-0 max-md:flex-col max-md:items-stretch max-md:gap-2.5 max-md:pb-4"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{NOTIFICATION_KIND_LABEL[kind]}</p>
+                  <p className="text-sm font-medium max-md:text-[15px]">
+                    {NOTIFICATION_KIND_LABEL[kind]}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {NOTIFICATION_KIND_DESCRIPTION[kind]}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-4">
-                  <label className="flex items-center gap-1.5 text-xs">
+                <div className="flex shrink-0 gap-4 max-md:gap-2">
+                  <label className="flex items-center gap-1.5 text-xs max-md:min-h-12 max-md:flex-1 max-md:flex-row-reverse max-md:justify-between max-md:rounded-lg max-md:border max-md:px-3 max-md:text-sm">
                     <Switch
                       checked={current[kind].in_app}
                       onCheckedChange={(next) =>
@@ -495,7 +532,7 @@ function NotificationsCard() {
                     />
                     In app
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs">
+                  <label className="flex items-center gap-1.5 text-xs max-md:min-h-12 max-md:flex-1 max-md:flex-row-reverse max-md:justify-between max-md:rounded-lg max-md:border max-md:px-3 max-md:text-sm">
                     <Switch
                       checked={current[kind].email}
                       onCheckedChange={(next) =>
@@ -510,12 +547,13 @@ function NotificationsCard() {
             ))}
           </ul>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 max-md:grid-cols-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="quiet-start">Quiet from</Label>
               <Input
                 id="quiet-start"
                 type="number"
+                inputMode="numeric"
                 min={0}
                 max={23}
                 defaultValue={row?.quiet_hours_start ?? ""}
@@ -527,6 +565,7 @@ function NotificationsCard() {
               <Input
                 id="quiet-end"
                 type="number"
+                inputMode="numeric"
                 min={0}
                 max={23}
                 defaultValue={row?.quiet_hours_end ?? ""}
@@ -538,27 +577,30 @@ function NotificationsCard() {
             Emails hold until quiet hours are over. Mentions always get through.
           </p>
 
-          <Button
-            size="sm"
-            disabled={save.busy}
-            onClick={() => {
-              const start = Number(
-                (document.getElementById("quiet-start") as HTMLInputElement | null)?.value,
-              );
-              const end = Number(
-                (document.getElementById("quiet-end") as HTMLInputElement | null)?.value,
-              );
-              save.fire({
-                channels: current,
-                digestFrequency: (row?.digest_frequency as "off" | "daily" | "weekly") ?? "daily",
-                quietHoursStart: Number.isFinite(start) && start >= 0 ? start : null,
-                quietHoursEnd: Number.isFinite(end) && end >= 0 ? end : null,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              });
-            }}
-          >
-            {save.busy ? "Saving…" : "Save preferences"}
-          </Button>
+          <div className="max-md:sticky max-md:bottom-[var(--mobile-tabbar-h)] max-md:z-10 max-md:-mx-4 max-md:-mb-4 max-md:rounded-b-[14px] max-md:border-t max-md:bg-card/95 max-md:px-4 max-md:py-3 max-md:backdrop-blur">
+            <Button
+              size="sm"
+              className="max-md:h-11 max-md:w-full"
+              disabled={save.busy}
+              onClick={() => {
+                const start = Number(
+                  (document.getElementById("quiet-start") as HTMLInputElement | null)?.value,
+                );
+                const end = Number(
+                  (document.getElementById("quiet-end") as HTMLInputElement | null)?.value,
+                );
+                save.fire({
+                  channels: current,
+                  digestFrequency: (row?.digest_frequency as "off" | "daily" | "weekly") ?? "daily",
+                  quietHoursStart: Number.isFinite(start) && start >= 0 ? start : null,
+                  quietHoursEnd: Number.isFinite(end) && end >= 0 ? end : null,
+                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                });
+              }}
+            >
+              {save.busy ? "Saving…" : "Save preferences"}
+            </Button>
+          </div>
         </Card>
       )}
     </QueryState>
@@ -579,7 +621,7 @@ function IntegrationsCard() {
   return (
     <QueryState query={status} errorTitle="Couldn't check integrations">
       {(data) => (
-        <Card className="space-y-4 rounded-[14px] p-5">
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
           <div>
             <h2 className="font-display text-[22px] leading-tight">Integrations</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -664,7 +706,9 @@ function Integration({
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{provider.enabled ? onWhen : offWhen}</p>
       {!provider.enabled && (
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground">Set {key_} to enable.</p>
+        <p className="mt-0.5 break-words font-mono text-xs text-muted-foreground">
+          Set {key_} to enable.
+        </p>
       )}
     </li>
   );
@@ -679,7 +723,7 @@ function OutboxCard() {
   return (
     <QueryState query={outbox} errorTitle="Couldn't load the outbox">
       {(data) => (
-        <Card className="rounded-[14px] p-5">
+        <Card className="rounded-[14px] p-5 max-md:p-4">
           <h2 className="font-display text-[22px] leading-tight">Outbox</h2>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
             Every message the app composed. With no email provider configured these are recorded
@@ -711,7 +755,9 @@ function OutboxCard() {
                       {formatRelative(message.created_at)}
                     </time>
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">To {message.to_address}</p>
+                  <p className="mt-0.5 break-all text-xs text-muted-foreground">
+                    To {message.to_address}
+                  </p>
                   {message.body_text && (
                     <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">
                       {message.body_text}
@@ -739,7 +785,7 @@ function ErrorsCard() {
   return (
     <QueryState query={errors} errorTitle="Couldn't load errors">
       {(data) => (
-        <Card className="rounded-[14px] p-5">
+        <Card className="rounded-[14px] p-5 max-md:p-4">
           <h2 className="font-display text-[22px] leading-tight">Errors</h2>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
             Grouped by cause, newest first. A client hitting a crash shows up here without them

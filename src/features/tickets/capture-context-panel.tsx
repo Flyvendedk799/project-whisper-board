@@ -28,19 +28,21 @@ export function CaptureContextPanel({ context }: { context: CaptureContext }) {
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-accent/40"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-accent/40 max-md:min-h-12 max-md:flex-wrap max-md:py-2.5 max-md:active:bg-accent/40"
       >
         <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="font-medium">Technical details</span>
         {(errorCount > 0 || networkEntries.length > 0) && (
-          <StatusPill tone="warning">
-            {[
-              errorCount > 0 ? `${errorCount} console errors` : "",
-              networkEntries.length > 0 ? `${networkEntries.length} failed requests` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </StatusPill>
+          <span className="max-md:order-last max-md:basis-full max-md:pl-6">
+            <StatusPill tone="warning">
+              {[
+                errorCount > 0 ? `${errorCount} console errors` : "",
+                networkEntries.length > 0 ? `${networkEntries.length} failed requests` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </StatusPill>
+          </span>
         )}
         <ChevronDown
           className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
@@ -86,7 +88,7 @@ export function CaptureContextPanel({ context }: { context: CaptureContext }) {
               </h4>
               <ul className="space-y-0.5 font-mono text-xs">
                 {networkEntries.map((entry, index) => (
-                  <li key={index} className="flex gap-2">
+                  <li key={index} className="flex gap-2 max-md:flex-wrap">
                     <span
                       className={
                         entry.status === 0 || (entry.status ?? 0) >= 500
@@ -97,7 +99,9 @@ export function CaptureContextPanel({ context }: { context: CaptureContext }) {
                       {entry.status === 0 ? "ERR" : entry.status}
                     </span>
                     <span className="text-muted-foreground">{entry.method}</span>
-                    <span className="min-w-0 truncate">{entry.url}</span>
+                    <span className="min-w-0 truncate max-md:basis-full max-md:whitespace-normal max-md:break-all">
+                      {entry.url}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -109,7 +113,7 @@ export function CaptureContextPanel({ context }: { context: CaptureContext }) {
               <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Console, just before they reported it
               </h4>
-              <ul className="max-h-64 space-y-0.5 overflow-y-auto rounded bg-muted/50 p-2 font-mono text-xs">
+              <ul className="max-h-64 space-y-0.5 overflow-y-auto rounded bg-muted/50 p-2 font-mono text-xs max-md:overscroll-contain max-md:break-all">
                 {consoleEntries.map((entry, index) => (
                   <li
                     key={index}
@@ -134,7 +138,10 @@ function Detail({ label, value, mono }: { label: string; value?: string | null; 
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`truncate ${mono ? "font-mono text-xs" : ""}`} title={value}>
+      <dd
+        className={`truncate max-md:whitespace-normal max-md:break-words ${mono ? "font-mono text-xs max-md:break-all" : ""}`}
+        title={value}
+      >
         {value}
       </dd>
     </div>

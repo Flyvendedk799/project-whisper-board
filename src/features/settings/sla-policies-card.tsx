@@ -63,8 +63,8 @@ export function SlaPoliciesCard() {
   return (
     <QueryState query={policies} errorTitle="Couldn't load SLA policies">
       {() => (
-        <Card className="space-y-4 rounded-[14px] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
             <div>
               <h2 className="font-display text-[22px] leading-tight">Response times</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -76,6 +76,7 @@ export function SlaPoliciesCard() {
               type="button"
               variant="outline"
               size="sm"
+              className="max-md:w-full"
               disabled={save.busy}
               onClick={() => {
                 void (async () => {
@@ -100,13 +101,15 @@ export function SlaPoliciesCard() {
               {TICKET_PRIORITIES.map((priority) => (
                 <form
                   key={priority}
-                  className="grid gap-3 rounded-lg border bg-surface p-3 sm:grid-cols-[8rem_1fr_1fr_auto] sm:items-end"
+                  className="grid gap-3 rounded-lg border bg-surface p-3 max-md:grid-cols-2 sm:grid-cols-[8rem_1fr_1fr_auto] sm:items-end"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void persist(priority);
                   }}
                 >
-                  <div className="text-sm font-medium">{TICKET_PRIORITY_LABEL[priority]}</div>
+                  <div className="text-sm font-medium max-md:col-span-2 max-md:text-base">
+                    {TICKET_PRIORITY_LABEL[priority]}
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor={`sla-first-${priority}`}>First reply (hours)</Label>
                     <Input
@@ -135,7 +138,12 @@ export function SlaPoliciesCard() {
                       }
                     />
                   </div>
-                  <Button type="submit" size="sm" disabled={save.busy}>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="max-md:col-span-2 max-md:h-11"
+                    disabled={save.busy}
+                  >
                     Save
                   </Button>
                 </form>

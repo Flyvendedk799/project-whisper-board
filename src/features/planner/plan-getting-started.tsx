@@ -41,9 +41,9 @@ export function PlanGettingStarted({
   ];
 
   return (
-    <div className="mx-auto my-16 flex max-w-[680px] flex-col gap-6 px-6">
+    <div className="mx-auto my-16 flex max-w-[680px] flex-col gap-6 px-6 max-md:my-6 max-md:px-4">
       <div>
-        <h2 className="font-display text-[32px] font-normal leading-tight">
+        <h2 className="font-display text-[32px] font-normal leading-tight max-md:text-[26px]">
           Start by giving this plan some structure
         </h2>
         <p className="mt-2 leading-relaxed text-muted-foreground">
@@ -60,17 +60,17 @@ export function PlanGettingStarted({
               disabled={starter.disabled}
               onClick={starter.onRun}
               className={cn(
-                "flex w-full items-center gap-4 rounded-xl border bg-card px-[18px] py-4 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex w-full items-center gap-4 rounded-xl border bg-card px-[18px] py-4 text-left transition-colors max-md:min-h-[72px] max-md:gap-3 max-md:px-4 max-md:active:bg-muted/60 hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 starter.disabled && "cursor-not-allowed opacity-50 hover:border-border",
               )}
             >
               <span
                 aria-hidden="true"
-                className="flex h-[34px] w-[34px] items-center justify-center rounded-lg bg-accent font-semibold"
+                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-accent font-semibold"
               >
                 {index + 1}
               </span>
-              <span className="flex-1">
+              <span className="min-w-0 flex-1">
                 <span className="block font-medium">{starter.title}</span>
                 <span className="mt-0.5 block text-[13px] text-muted-foreground">
                   {starter.hint}

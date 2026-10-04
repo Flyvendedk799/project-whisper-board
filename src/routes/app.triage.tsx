@@ -2,19 +2,25 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bug, Inbox, Loader2, Plus, Ticket } from "lucide-react";
+import { Bookmark, Bug, Columns3, Inbox, List, Loader2, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { EmptyState, PageHeader, Segmented } from "@/components/app-shell";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { EmptyState, ListSkeleton, PageHeader, Segmented } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
 import { SectionBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/components/auth-provider";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { FilterBar } from "@/features/triage/filter-bar";
 import { TicketBoard } from "@/features/triage/ticket-board";
 import { BulkBar } from "@/features/triage/bulk-bar";
 import { CreatePlanFromTicketsDialog } from "@/features/triage/create-plan-from-tickets";
-import { ViewsRail } from "@/features/triage/views-rail";
+import { ViewChips, ViewsRail } from "@/features/triage/views-rail";
 import { TicketDeleteDialog } from "@/features/tickets/ticket-delete-dialog";
 import { TicketListHeader, TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
@@ -54,7 +60,6 @@ function TriagePage() {
   const [viewsOpen, setViewsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [creatingPlan, setCreatingPlan] = useState(false);
-  const isMobile = useIsMobile();
 
   const viewerId = user?.id ?? "";
 
@@ -167,42 +172,33 @@ function TriagePage() {
     });
   };
 
+  const loadMore = tickets.hasNextPage ? (
+    <div className="p-4 text-center">
+      <Button
+        variant="outline"
+        className="max-md:w-full"
+        onClick={() => void tickets.fetchNextPage()}
+        disabled={tickets.isFetchingNextPage}
+      >
+        {tickets.isFetchingNextPage ? (
+          <>
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading
+          </>
+        ) : (
+          "Load more"
+        )}
+      </Button>
+    </div>
+  ) : null;
+
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col max-md:h-auto max-md:min-h-mobile-view">
       <PageHeader
         title="Triage"
         description={`${rows.length}${tickets.hasNextPage ? "+" : ""} tickets · the queue across every client`}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            {isMobile && (
-              <Sheet open={viewsOpen} onOpenChange={setViewsOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Views
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-72 p-0">
-                  <SheetHeader className="border-b px-4 py-3">
-                    <SheetTitle>Views</SheetTitle>
-                  </SheetHeader>
-                  <SectionBoundary label="views-rail-mobile">
-                    <ViewsRail
-                      counts={counts.data}
-                      views={views.data ?? []}
-                      activeViewId={search.view}
-                      currentFilters={search}
-                      canSave={canSave}
-                      onApply={(next, viewId) => {
-                        setFilters(next, viewId);
-                        setViewsOpen(false);
-                      }}
-                      onSave={saveCurrent}
-                      onDelete={(viewId) => removeView.fire({ viewId })}
-                    />
-                  </SectionBoundary>
-                </SheetContent>
-              </Sheet>
-            )}
+          <div className="flex flex-wrap items-center gap-2 max-md:hidden">
             <Segmented
               label="Layout"
               value={search.board ? "board" : "list"}
@@ -263,6 +259,68 @@ function TriagePage() {
               name: label.name,
               color: label.color,
             }))}
+            mobileActions={
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 bg-card"
+                aria-label={search.board ? "Switch to list layout" : "Switch to board layout"}
+                onClick={() => setFilters({ board: !search.board })}
+              >
+                {search.board ? (
+                  <List className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Columns3 className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
+            }
+            mobileRow={
+              <ViewChips
+                counts={counts.data}
+                currentFilters={search}
+                onApply={setFilters}
+                leading={
+                  <Sheet open={viewsOpen} onOpenChange={setViewsOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={`h-10 max-w-[10rem] shrink-0 gap-1.5 rounded-full px-3.5 text-sm ${
+                          search.view ? "border-primary bg-accent" : "bg-card"
+                        }`}
+                      >
+                        <Bookmark className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">
+                          {views.data?.find((view) => view.id === search.view)?.name ?? "Views"}
+                        </span>
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="p-0 pt-9">
+                      <SheetHeader className="px-5 text-left">
+                        <SheetTitle>Views</SheetTitle>
+                        <SheetDescription className="sr-only">
+                          Built-in queues and your saved filters.
+                        </SheetDescription>
+                      </SheetHeader>
+                      <SectionBoundary label="views-rail-mobile">
+                        <ViewsRail
+                          counts={counts.data}
+                          views={views.data ?? []}
+                          activeViewId={search.view}
+                          currentFilters={search}
+                          canSave={canSave}
+                          onApply={(next, viewId) => {
+                            setFilters(next, viewId);
+                            setViewsOpen(false);
+                          }}
+                          onSave={saveCurrent}
+                          onDelete={(viewId) => removeView.fire({ viewId })}
+                        />
+                      </SectionBoundary>
+                    </SheetContent>
+                  </Sheet>
+                }
+              />
+            }
           />
 
           <BulkBar
@@ -280,10 +338,19 @@ function TriagePage() {
             onClear={() => setSelected(new Set())}
           />
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto max-md:overflow-visible ${
+              selected.size > 0 ? "max-md:pb-20" : ""
+            }`}
+          >
             <QueryState
               query={tickets}
               errorTitle="Couldn't load the queue"
+              pending={
+                <div className="max-md:p-4">
+                  <ListSkeleton />
+                </div>
+              }
               empty={
                 <EmptyState
                   title={isFiltered(search) ? "Nothing here" : "No tickets yet"}
@@ -314,7 +381,10 @@ function TriagePage() {
             >
               {() =>
                 search.board ? (
-                  <TicketBoard tickets={rows} onMove={moveOnBoard} />
+                  <>
+                    <TicketBoard tickets={rows} onMove={moveOnBoard} />
+                    <div className="md:hidden">{loadMore}</div>
+                  </>
                 ) : (
                   <>
                     <TicketListHeader
@@ -341,24 +411,7 @@ function TriagePage() {
                       ))}
                     </ul>
 
-                    {tickets.hasNextPage && (
-                      <div className="p-4 text-center">
-                        <Button
-                          variant="outline"
-                          onClick={() => void tickets.fetchNextPage()}
-                          disabled={tickets.isFetchingNextPage}
-                        >
-                          {tickets.isFetchingNextPage ? (
-                            <>
-                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
-                              Loading
-                            </>
-                          ) : (
-                            "Load more"
-                          )}
-                        </Button>
-                      </div>
-                    )}
+                    {loadMore}
                   </>
                 )
               }

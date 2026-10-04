@@ -53,7 +53,7 @@ export function OpenQuestion({
         </p>
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+            "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium max-md:text-xs",
             question.blocking
               ? "bg-destructive/15 text-destructive"
               : "bg-warning/15 text-foreground",
@@ -78,10 +78,10 @@ export function OpenQuestion({
         aria-label={`Answer: ${question.body}`}
         placeholder="Write the answer…"
         maxLength={QUESTION_ANSWER_MAX}
-        className="min-h-[64px] resize-y bg-background text-sm"
+        className="min-h-[64px] resize-y bg-background text-sm max-md:min-h-[80px]"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground max-md:min-h-11 max-md:w-full max-md:text-[13px]">
           <Switch
             checked={question.blocking}
             onCheckedChange={(blocking) =>
@@ -91,12 +91,12 @@ export function OpenQuestion({
           />
           Blocks the task
         </label>
-        <span className="flex-1" />
+        <span className="flex-1 max-md:hidden" />
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 text-xs"
+          className="h-8 text-xs max-md:flex-1 max-md:border"
           disabled={actions.dismiss.busy}
           onClick={() => actions.dismiss.fire({ questionId: question.id })}
         >
@@ -105,7 +105,7 @@ export function OpenQuestion({
         <Button
           type="button"
           size="sm"
-          className="h-8 text-xs"
+          className="h-8 text-xs max-md:flex-1"
           disabled={!answer.trim() || actions.answer.busy}
           onClick={submit}
         >
@@ -139,7 +139,7 @@ function ResolvedQuestion({
         </p>
         <button
           type="button"
-          className="shrink-0 text-xs text-primary hover:underline"
+          className="shrink-0 text-xs text-primary hover:underline max-md:-mr-2 max-md:-mt-2 max-md:min-h-11 max-md:px-3 max-md:text-sm"
           onClick={() => actions.dismiss.fire({ questionId: question.id, reopen: true })}
         >
           Reopen
@@ -228,7 +228,7 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
           className="min-h-[56px] resize-y bg-background text-sm"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground max-md:min-h-11 max-md:w-full max-md:text-[13px]">
             <Switch
               checked={blocking}
               onCheckedChange={setBlocking}
@@ -236,11 +236,11 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
             />
             Block the task until it is answered
           </label>
-          <span className="flex-1" />
+          <span className="flex-1 max-md:hidden" />
           <Button
             type="button"
             size="sm"
-            className="h-8 text-xs"
+            className="h-8 text-xs max-md:w-full"
             disabled={!body.trim() || actions.ask.busy}
             onClick={submit}
           >
@@ -251,7 +251,7 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
 
       {resolved.length > 0 ? (
         <details className="group">
-          <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+          <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground max-md:py-3 max-md:text-sm">
             {resolved.length} resolved
           </summary>
           <ul className="mt-2 flex flex-col gap-2">

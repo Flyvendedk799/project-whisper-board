@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -46,17 +46,12 @@ import type { RelationWithTicket, TicketDetail } from "@/data/types";
 
 const CARD = "space-y-3 rounded-xl bg-surface p-[18px] shadow-none";
 
-/** Everything an admin does to a ticket, in the order they usually do it. */
-export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
-  const { workspaceId } = useAuth();
-  const aiEnabled = useAiEnabled();
-  const invalidate = [qk.ticket(ticket.id), qk.tickets()];
-
+/** The one mutation both the sidebar and the phone's status chips go through. */
+function useTicketUpdate(ticket: TicketDetail) {
   const notify = useServerFn(notifyTicketChanged);
-
-  const update = useServerAction(useServerFn(updateTicket), {
+  return useServerAction(useServerFn(updateTicket), {
     label: "tickets.update",
-    invalidate,
+    invalidate: [qk.ticket(ticket.id), qk.tickets()],
     onSuccess: (result) => {
       // Only a change the client would want to hear about, and never at the
       // cost of the update itself if the notification cannot be delivered.
@@ -65,6 +60,62 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
       }
     },
   });
+}
+
+/**
+ * Status in one tap, for a phone: every status is a chip in a row that scrolls
+ * sideways, so changing it never means opening a menu.
+ */
+export function TicketQuickStatus({ ticket }: { ticket: TicketDetail }) {
+  const update = useTicketUpdate(ticket);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const row = rowRef.current;
+    const active = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!row || !active) return;
+    row.scrollLeft = active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2;
+  }, [ticket.status]);
+
+  return (
+    <div
+      ref={rowRef}
+      role="group"
+      aria-label="Change status"
+      className="no-scrollbar -mx-4 flex snap-x gap-2 overflow-x-auto overscroll-x-contain px-4 py-0.5 md:hidden"
+    >
+      {TICKET_STATUSES.map((value) => {
+        const active = ticket.status === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={active}
+            disabled={update.busy}
+            onClick={() => {
+              if (!active) update.fire({ ticketId: ticket.id, status: value });
+            }}
+            className={`h-11 shrink-0 snap-start rounded-full border px-4 text-sm transition-colors disabled:opacity-60 ${
+              active
+                ? "border-primary bg-accent font-medium"
+                : "bg-card text-muted-foreground active:bg-muted"
+            }`}
+          >
+            {TICKET_STATUS_LABEL[value]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Everything an admin does to a ticket, in the order they usually do it. */
+export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId: string }) {
+  const { workspaceId } = useAuth();
+  const aiEnabled = useAiEnabled();
+  const invalidate = [qk.ticket(ticket.id), qk.tickets()];
+
+  const update = useTicketUpdate(ticket);
 
   const people = useQuery(workspacePeopleQuery(workspaceId));
   const relations = useQuery(ticketRelationsQuery(ticket.id));
@@ -231,6 +282,7 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
           <Input
             id="estimate"
             type="number"
+            inputMode="decimal"
             min={0}
             step={0.5}
             defaultValue={ticket.estimate_hours ?? ""}
@@ -352,7 +404,7 @@ function ProjectRepoCard({ repo, projectId }: { repo: string | null; projectId: 
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="text-sm underline underline-offset-2"
+          className="text-sm underline underline-offset-2 max-md:inline-block max-md:break-all max-md:py-2"
         >
           {repo}
         </a>
@@ -421,7 +473,7 @@ function RelationsCard({
 
       <ul className="space-y-1.5">
         {relations.map((relation) => (
-          <li key={relation.id} className="group flex items-center gap-2 text-sm">
+          <li key={relation.id} className="group flex items-center gap-2 text-sm max-md:min-h-11">
             <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="shrink-0 text-xs text-muted-foreground">
               {TICKET_RELATION_LABEL[relation.kind]}
@@ -439,7 +491,7 @@ function RelationsCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
               aria-label="Remove link"
               onClick={() => unlink.fire({ relationId: relation.id })}
             >
@@ -464,6 +516,9 @@ function RelationsCard({
             placeholder="Ticket id"
             aria-label="Ticket to link"
             className="h-8"
+            autoComplete="off"
+            autoCapitalize="none"
+            enterKeyHint="done"
           />
           <Button type="submit" size="sm" disabled={link.busy || !number.trim()}>
             Link

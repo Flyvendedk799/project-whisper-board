@@ -144,14 +144,17 @@ function ProjectPage() {
         <>
           <PageHeader
             back={
-              <Link to="/app/projects" className="hover:text-foreground">
+              <Link
+                to="/app/projects"
+                className="hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center"
+              >
                 ← Projects
               </Link>
             }
             title={p.title}
             description={p.description ?? undefined}
             meta={
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground max-md:gap-x-3 max-md:text-sm">
                 {isAdmin ? (
                   <ProjectStatusSelect projectId={projectId} status={p.status} />
                 ) : (
@@ -159,15 +162,15 @@ function ProjectPage() {
                     {PROJECT_STATUS_LABEL[p.status]}
                   </StatusPill>
                 )}
-                <span>{p.organization?.name ?? "Internal"}</span>
+                <span className="min-w-0 truncate">{p.organization?.name ?? "Internal"}</span>
                 <span
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 max-md:w-full"
                   title="Share of plan tasks or milestones finished. Not the same as project stage."
                 >
                   <ProgressBar
                     value={p.progress}
                     label={`${p.title} work finished`}
-                    className="w-[120px]"
+                    className="w-[120px] max-md:w-auto max-md:flex-1"
                   />
                   <span className="tabular-nums">{p.progress}%</span>
                 </span>
@@ -189,18 +192,24 @@ function ProjectPage() {
             }
             action={
               <>
-                {isAdmin && <ProjectSettingsDialog project={p} />}
+                {isAdmin && (
+                  <ProjectSettingsDialog
+                    project={p}
+                    className="max-md:h-11 max-md:flex-1 max-md:text-sm"
+                  />
+                )}
                 {(isAdmin || isClientAdmin) && (
                   <InviteClientButton
                     projectId={projectId}
                     canChooseRole={isAdmin}
+                    className="max-md:flex-1"
                     onInvited={(email) => {
                       setPendingInvite(email);
                       if (tab !== "people") setTab("people");
                     }}
                   />
                 )}
-                <Button asChild>
+                <Button asChild className="max-md:order-first max-md:w-full">
                   <Link to="/app/report" search={{ project: projectId, url: undefined }}>
                     <Bug className="mr-1.5 h-4 w-4" aria-hidden="true" />
                     Report something
@@ -216,7 +225,7 @@ function ProjectPage() {
             }))}
           />
 
-          <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-8">
             {isAdmin &&
               p.progress >= 100 &&
               (p.status === "discovery" || p.status === "proposal") && (
@@ -525,7 +534,7 @@ function PeoplePanel({
           return (
             <div className="space-y-3">
               {canInvite && !hasClient && !pendingInvite && (
-                <Card className="flex flex-wrap items-center justify-between gap-3 border-dashed p-4">
+                <Card className="flex flex-wrap items-center justify-between gap-3 border-dashed p-4 max-md:[&_button]:w-full">
                   <div className="min-w-0">
                     <p className="text-sm font-medium">No client on this project yet</p>
                     <p className="text-sm text-muted-foreground">
@@ -544,6 +553,7 @@ function PeoplePanel({
                 <div className="flex justify-end">
                   <InviteClientButton
                     projectId={projectId}
+                    className="max-md:w-full"
                     canChooseRole={canManageRoles}
                     onInvited={(email) => onPendingInviteChange(email)}
                   />
@@ -557,14 +567,14 @@ function PeoplePanel({
                     canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
 
                   return (
-                    <div key={member.id} className="flex items-center gap-3 p-4">
+                    <div key={member.id} className="flex items-center gap-3 p-4 max-md:flex-wrap">
                       <span
                         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
                         aria-hidden="true"
                       >
                         {initials(member.profile?.full_name ?? member.profile?.email)}
                       </span>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 max-md:basis-32">
                         <div className="truncate text-sm font-medium">
                           {member.profile?.full_name ?? member.profile?.email}
                         </div>
@@ -579,6 +589,7 @@ function PeoplePanel({
                         <Button
                           variant="outline"
                           size="sm"
+                          className="max-md:order-last max-md:w-full"
                           disabled={setRole.busy}
                           onClick={() =>
                             setRole.fire({
@@ -623,7 +634,7 @@ function ProjectStatusSelect({ projectId, status }: { projectId: string; status:
   return (
     <>
       <Select value={status} onValueChange={(value) => apply(value as ProjectStatus)}>
-        <SelectTrigger className="h-8 w-40" aria-label="Project status">
+        <SelectTrigger className="h-8 w-40 max-md:w-full" aria-label="Project status">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -658,10 +669,12 @@ function ProjectStatusSelect({ projectId, status }: { projectId: string; status:
 function InviteClientButton({
   projectId,
   canChooseRole = false,
+  className,
   onInvited,
 }: {
   projectId: string;
   canChooseRole?: boolean;
+  className?: string;
   onInvited?: (email: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -685,7 +698,7 @@ function InviteClientButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button variant="outline" className={className}>
           <UserPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           Invite client
         </Button>
@@ -711,11 +724,21 @@ function InviteClientButton({
         >
           <div className="space-y-1.5">
             <Label htmlFor="invite-email">Email</Label>
-            <Input id="invite-email" name="email" type="email" required />
+            <Input
+              id="invite-email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="off"
+              autoCorrect="off"
+              enterKeyHint="next"
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="invite-name">Name (optional)</Label>
-            <Input id="invite-name" name="name" />
+            <Input id="invite-name" name="name" autoComplete="name" enterKeyHint="done" />
           </div>
           {canChooseRole && (
             <div className="space-y-1.5">

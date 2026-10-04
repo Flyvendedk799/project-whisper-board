@@ -17,7 +17,9 @@ import { cn } from "@/lib/utils";
  */
 export function CardCorner({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute right-2.5 top-3.5 z-10 flex h-8 items-center gap-1">{children}</div>
+    <div className="absolute right-2.5 top-3.5 z-10 flex h-8 items-center gap-1 max-md:right-1 max-md:top-2 max-md:h-11">
+      {children}
+    </div>
   );
 }
 
@@ -60,7 +62,7 @@ export function CardActionsMenu({
           disabled={busy}
           className={cn(
             "h-8 w-8 text-muted-foreground",
-            !inline && "absolute right-2.5 top-2.5",
+            !inline && "absolute right-2.5 top-2.5 max-md:right-1 max-md:top-1",
             className,
           )}
         >

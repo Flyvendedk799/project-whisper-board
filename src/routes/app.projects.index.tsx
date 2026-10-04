@@ -73,16 +73,20 @@ function ProjectsPage() {
         action={
           isAdmin ? (
             <>
-              <Button variant="outline" onClick={() => setShowArchived((value) => !value)}>
+              <Button
+                variant="outline"
+                className="max-md:flex-1"
+                onClick={() => setShowArchived((value) => !value)}
+              >
                 {showArchived ? "Hide archived" : "Show archived"}
               </Button>
-              <NewProjectButton />
+              <NewProjectButton className="max-md:flex-1" />
             </>
           ) : undefined
         }
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+      <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-8">
         <QueryState
           query={projects}
           errorTitle="Couldn't load projects"
@@ -130,7 +134,7 @@ function ProjectsPage() {
               );
             }
             return (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
                 {visible.map((project) => (
                   <div key={project.id} className="relative">
                     <Link
@@ -139,11 +143,11 @@ function ProjectsPage() {
                       search={{ tab: undefined, paid: undefined }}
                       className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md">
+                      <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all hover:border-foreground/25 hover:shadow-md max-md:min-h-0 max-md:p-4 max-md:active:bg-surface">
                         <div
                           className={cn(
                             "flex items-center justify-between gap-2",
-                            isAdmin && "pr-8",
+                            isAdmin && "pr-8 max-md:pr-11",
                           )}
                         >
                           <StatusPill tone={PROJECT_STATUS_TONE[project.status]}>
@@ -154,7 +158,9 @@ function ProjectsPage() {
                           </span>
                         </div>
 
-                        <h2 className="font-display text-2xl leading-tight">{project.title}</h2>
+                        <h2 className="break-words font-display text-2xl leading-tight max-md:text-xl">
+                          {project.title}
+                        </h2>
                         <p className="text-xs text-muted-foreground">
                           {project.organization?.name ?? "Internal"}
                         </p>
@@ -208,7 +214,7 @@ function ProjectsPage() {
   );
 }
 
-function NewProjectButton() {
+function NewProjectButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [orgMode, setOrgMode] = useState<"existing" | "new" | "none">("none");
   const [organizationId, setOrganizationId] = useState<string | undefined>();
@@ -243,7 +249,7 @@ function NewProjectButton() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        <Button className={className}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           New project
         </Button>
@@ -281,7 +287,14 @@ function NewProjectButton() {
         >
           <div className="space-y-1.5">
             <Label htmlFor="project-title">Title</Label>
-            <Input id="project-title" name="title" required placeholder="Acme storefront" />
+            <Input
+              id="project-title"
+              name="title"
+              required
+              placeholder="Acme storefront"
+              autoComplete="off"
+              enterKeyHint="next"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="project-description">What is it?</Label>
@@ -331,7 +344,14 @@ function NewProjectButton() {
           {orgMode === "new" && (
             <div className="space-y-1.5">
               <Label htmlFor="org-name">Client name</Label>
-              <Input id="org-name" name="orgName" required placeholder="Acme Inc." />
+              <Input
+                id="org-name"
+                name="orgName"
+                required
+                placeholder="Acme Inc."
+                autoComplete="organization"
+                enterKeyHint="done"
+              />
             </div>
           )}
 

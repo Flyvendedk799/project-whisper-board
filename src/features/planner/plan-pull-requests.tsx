@@ -75,10 +75,10 @@ export function PlanPullRequests({ planId }: { planId: string }) {
 
           return (
             <>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3 max-md:gap-x-3">
+                <div className="min-w-0 flex-1 max-md:basis-[calc(100%-6.5rem)]">
                   <h2 className="font-display text-2xl leading-tight">Pull requests</h2>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground max-md:break-words">
                     {data.repo ? <span className="font-mono text-[13px]">{data.repo}</span> : null}
                     {base ? (
                       <>
@@ -101,6 +101,7 @@ export function PlanPullRequests({ planId }: { planId: string }) {
                   Refresh
                 </Button>
                 <Segmented<MergeMethod>
+                  className="max-md:flex max-md:w-full max-md:[&_button]:h-10 max-md:[&_button]:flex-1 max-md:[&_button]:px-2"
                   label="Merge method"
                   value={method}
                   onChange={setMethod}
@@ -111,6 +112,7 @@ export function PlanPullRequests({ planId }: { planId: string }) {
                   ]}
                 />
                 <Button
+                  className="max-md:w-full"
                   onClick={() => setDialog({ only: null })}
                   disabled={!data.canMerge || pending.length === 0}
                   data-testid="merge-all"
@@ -244,7 +246,7 @@ function PullRow({
         <div className="rounded-xl border bg-card p-3.5">
           <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium leading-snug">{headline}</p>
+              <p className="text-sm font-medium leading-snug max-md:break-words">{headline}</p>
               {covers ? (
                 <p
                   className="mt-0.5 text-xs text-muted-foreground"
@@ -258,13 +260,13 @@ function PullRow({
                   href={entry.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-foreground hover:underline max-md:-my-2 max-md:min-h-11"
                 >
                   #{entry.number}
                   <ExternalLink className="h-3 w-3" aria-label="Open on GitHub" />
                 </a>
                 {info ? (
-                  <span className="font-mono text-[11px]">
+                  <span className="font-mono text-[11px] max-md:break-all max-md:text-xs">
                     {info.base} ← {info.head}
                   </span>
                 ) : null}

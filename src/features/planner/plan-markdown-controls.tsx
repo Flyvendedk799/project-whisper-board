@@ -201,7 +201,7 @@ export function ImportMarkdownDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:flex-wrap">
             <input
               ref={fileRef}
               type="file"
@@ -230,11 +230,13 @@ export function ImportMarkdownDialog({
             >
               Use sample outline
             </Button>
-            <span className="flex-1" />
-            <span className="truncate text-xs text-muted-foreground">{fileName}</span>
+            <span className="flex-1 max-md:hidden" />
+            <span className="min-w-0 truncate text-xs text-muted-foreground max-md:w-full">
+              {fileName}
+            </span>
           </div>
 
-          <div className="grid min-h-[260px] gap-3.5 md:grid-cols-2">
+          <div className="grid min-h-[260px] gap-3.5 max-md:min-h-0 md:grid-cols-2">
             <Textarea
               value={markdown}
               onChange={(event) => {
@@ -243,10 +245,13 @@ export function ImportMarkdownDialog({
               }}
               aria-label="Markdown outline"
               placeholder="Or paste an outline here"
-              className="min-h-[260px] resize-none rounded-[10px] bg-background font-mono text-xs leading-relaxed"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className="min-h-[260px] resize-none rounded-[10px] bg-background font-mono text-xs leading-relaxed max-md:min-h-[180px]"
             />
             <div
-              className="max-h-[340px] overflow-auto rounded-[10px] border p-3"
+              className="max-h-[340px] overflow-auto rounded-[10px] border p-3 max-md:max-h-[200px] max-md:overscroll-contain"
               aria-label="Preview"
               aria-live="polite"
             >
@@ -258,17 +263,23 @@ export function ImportMarkdownDialog({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-[200px] flex-1 text-xs leading-snug text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 max-md:grid max-md:grid-cols-2">
+            <p className="min-w-[200px] flex-1 text-xs leading-snug text-muted-foreground max-md:col-span-2 max-md:min-w-0">
               {empty
                 ? "Sync adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first."
                 : `${summary}. Sync matches by id or title, adds what is missing and keeps all progress. Merge adds every section as new. Replace deletes all current sections and tasks first.`}
             </p>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="max-md:order-last max-md:col-span-2"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button
               type="button"
+              className="max-md:col-span-2"
               disabled={empty || importMd.busy}
               onClick={() => importMd.fire({ planId, markdown, mode: "sync" })}
             >

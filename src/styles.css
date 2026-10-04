@@ -173,3 +173,83 @@
     letter-spacing: -0.01em;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile (below the `md` breakpoint, 768px). Nothing in this block applies to
+   desktop. The shell sets --mobile-topbar-h / --mobile-tabbar-h so sticky
+   headers, FABs and toasts can stack against the real chrome heights.
+   ------------------------------------------------------------------------ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --mobile-topbar-h: calc(3.25rem + var(--safe-top));
+  --mobile-tabbar-h: calc(3.5rem + var(--safe-bottom));
+}
+
+@media (max-width: 767px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    /* Stop the whole page rubber-banding sideways when something overflows. */
+    overscroll-behavior-x: none;
+  }
+  body {
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+  /* Removes the 300ms double-tap-zoom delay on every control. */
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  label,
+  summary,
+  select,
+  input,
+  textarea {
+    touch-action: manipulation;
+  }
+  /* iOS Safari zooms the viewport on focus when a field is under 16px. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  [contenteditable="true"],
+  .ProseMirror {
+    font-size: 16px;
+  }
+  /* Long unbroken strings (URLs, ids, branch names) must wrap, not widen the page. */
+  main {
+    overflow-wrap: break-word;
+  }
+  /* Radix select/popover/dropdown content must not outgrow the screen. */
+  [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 1rem);
+  }
+}
+
+/* Horizontal rows that scroll (tabs, chips, filters) without a visible bar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* A full-height pane inside the phone chrome: the screen minus the top bar, the
+   tab bar and (when it is up) the running-timer bar. */
+@utility h-mobile-view {
+  height: calc(
+    100dvh - var(--mobile-topbar-h) - var(--mobile-tabbar-h) - var(--mobile-timer-h, 0rem)
+  );
+}
+@utility min-h-mobile-view {
+  min-height: calc(
+    100dvh - var(--mobile-topbar-h) - var(--mobile-tabbar-h) - var(--mobile-timer-h, 0rem)
+  );
+}

@@ -148,10 +148,12 @@ export function OnboardingWizard() {
   );
 
   return (
-    <Card className="mx-auto max-w-xl p-6 sm:p-8">
-      <div className="mb-6 flex items-center gap-2">
+    <Card className="mx-auto max-w-xl p-6 sm:p-8 max-md:p-5">
+      <div className="mb-6 flex items-center gap-2 max-md:mb-5">
         <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-2xl">Let&rsquo;s get your first ticket</h2>
+        <h2 className="font-display text-2xl max-md:text-[22px]">
+          Let&rsquo;s get your first ticket
+        </h2>
       </div>
 
       <ol className="mb-6 flex items-center gap-2 text-sm" aria-label="Setup progress">
@@ -183,13 +185,24 @@ export function OnboardingWizard() {
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="ob-email">Their email</Label>
-            <Input id="ob-email" name="email" type="email" required autoFocus />
+            <Input
+              id="ob-email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              enterKeyHint="next"
+              required
+              autoFocus
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ob-name">Their name (optional)</Label>
-            <Input id="ob-name" name="name" />
+            <Input id="ob-name" name="name" autoComplete="off" enterKeyHint="done" />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 max-md:flex-col-reverse">
             <Button type="button" variant="outline" onClick={() => setStep(2)}>
               Skip for now
             </Button>
@@ -221,7 +234,15 @@ export function OnboardingWizard() {
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="ob-title">What are you building?</Label>
-            <Input id="ob-title" name="title" required placeholder="Acme storefront" autoFocus />
+            <Input
+              id="ob-title"
+              name="title"
+              required
+              placeholder="Acme storefront"
+              autoComplete="off"
+              enterKeyHint="next"
+              autoFocus
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ob-description">A line about it (optional)</Label>
@@ -253,7 +274,15 @@ export function OnboardingWizard() {
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="ob-ticket">What needs doing?</Label>
-            <Input id="ob-ticket" name="title" required placeholder="Set up staging" autoFocus />
+            <Input
+              id="ob-ticket"
+              name="title"
+              required
+              placeholder="Set up staging"
+              autoComplete="off"
+              enterKeyHint="next"
+              autoFocus
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ob-ticket-detail">Details (optional)</Label>

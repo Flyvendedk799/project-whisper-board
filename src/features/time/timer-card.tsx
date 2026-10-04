@@ -24,14 +24,14 @@ function Elapsed({ since }: { since: string }) {
     return () => clearInterval(id);
   }, []);
   return (
-    <span className="font-mono text-lg tabular-nums">
+    <span className="font-mono text-lg tabular-nums max-md:text-5xl max-md:leading-none">
       {formatClock(now - new Date(since).getTime())}
     </span>
   );
 }
 
 const DARK_BUTTON =
-  "h-9 shrink-0 rounded-lg bg-foreground px-[18px] text-[13px] text-background transition-opacity hover:opacity-90 disabled:opacity-50";
+  "h-9 shrink-0 rounded-lg bg-foreground px-[18px] text-[13px] text-background transition-opacity hover:opacity-90 disabled:opacity-50 max-md:h-14 max-md:basis-full max-md:text-base max-md:font-medium max-md:active:scale-[0.98]";
 
 /**
  * The timer card: what is running and for how long, or a way to start one
@@ -68,7 +68,7 @@ export function TimerCard() {
   const runningProject = entry ? projects.data?.find((p) => p.id === entry.project_id) : undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-3.5 rounded-[14px] border bg-card px-5 py-4">
+    <div className="flex flex-wrap items-center gap-3.5 rounded-[14px] border bg-card px-5 py-4 max-md:gap-3 max-md:p-4">
       <span
         className={`h-[9px] w-[9px] shrink-0 rounded-full ${entry ? "animate-pulse bg-success" : "bg-muted-foreground/40"}`}
         aria-hidden="true"
@@ -77,7 +77,7 @@ export function TimerCard() {
       {entry ? (
         <>
           <div className="min-w-0 flex-1" role="status" aria-live="polite">
-            <div className="flex flex-wrap items-baseline gap-x-3">
+            <div className="flex flex-wrap items-baseline gap-x-3 max-md:flex-col max-md:gap-y-2">
               <span className="text-sm">
                 Timer running · started{" "}
                 {new Date(entry.started_at).toLocaleTimeString(undefined, {
@@ -87,7 +87,7 @@ export function TimerCard() {
               </span>
               <Elapsed since={entry.started_at} />
             </div>
-            <div className="truncate text-xs text-muted-foreground">
+            <div className="truncate text-xs text-muted-foreground max-md:mt-2 max-md:whitespace-normal max-md:break-words max-md:text-[13px]">
               {entry.ticket ? (
                 <Link
                   to="/app/tickets/$ticketId"
@@ -114,9 +114,12 @@ export function TimerCard() {
       ) : (
         <>
           <span className="text-sm">No timer running</span>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 max-md:basis-full max-md:flex-col max-md:items-stretch max-md:gap-3">
             <Select value={projectId || undefined} onValueChange={setProjectId}>
-              <SelectTrigger aria-label="Project" className="h-9 w-48 rounded-lg text-[13px]">
+              <SelectTrigger
+                aria-label="Project"
+                className="h-9 w-48 rounded-lg text-[13px] max-md:w-full max-md:text-base"
+              >
                 <SelectValue placeholder="Project" />
               </SelectTrigger>
               <SelectContent>
@@ -133,7 +136,7 @@ export function TimerCard() {
               maxLength={500}
               onChange={(e) => setNote(e.target.value)}
               placeholder="What are you working on?"
-              className="h-9 w-56 rounded-lg text-[13px]"
+              className="h-9 w-56 rounded-lg text-[13px] max-md:w-full"
             />
             <button
               type="button"

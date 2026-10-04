@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/features/auth/password-input";
 import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
 import { createWorkspace } from "@/lib/workspace.functions";
@@ -125,6 +126,10 @@ function SignupPage() {
               <Label htmlFor="name">Your name</Label>
               <Input
                 id="name"
+                name="name"
+                autoComplete="name"
+                autoCapitalize="words"
+                enterKeyHint="next"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -136,6 +141,13 @@ function SignupPage() {
               <Input
                 id="email"
                 type="email"
+                name="email"
+                autoComplete="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -143,16 +155,18 @@ function SignupPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
+                name="password"
+                autoComplete="new-password"
+                enterKeyHint="go"
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="h-11 w-full">
+            <Button type="submit" className="h-11 w-full max-md:h-12">
               Continue
             </Button>
           </>
@@ -162,6 +176,10 @@ function SignupPage() {
               <Label htmlFor="ws-name">Agency / workspace name</Label>
               <Input
                 id="ws-name"
+                name="organization"
+                autoComplete="organization"
+                autoCapitalize="words"
+                enterKeyHint="go"
                 required
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
@@ -176,22 +194,25 @@ function SignupPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="h-11"
+                className="h-11 max-md:h-12"
                 disabled={busy}
                 onClick={() => setStep(1)}
               >
                 Back
               </Button>
-              <Button type="submit" className="h-11 flex-1" disabled={busy}>
+              <Button type="submit" className="h-11 flex-1 max-md:h-12" disabled={busy}>
                 {busy ? "Creating…" : "Create workspace"}
               </Button>
             </div>
           </>
         )}
       </form>
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground max-md:flex max-md:items-center max-md:justify-center max-md:gap-1">
         Already have an account?{" "}
-        <Link to="/login" className="text-primary underline">
+        <Link
+          to="/login"
+          className="text-primary underline max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:px-1"
+        >
           Sign in
         </Link>
       </p>

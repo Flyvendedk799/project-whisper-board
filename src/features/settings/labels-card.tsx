@@ -35,7 +35,7 @@ export function LabelsCard() {
   return (
     <QueryState query={labels} errorTitle="Couldn't load labels">
       {(rows) => (
-        <Card className="space-y-4 rounded-[14px] p-5">
+        <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
           <div>
             <h2 className="font-display text-[22px] leading-tight">Labels</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -66,6 +66,7 @@ export function LabelsCard() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={40}
+                  enterKeyHint="next"
                   required
                 />
               </div>
@@ -76,17 +77,18 @@ export function LabelsCard() {
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   maxLength={200}
+                  enterKeyHint="done"
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 max-md:gap-3.5">
               {LABEL_COLORS.map((swatch) => (
                 <button
                   key={swatch}
                   type="button"
                   aria-label={`Colour ${swatch}`}
                   aria-pressed={color === swatch}
-                  className="h-6 w-6 rounded-full ring-offset-2 ring-offset-background"
+                  className="relative h-6 w-6 rounded-full ring-offset-2 ring-offset-background max-md:after:absolute max-md:after:-inset-2.5 max-md:after:content-['']"
                   style={{
                     background: swatch,
                     boxShadow:
@@ -97,7 +99,12 @@ export function LabelsCard() {
                   onClick={() => setColor(swatch)}
                 />
               ))}
-              <Button type="submit" size="sm" className="ml-auto" disabled={save.busy}>
+              <Button
+                type="submit"
+                size="sm"
+                className="ml-auto max-md:ml-0 max-md:mt-1 max-md:w-full"
+                disabled={save.busy}
+              >
                 Add label
               </Button>
             </div>
@@ -108,16 +115,16 @@ export function LabelsCard() {
           ) : (
             <ul className="divide-y rounded-md border">
               {rows.map((label) => (
-                <li key={label.id} className="flex items-center gap-3 px-3 py-2">
+                <li key={label.id} className="flex items-center gap-3 px-3 py-2 max-md:py-1.5">
                   <span
                     className="h-3 w-3 shrink-0 rounded-full"
                     style={{ background: label.color }}
                     aria-hidden
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium">{label.name}</div>
+                    <div className="break-words text-sm font-medium">{label.name}</div>
                     {label.description && (
-                      <div className="truncate text-xs text-muted-foreground">
+                      <div className="truncate text-xs text-muted-foreground max-md:whitespace-normal max-md:break-words">
                         {label.description}
                       </div>
                     )}

@@ -39,9 +39,12 @@ export function ViewsRail({
   const [open, setOpen] = useState(false);
 
   return (
-    <nav aria-label="Saved views" className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-4">
+    <nav
+      aria-label="Saved views"
+      className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-4 max-md:px-2"
+    >
       <div>
-        <h2 className="px-2.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <h2 className="px-2.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:px-3 max-md:text-xs">
           Views
         </h2>
         <ul className="space-y-0.5">
@@ -57,7 +60,7 @@ export function ViewsRail({
                     onApply({ ...CLEARED_FILTERS, ...view.filters, view: undefined }, undefined)
                   }
                   aria-current={active ? "true" : undefined}
-                  className={`flex h-[34px] w-full items-center rounded-lg px-2.5 text-left text-[13px] transition-colors ${
+                  className={`flex h-[34px] w-full items-center rounded-lg px-2.5 text-left text-[13px] transition-colors max-md:h-12 max-md:px-3 max-md:text-[15px] ${
                     active ? "bg-accent font-medium" : "hover:bg-muted"
                   }`}
                 >
@@ -83,8 +86,8 @@ export function ViewsRail({
       </div>
 
       <div>
-        <div className="flex items-center justify-between px-2.5 pb-1.5">
-          <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <div className="flex items-center justify-between px-2.5 pb-1.5 max-md:px-3">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:text-xs">
             Saved
           </h2>
           <Popover open={open} onOpenChange={setOpen}>
@@ -92,7 +95,7 @@ export function ViewsRail({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-6 w-6 max-md:h-11 max-md:w-11"
                 disabled={!canSave}
                 aria-label="Save current filters as a view"
                 title={canSave ? "Save these filters" : "Set some filters first"}
@@ -130,7 +133,7 @@ export function ViewsRail({
         </div>
 
         {views.length === 0 ? (
-          <p className="px-2.5 text-xs text-muted-foreground">
+          <p className="px-2.5 text-xs text-muted-foreground max-md:px-3 max-md:text-[13px]">
             Filter the queue, then save it here.
           </p>
         ) : (
@@ -141,7 +144,7 @@ export function ViewsRail({
                   type="button"
                   onClick={() => onApply({ ...CLEARED_FILTERS, ...viewFilters(view) }, view.id)}
                   aria-current={activeViewId === view.id ? "true" : undefined}
-                  className={`flex h-[34px] min-w-0 flex-1 items-center rounded-lg px-2.5 text-left text-[13px] transition-colors ${
+                  className={`flex h-[34px] min-w-0 flex-1 items-center rounded-lg px-2.5 text-left text-[13px] transition-colors max-md:h-12 max-md:px-3 max-md:text-[15px] ${
                     activeViewId === view.id ? "bg-accent font-medium" : "hover:bg-muted"
                   }`}
                 >
@@ -150,7 +153,7 @@ export function ViewsRail({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:h-11 max-md:w-11 max-md:opacity-100"
                   aria-label={`Delete view ${view.name}`}
                   onClick={() => onDelete(view.id)}
                 >
@@ -162,5 +165,65 @@ export function ViewsRail({
         )}
       </div>
     </nav>
+  );
+}
+
+/**
+ * Phone-only: the built-in queues as a row of chips that scrolls sideways, so
+ * the most common thing — jumping to Overdue or Unassigned — is one tap away
+ * without opening the Views sheet. `leading` holds the button for saved views.
+ */
+export function ViewChips({
+  counts,
+  currentFilters,
+  onApply,
+  leading,
+}: {
+  counts?: Counts;
+  currentFilters: TicketFilters;
+  onApply: (filters: Partial<TicketFilters>, viewId?: string) => void;
+  leading?: React.ReactNode;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Queues"
+      className="no-scrollbar flex items-center gap-2 overflow-x-auto overscroll-x-contain px-4 py-2 md:hidden"
+    >
+      {leading}
+      {QUEUE_VIEWS.map((view) => {
+        const count = counts?.[view.id];
+        const active = matchesQueueView(currentFilters, view);
+        const hot = (view.tone === "danger" || view.tone === "warning") && (count ?? 0) > 0;
+        return (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() =>
+              onApply({ ...CLEARED_FILTERS, ...view.filters, view: undefined }, undefined)
+            }
+            aria-pressed={active}
+            className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm transition-colors ${
+              active ? "border-primary bg-accent font-medium" : "bg-card"
+            }`}
+          >
+            {view.label}
+            {count !== undefined && (
+              <span
+                className={`text-xs tabular-nums ${
+                  hot
+                    ? view.tone === "danger"
+                      ? "font-medium text-destructive"
+                      : "font-medium text-warning"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }

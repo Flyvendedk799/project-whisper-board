@@ -49,7 +49,7 @@ export function CopyIdButton({
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex shrink-0 items-center gap-1 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:relative max-md:after:absolute max-md:after:-inset-3 max-md:after:content-['']",
         copied && "text-success",
         className,
       )}

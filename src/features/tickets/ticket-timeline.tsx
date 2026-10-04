@@ -59,7 +59,7 @@ export function TicketTimeline({
   }
 
   return (
-    <ol className="space-y-4">
+    <ol className="space-y-4 max-md:space-y-3">
       {entries.map((entry) =>
         entry.kind === "comment" ? (
           <CommentEntry
@@ -84,10 +84,10 @@ function CommentEntry({
 }) {
   const author = comment.author;
   return (
-    <li className="flex gap-3">
+    <li className="flex gap-3 max-md:gap-2">
       <Avatar person={author} muted={fromClient} />
       <div
-        className={`min-w-0 flex-1 rounded-xl border px-4 py-3 ${
+        className={`min-w-0 flex-1 rounded-xl border px-4 py-3 max-md:px-3 max-md:py-2.5 ${
           comment.is_internal ? "border-warning/40 bg-warning/10" : "bg-card"
         }`}
       >
@@ -99,7 +99,7 @@ function CommentEntry({
           <time dateTime={comment.created_at}>{formatRelative(comment.created_at)}</time>
           {comment.is_internal && <StatusPill tone="warning">Internal note</StatusPill>}
         </div>
-        <div className="mt-1 text-sm leading-relaxed">
+        <div className="mt-1 text-sm leading-relaxed max-md:break-words">
           <RichTextView html={comment.body} />
         </div>
       </div>
@@ -125,14 +125,14 @@ function EventEntry({ event }: { event: EventWithActor }) {
   const who = event.actor?.full_name ?? event.actor?.email ?? "Someone";
 
   return (
-    <li className="flex items-center gap-3 text-xs text-muted-foreground">
-      <span className="grid h-8 w-8 shrink-0 place-items-center">
+    <li className="flex items-start gap-3 text-xs text-muted-foreground max-md:gap-2 md:items-center">
+      <span className="grid h-8 w-8 shrink-0 place-items-center max-md:h-7 max-md:w-7">
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 max-md:pt-1.5 max-md:leading-snug">
         <span className="font-medium text-foreground">{who}</span> {describeEvent(event)}
       </span>
-      <time dateTime={event.created_at} className="shrink-0">
+      <time dateTime={event.created_at} className="shrink-0 max-md:pt-1.5">
         {formatRelative(event.created_at)}
       </time>
     </li>
@@ -206,7 +206,7 @@ function label(map: Record<string, string>, value: string | null): string {
 function Avatar({ person, muted = false }: { person: PersonRef | null; muted?: boolean }) {
   return (
     <span
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold max-md:h-7 max-md:w-7 max-md:text-[10px] ${
         muted ? "bg-muted" : "bg-accent"
       }`}
       aria-hidden="true"

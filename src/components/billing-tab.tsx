@@ -178,16 +178,19 @@ function LineEditor({
       {lines.map((line, index) => (
         <div
           key={index}
-          className="grid grid-cols-1 gap-2 rounded-md border p-2 sm:grid-cols-[1fr_7rem_5rem_auto] sm:border-0 sm:p-0"
+          className="grid grid-cols-1 gap-2 rounded-md border p-2 max-sm:grid-cols-2 sm:grid-cols-[1fr_7rem_5rem_auto] sm:border-0 sm:p-0"
         >
           <Input
             placeholder="What it covers"
+            className="max-sm:col-span-2"
+            enterKeyHint="next"
             aria-label={`Line ${index + 1} description`}
             value={line.description}
             onChange={(e) => patch(index, { description: e.target.value })}
           />
           <Input
             type="number"
+            inputMode="decimal"
             step="0.01"
             min="0"
             placeholder="Price"
@@ -199,6 +202,7 @@ function LineEditor({
           />
           <Input
             type="number"
+            inputMode="decimal"
             step="0.5"
             min="0"
             placeholder="Qty"
@@ -206,7 +210,7 @@ function LineEditor({
             value={line.quantity}
             onChange={(e) => patch(index, { quantity: Number(e.target.value) })}
           />
-          <div className="flex">
+          <div className="flex max-sm:col-span-2 max-sm:justify-end">
             <Button
               type="button"
               variant="ghost"
@@ -313,7 +317,14 @@ function NewQuoteButton({ projectId, currency }: { projectId: string; currency: 
         >
           <div className="space-y-1.5">
             <Label htmlFor="q-title">Title</Label>
-            <Input id="q-title" name="title" required placeholder="Phase 2 — reporting" />
+            <Input
+              id="q-title"
+              name="title"
+              required
+              placeholder="Phase 2 — reporting"
+              autoComplete="off"
+              enterKeyHint="next"
+            />
           </div>
           <LineEditor lines={lines} onChange={setLines} currency={currency} />
           <div className="space-y-1.5">
@@ -385,10 +396,10 @@ function QuoteCard({
 
   return (
     <Card className="space-y-3 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 max-md:flex-nowrap">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-medium">{quote.title}</h4>
+            <h4 className="break-words font-medium">{quote.title}</h4>
             <StatusPill tone={QUOTE_STATUS_TONE[quote.status]}>
               {QUOTE_STATUS_LABEL[quote.status]}
             </StatusPill>
@@ -398,7 +409,7 @@ function QuoteCard({
             {quote.valid_until ? ` · valid until ${formatDate(quote.valid_until)}` : ""}
           </p>
         </div>
-        <div className="text-lg font-medium tabular-nums">
+        <div className="text-lg font-medium tabular-nums max-md:shrink-0">
           {formatCents(quote.total_cents, quote.currency)}
         </div>
       </div>
@@ -407,7 +418,7 @@ function QuoteCard({
         <ul className="space-y-0.5 text-sm text-muted-foreground">
           {quote.quote_line_items.map((line) => (
             <li key={line.id} className="flex justify-between gap-3">
-              <span className="min-w-0 truncate">
+              <span className="min-w-0 truncate max-md:whitespace-normal max-md:break-words">
                 {line.description}
                 {line.quantity !== 1 && ` × ${line.quantity}`}
               </span>
@@ -419,11 +430,16 @@ function QuoteCard({
         </ul>
       )}
 
-      {quote.notes && <p className="text-sm text-muted-foreground">{quote.notes}</p>}
+      {quote.notes && <p className="break-words text-sm text-muted-foreground">{quote.notes}</p>}
 
       <div className="flex flex-wrap gap-2">
         {canEdit && quote.status === "draft" && (
-          <Button size="sm" disabled={send.busy} onClick={() => send.fire({ quoteId: quote.id })}>
+          <Button
+            size="sm"
+            className="max-md:flex-1"
+            disabled={send.busy}
+            onClick={() => send.fire({ quoteId: quote.id })}
+          >
             Send to client
           </Button>
         )}
@@ -431,6 +447,7 @@ function QuoteCard({
           <>
             <Button
               size="sm"
+              className="max-md:h-11 max-md:flex-1"
               disabled={respond.busy}
               onClick={() => respond.fire({ quoteId: quote.id, accept: true })}
             >
@@ -439,6 +456,7 @@ function QuoteCard({
             <Button
               size="sm"
               variant="outline"
+              className="max-md:h-11 max-md:flex-1"
               disabled={respond.busy}
               onClick={() => respond.fire({ quoteId: quote.id, accept: false })}
             >
@@ -458,6 +476,7 @@ function QuoteCard({
         <Button
           size="sm"
           variant="ghost"
+          className="max-md:flex-1 max-md:border max-md:border-input"
           disabled={doc.busy}
           onClick={() => doc.fire({ kind: "quote", id: quote.id })}
         >
@@ -495,7 +514,7 @@ function InvoiceFromQuoteButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" className="max-md:flex-1">
           <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />
           Create invoice
         </Button>
@@ -578,8 +597,12 @@ function NewInvoiceButton({ projectId, currency }: { projectId: string; currency
           className="space-y-4"
         >
           {unbilledMinutes > 0 && (
-            <label className="flex items-start gap-2 rounded-md border bg-accent/30 p-3 text-sm">
-              <input type="checkbox" name="billTime" className="mt-0.5" />
+            <label className="flex items-start gap-2 rounded-md border bg-accent/30 p-3 text-sm max-md:gap-3 max-md:p-3.5">
+              <input
+                type="checkbox"
+                name="billTime"
+                className="mt-0.5 max-md:h-5 max-md:w-5 max-md:shrink-0"
+              />
               <span>
                 Mark <strong>{formatMinutes(unbilledMinutes)}</strong> of unbilled time as invoiced.
                 Add a line item for it below.
@@ -643,10 +666,10 @@ function InvoiceCard({
 
   return (
     <Card className="space-y-3 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 max-md:flex-nowrap">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm">{invoice.number}</span>
+            <span className="break-all font-mono text-sm">{invoice.number}</span>
             <StatusPill tone={INVOICE_STATUS_TONE[invoice.status]}>
               {INVOICE_STATUS_LABEL[invoice.status]}
             </StatusPill>
@@ -658,7 +681,7 @@ function InvoiceCard({
             <p className="mt-1 text-xs text-muted-foreground">From quote: {invoice.quote.title}</p>
           )}
         </div>
-        <div className="text-right">
+        <div className="text-right max-md:shrink-0">
           <div className="text-lg font-medium tabular-nums">
             {formatCents(invoice.amount_cents, invoice.currency)}
           </div>
@@ -674,7 +697,7 @@ function InvoiceCard({
         <ul className="space-y-0.5 text-sm text-muted-foreground">
           {invoice.invoice_line_items.map((line) => (
             <li key={line.id} className="flex justify-between gap-3">
-              <span className="min-w-0 truncate">
+              <span className="min-w-0 truncate max-md:whitespace-normal max-md:break-words">
                 {line.description}
                 {line.quantity !== 1 && ` × ${line.quantity}`}
               </span>
@@ -703,6 +726,7 @@ function InvoiceCard({
           <Button
             size="sm"
             variant="outline"
+            className="max-md:flex-1"
             disabled={pay.busy}
             onClick={() => pay.fire({ invoiceId: invoice.id })}
           >
@@ -713,6 +737,7 @@ function InvoiceCard({
         {!canEdit && outstanding > 0 && (
           <Button
             size="sm"
+            className="max-md:order-first max-md:h-12 max-md:w-full max-md:text-sm"
             disabled={checkout.busy}
             onClick={() => checkout.fire({ invoiceId: invoice.id })}
           >
@@ -723,6 +748,7 @@ function InvoiceCard({
         <Button
           size="sm"
           variant="ghost"
+          className="max-md:flex-1 max-md:border max-md:border-input"
           disabled={doc.busy}
           onClick={() => doc.fire({ kind: "invoice", id: invoice.id })}
         >

@@ -75,6 +75,7 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
+                enterKeyHint="next"
               />
             </div>
             {title && (
@@ -91,7 +92,12 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                 />
               </div>
             )}
-            <Button type="submit" size="sm" disabled={post.busy || !title.trim()}>
+            <Button
+              type="submit"
+              size="sm"
+              className="max-md:h-11 max-md:w-full"
+              disabled={post.busy || !title.trim()}
+            >
               <Send className="mr-1.5 h-4 w-4" aria-hidden="true" />
               {post.busy ? "Posting…" : "Post"}
             </Button>
@@ -141,9 +147,9 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                       <time dateTime={update.created_at}>{formatRelative(update.created_at)}</time>
                       {update.kind !== "post" && <StatusPill>Automatic</StatusPill>}
                     </div>
-                    {update.title && <h3 className="font-medium">{update.title}</h3>}
+                    {update.title && <h3 className="break-words font-medium">{update.title}</h3>}
                     {update.body && (
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                         {update.body}
                       </p>
                     )}
@@ -153,7 +159,7 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                           to="/app/projects/$projectId"
                           params={{ projectId }}
                           search={{ tab: deepLink.tab }}
-                          className="text-sm underline underline-offset-2"
+                          className="text-sm underline underline-offset-2 max-md:inline-flex max-md:min-h-11 max-md:items-center"
                         >
                           {deepLink.label}
                         </Link>

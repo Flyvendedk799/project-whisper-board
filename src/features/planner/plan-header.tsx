@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -79,11 +79,11 @@ export function PlanHeader({
 
   return (
     <header className="flex shrink-0 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2.5 text-[13px] text-muted-foreground md:px-8">
+      <div className="flex items-center gap-2 border-b px-4 py-2.5 text-[13px] text-muted-foreground max-md:py-0 md:px-8">
         <Link
           to="/app/planner"
           search={{ project: plan.project_id ?? undefined }}
-          className="hover:text-foreground"
+          className="hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:shrink-0 max-md:items-center"
         >
           ← Plans
         </Link>
@@ -94,14 +94,17 @@ export function PlanHeader({
               to="/app/projects/$projectId"
               params={{ projectId: plan.project.id }}
               search={{ tab: "plans" }}
-              className="truncate hover:text-foreground"
+              className="truncate hover:text-foreground max-md:inline-flex max-md:min-w-0 max-md:min-h-11 max-md:items-center"
             >
               {plan.project.title}
             </Link>
           </>
         ) : null}
         <span className="flex-1" />
-        <span className="flex items-center gap-1.5 text-xs" aria-live="polite">
+        <span
+          className="flex items-center gap-1.5 text-xs max-md:shrink-0 max-md:whitespace-nowrap"
+          aria-live="polite"
+        >
           <span
             aria-hidden="true"
             className="h-[7px] w-[7px] animate-pulse rounded-full bg-success"
@@ -110,21 +113,21 @@ export function PlanHeader({
         </span>
       </div>
 
-      <div className="flex flex-col gap-[18px] px-4 pt-5 md:px-8">
+      <div className="flex flex-col gap-[18px] px-4 pt-5 max-md:gap-4 max-md:pt-4 md:px-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-display text-[38px] font-normal leading-[1.1] tracking-[-0.01em]">
+            <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2.5 max-md:gap-y-1">
+              <h1 className="font-display text-[38px] font-normal leading-[1.1] tracking-[-0.01em] max-md:w-full max-md:min-w-0 max-md:break-words max-md:text-[28px]">
                 {plan.title}
               </h1>
-              <CopyIdButton id={plan.id} label="plan" showId />
+              <CopyIdButton id={plan.id} label="plan" showId className="max-md:-ml-2 max-md:p-2" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
                     title="Change plan status"
                     className={cn(
-                      "inline-flex h-[26px] items-center gap-1 rounded-full px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "relative inline-flex h-[26px] items-center gap-1 rounded-full px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-9 max-md:px-3.5 max-md:text-sm max-md:before:absolute max-md:before:inset-x-0 max-md:before:-inset-y-1 max-md:before:content-['']",
                       PLAN_STATUS_CLASS[status],
                     )}
                   >
@@ -146,11 +149,11 @@ export function PlanHeader({
               </DropdownMenu>
             </div>
             {plan.description ? (
-              <p className="mt-1.5 max-w-[660px] leading-normal text-muted-foreground">
+              <p className="mt-1.5 max-w-[660px] leading-normal max-md:line-clamp-2 max-md:break-words text-muted-foreground">
                 {plan.description}
               </p>
             ) : null}
-            <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted-foreground">
+            <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted-foreground max-md:break-all max-md:text-[13px]">
               {plan.github_repo ? (
                 <>
                   {repoUrl ? (
@@ -179,7 +182,7 @@ export function PlanHeader({
                 <button
                   type="button"
                   onClick={actions.onOpenSettings}
-                  className="text-primary hover:underline"
+                  className="text-primary hover:underline max-md:-my-2 max-md:text-left max-md:py-2.5 max-md:text-sm"
                 >
                   Connect a GitHub repository so agents can link PRs
                 </button>
@@ -187,16 +190,21 @@ export function PlanHeader({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:w-full">
             {aiMenu}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" className="h-9 gap-1.5">
-                  Plan options
-                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 gap-1.5 max-md:w-11 max-md:shrink-0 max-md:px-0"
+                >
+                  <span className="max-md:sr-only">Plan options</span>
+                  <ChevronDown className="h-3.5 w-3.5 max-md:hidden" aria-hidden="true" />
+                  <MoreHorizontal className="hidden h-5 w-5 max-md:block" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[270px]">
+              <DropdownMenuContent align="end" collisionPadding={12} className="w-[270px]">
                 <OptionItem
                   label="Add open tickets"
                   hint={
@@ -238,9 +246,13 @@ export function PlanHeader({
                 />
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" className="h-9 gap-2" onClick={actions.onNewTask}>
+            <Button
+              type="button"
+              className="h-9 gap-2 max-md:order-first max-md:flex-1"
+              onClick={actions.onNewTask}
+            >
               + New task
-              <kbd className="rounded border border-primary-foreground/50 px-[5px] text-[11px] font-normal opacity-85">
+              <kbd className="rounded border border-primary-foreground/50 px-[5px] text-[11px] font-normal opacity-85 max-md:hidden">
                 N
               </kbd>
             </Button>
@@ -248,20 +260,29 @@ export function PlanHeader({
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2.5 max-md:gap-y-3">
             <span className="font-display text-[28px] leading-none">{overall.percent}%</span>
             <span className="text-muted-foreground">
               {overall.done} of {overall.total} tasks done
             </span>
             <span className="flex-1" />
+            <span
+              aria-hidden="true"
+              className="block h-1.5 w-full overflow-hidden rounded-full bg-muted md:hidden"
+            >
+              <span
+                className="block h-full rounded-full bg-primary transition-[width] duration-300"
+                style={{ width: `${overall.percent}%` }}
+              />
+            </span>
             {attention.length > 0 || questions.open > 0 ? (
-              <div className="flex items-center gap-2 rounded-full bg-accent py-1 pl-3 pr-1 text-[13px]">
+              <div className="flex flex-wrap items-center gap-2 rounded-full bg-accent py-1 pl-3 pr-1 text-[13px] max-md:w-full max-md:rounded-2xl max-md:p-2 max-md:pl-3">
                 <span>Needs you</span>
                 {questions.open > 0 ? (
                   <button
                     type="button"
                     onClick={actions.onShowQuestions}
-                    className="h-6 rounded-full bg-card px-2.5 text-xs font-medium hover:bg-card/70"
+                    className="h-6 rounded-full bg-card px-2.5 text-xs font-medium hover:bg-card/70 max-md:h-10 max-md:px-3.5 max-md:text-[13px]"
                   >
                     {questions.open} {questions.open === 1 ? "question" : "questions"}
                     {questions.blocking > 0 ? ` (${questions.blocking} blocking)` : ""}
@@ -272,7 +293,7 @@ export function PlanHeader({
                     key={chip.status}
                     type="button"
                     onClick={() => actions.onFilterStatus(chip.status)}
-                    className="h-6 rounded-full bg-card px-2.5 text-xs font-medium hover:bg-card/70"
+                    className="h-6 rounded-full bg-card px-2.5 text-xs font-medium hover:bg-card/70 max-md:h-10 max-md:px-3.5 max-md:text-[13px]"
                   >
                     {chip.label}
                   </button>
@@ -283,19 +304,22 @@ export function PlanHeader({
 
           <ul
             aria-label="Roadmap"
-            className="flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5"
+            className="max-md:hidden flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5 max-md:no-scrollbar max-md:-mx-4 max-md:snap-x max-md:snap-proximity max-md:scroll-px-4 max-md:overscroll-x-contain max-md:px-4"
           >
             {plan.sections.map((section, index) => {
               const mine = sortedTasks(section.tasks ?? []);
               const progress = progressOf(mine);
               const color = sectionColor(section.color, index);
               return (
-                <li key={section.id} className="min-w-[180px] max-w-[280px] flex-1 basis-[180px]">
+                <li
+                  key={section.id}
+                  className="min-w-[180px] max-w-[280px] flex-1 basis-[180px] max-md:snap-start"
+                >
                   <button
                     type="button"
                     onClick={() => actions.onFocusSection(section.id)}
                     aria-label={`${section.title}: ${progress.done} of ${progress.total} done`}
-                    className="flex h-full w-full flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-full min-h-14 w-full flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="flex items-center gap-2">
                       <span
@@ -327,11 +351,11 @@ export function PlanHeader({
                 </li>
               );
             })}
-            <li className="flex">
+            <li className="flex max-md:snap-start">
               <button
                 type="button"
                 onClick={actions.onAddSection}
-                className="rounded-xl border border-dashed px-4 text-[13px] text-muted-foreground hover:bg-muted/60"
+                className="rounded-xl border border-dashed px-4 text-[13px] text-muted-foreground hover:bg-muted/60 max-md:min-h-14 max-md:whitespace-nowrap"
               >
                 + Section
               </button>
@@ -365,8 +389,8 @@ function OptionItem({
         destructive && "text-destructive focus:text-destructive",
       )}
     >
-      <span className="text-[13px]">{label}</span>
-      <span className="text-[11px] text-muted-foreground">{hint}</span>
+      <span className="text-[13px] max-md:text-sm">{label}</span>
+      <span className="text-[11px] text-muted-foreground max-md:text-xs">{hint}</span>
     </DropdownMenuItem>
   );
 }

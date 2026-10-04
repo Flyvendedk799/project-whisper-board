@@ -187,12 +187,12 @@ function PlannerIndexPage() {
         }
       />
 
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+      <div className="mx-auto max-w-6xl px-4 py-6 max-md:pb-8 max-md:pt-3 md:px-8 md:py-8">
         {(projects.data?.length ?? 0) > 0 ? (
           <div
             role="group"
             aria-label="Filter by project"
-            className="-mt-1 mb-5 flex flex-wrap gap-1.5"
+            className="no-scrollbar -mt-1 mb-5 flex flex-wrap gap-1.5 max-md:sticky max-md:top-[var(--mobile-topbar-h)] max-md:z-10 max-md:-mx-4 max-md:-mt-3 max-md:mb-3 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-b max-md:bg-background/95 max-md:px-4 max-md:py-2 max-md:backdrop-blur"
           >
             <FilterChip active={!filterProjectId} onClick={() => setProjectFilter(undefined)}>
               All
@@ -246,7 +246,7 @@ function PlannerIndexPage() {
                 />
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 max-md:gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {rows.map((plan: PlanListItem) => {
                   const total = plan.task_count ?? 0;
                   const done = plan.done_task_count ?? 0;
@@ -264,8 +264,8 @@ function PlannerIndexPage() {
                         search={{}}
                         className="group block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md">
-                          <div className="flex items-center justify-between gap-2 pr-14">
+                        <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md max-md:min-h-[120px] max-md:p-4 max-md:active:bg-muted/40">
+                          <div className="flex items-center justify-between gap-2 pr-14 max-md:pr-12">
                             <StatusPill tone={PLAN_TONE[status]}>
                               {PLAN_STATUS_LABEL[status]}
                             </StatusPill>
@@ -273,7 +273,9 @@ function PlannerIndexPage() {
                               {Math.round(percent)}%
                             </span>
                           </div>
-                          <h2 className="font-display text-2xl leading-tight">{plan.title}</h2>
+                          <h2 className="font-display text-2xl leading-tight max-md:break-words max-md:text-[22px]">
+                            {plan.title}
+                          </h2>
                           <p className="text-xs text-muted-foreground">
                             {projectTitle ?? "No project"}
                           </p>
@@ -295,7 +297,7 @@ function PlannerIndexPage() {
                         </article>
                       </Link>
                       <CardCorner>
-                        <CopyIdButton id={plan.id} label="plan" />
+                        <CopyIdButton id={plan.id} label="plan" className="max-md:hidden" />
                         <CardActionsMenu
                           inline
                           label={plan.title}
@@ -330,7 +332,7 @@ function PlannerIndexPage() {
       ) : null}
 
       <Dialog open={isCreating} onOpenChange={closeCreate}>
-        <DialogContent className="sm:rounded-2xl">
+        <DialogContent className="md:rounded-2xl">
           <DialogHeader>
             <DialogTitle className="font-display text-[26px] font-normal leading-tight tracking-normal">
               Create new plan
@@ -374,6 +376,7 @@ function PlannerIndexPage() {
                 required
                 autoFocus
                 maxLength={200}
+                enterKeyHint="next"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -419,7 +422,7 @@ function FilterChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "h-[30px] rounded-full border px-3.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "h-[30px] rounded-full border px-3.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-10 max-md:shrink-0 max-md:whitespace-nowrap",
         active ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
       )}
     >

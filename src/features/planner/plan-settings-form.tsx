@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
 import type { PlanStatus, PlanWithSections } from "@/data";
 import { cn } from "@/lib/utils";
+import { STICKY_ACTIONS } from "./plan-dialogs";
 
 const STATUSES: PlanStatus[] = ["draft", "active", "paused", "completed", "archived"];
 
@@ -122,6 +123,7 @@ export function PlanSettingsForm({
           onChange={(e) => setTitle(e.target.value)}
           required
           maxLength={200}
+          enterKeyHint="next"
         />
       </div>
 
@@ -147,7 +149,7 @@ export function PlanSettingsForm({
               aria-pressed={status === value}
               onClick={() => setStatus(value)}
               className={cn(
-                "h-[30px] rounded-full border px-3 text-xs",
+                "h-[30px] rounded-full border px-3 text-xs max-md:h-10 max-md:px-3.5 max-md:text-sm",
                 status === value ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
               )}
             >
@@ -202,7 +204,7 @@ export function PlanSettingsForm({
       {selectedProject?.github_repo && selectedProject.github_repo !== githubRepo ? (
         <button
           type="button"
-          className="self-start text-[13px] text-primary hover:underline"
+          className="self-start text-left text-[13px] text-primary hover:underline max-md:-my-2 max-md:py-2.5 max-md:text-sm"
           onClick={() => {
             setGithubRepo(selectedProject.github_repo ?? "");
             if (!githubBase && selectedProject.github_default_branch) {
@@ -243,7 +245,7 @@ export function PlanSettingsForm({
               <label
                 key={label}
                 className={cn(
-                  "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-[13px]",
+                  "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-[13px] max-md:min-h-14 max-md:py-3 max-md:text-sm",
                   workMode === mode ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
                 )}
               >
@@ -257,7 +259,7 @@ export function PlanSettingsForm({
                       setWorkBranch(suggestBranchName(title));
                     }
                   }}
-                  className="mt-0.5"
+                  className="mt-0.5 max-md:h-5 max-md:w-5 max-md:shrink-0"
                 />
                 <span className="flex flex-col">
                   <span className="font-medium">{label}</span>
@@ -278,11 +280,15 @@ export function PlanSettingsForm({
                 placeholder="plan/my-plan"
                 className="font-mono text-[13px]"
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
               {githubReachable ? (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground max-md:min-h-11 max-md:text-sm">
                   <input
                     type="checkbox"
+                    className="max-md:h-5 max-md:w-5"
                     checked={createOnGitHub}
                     onChange={(e) => setCreateOnGitHub(e.target.checked)}
                   />
@@ -314,7 +320,12 @@ export function PlanSettingsForm({
         </fieldset>
       ) : null}
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div
+        className={cn(
+          "flex justify-end gap-2 pt-1 max-md:flex-col-reverse max-md:[&>button]:w-full",
+          STICKY_ACTIONS,
+        )}
+      >
         <Button variant="outline" type="button" onClick={onClose}>
           Cancel
         </Button>

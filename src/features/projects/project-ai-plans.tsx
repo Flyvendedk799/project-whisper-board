@@ -44,7 +44,7 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
           const done = rows.reduce((total, plan) => total + (plan.done_task_count ?? 0), 0);
           const percent = tasks === 0 ? 0 : Math.round((100 * done) / tasks);
           return (
-            <Card className="space-y-2 p-5">
+            <Card className="space-y-2 p-5 max-md:p-4">
               <h3 className="font-display text-xl">Plan progress</h3>
               <p className="text-sm text-muted-foreground">
                 {done} of {tasks} planned tasks are done ({percent}%).
@@ -52,7 +52,7 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
               <ul className="space-y-2">
                 {rows.map((plan) => (
                   <li key={plan.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate">{plan.title}</span>
+                    <span className="min-w-0 truncate">{plan.title}</span>
                     <span className="shrink-0 text-muted-foreground tabular-nums">
                       {plan.done_task_count ?? 0}/{plan.task_count ?? 0}
                     </span>
@@ -65,7 +65,7 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
         return (
           <div className="space-y-4">
             <div className="flex justify-end">
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="max-md:w-full">
                 <Link to="/app/planner" search={{ project: projectId, create: true }}>
                   <BrainCircuit className="mr-1.5 h-4 w-4" />
                   New plan
@@ -80,9 +80,9 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
                   params={{ planId: plan.id }}
                   className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Card className="h-full p-5 transition-shadow hover:shadow-md">
+                  <Card className="h-full p-5 transition-shadow hover:shadow-md max-md:p-4 max-md:active:bg-surface">
                     <div className="mb-2 flex items-start justify-between gap-4">
-                      <h3 className="font-semibold leading-tight group-hover:text-primary">
+                      <h3 className="min-w-0 break-words font-semibold leading-tight group-hover:text-primary">
                         {plan.title}
                       </h3>
                       <StatusPill tone={PLAN_STATUS_TONE[plan.status]}>{plan.status}</StatusPill>
@@ -94,7 +94,7 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
                       </p>
                     )}
 
-                    <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <LayoutList className="h-4 w-4" />
                         <span>{plan.section_count ?? 0} sections</span>

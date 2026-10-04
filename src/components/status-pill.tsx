@@ -46,7 +46,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="px-6 py-12 text-center">
+    <div className="px-6 py-12 text-center max-md:px-4 max-md:py-9">
       {Icon ? (
         <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent">
           <Icon className="h-6 w-6 text-primary" aria-hidden />
@@ -136,7 +136,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className={`inline-flex rounded-lg bg-muted p-[3px] ${className}`}
+      className={`inline-flex rounded-lg max-md:max-w-full bg-muted p-[3px] ${className}`}
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -149,7 +149,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={`rounded-md px-3.5 text-sm transition-colors ${
               size === "sm" ? "h-7 text-xs" : "h-7 sm:h-7"
-            } ${
+            } max-md:h-9 ${
               active
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"

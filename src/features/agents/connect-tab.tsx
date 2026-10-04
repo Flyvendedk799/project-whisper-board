@@ -28,13 +28,15 @@ function Step({
 }) {
   return (
     <section className="rounded-[14px] border bg-card p-4 md:p-5">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)] max-md:items-center max-md:gap-y-3">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-sm font-medium text-primary">
           {number}
         </span>
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 flex-1 space-y-3 max-md:contents max-md:space-y-0">
           <h2 className="font-display text-xl leading-7">{title}</h2>
-          {children}
+          <div className="space-y-3 max-md:col-span-2 max-md:min-w-0 max-md:[&_code]:break-all">
+            {children}
+          </div>
         </div>
       </div>
     </section>
@@ -84,7 +86,7 @@ function useOrigin() {
 /** What step 1 says to someone who is signed in: the keys live in their own settings. */
 function SignedInKeyStep() {
   return (
-    <Button asChild size="sm">
+    <Button asChild size="sm" className="max-md:h-11 max-md:w-full">
       <Link to="/app/settings" search={{ tab: "api" }}>
         <KeyRound className="h-4 w-4" aria-hidden />
         Open Settings &rarr; API keys
@@ -127,7 +129,7 @@ export function ConnectTab({ keyAction = <SignedInKeyStep /> }: { keyAction?: Re
           The server is a small program in the public Boared repository. Clone it and install once.
         </p>
         <CodeBlock code={snippets.install} caption="Run in a terminal" />
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="max-md:h-11 max-md:w-full">
           <a href={REPO_ZIP_URL} rel="noreferrer">
             <Download className="h-3.5 w-3.5" aria-hidden />
             Download as a zip instead
@@ -144,10 +146,17 @@ export function ConnectTab({ keyAction = <SignedInKeyStep /> }: { keyAction?: Re
             onChange={(event) => setRepoPath(event.target.value)}
             placeholder="/home/you/boared"
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            enterKeyHint="done"
             spellCheck={false}
           />
         </div>
-        <div role="tablist" aria-label="Agent" className="flex flex-wrap gap-1.5">
+        <div
+          role="tablist"
+          aria-label="Agent"
+          className="no-scrollbar flex flex-wrap gap-1.5 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4"
+        >
           {CLIENTS.map((entry) => (
             <button
               key={entry.id}
@@ -156,7 +165,7 @@ export function ConnectTab({ keyAction = <SignedInKeyStep /> }: { keyAction?: Re
               aria-selected={client === entry.id}
               onClick={() => setClient(entry.id)}
               className={cn(
-                "rounded-full border px-3 py-1 text-sm transition-colors",
+                "rounded-full border px-3 py-1 text-sm transition-colors max-md:h-11 max-md:shrink-0 max-md:whitespace-nowrap max-md:px-4",
                 client === entry.id
                   ? "border-primary bg-accent text-foreground"
                   : "text-muted-foreground hover:text-foreground",
