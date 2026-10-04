@@ -84,6 +84,9 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
             <Label htmlFor="patch-branch">Source branch</Label>
             <Input
               id="patch-branch"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={branch}
               onChange={(event) => setBranch(event.target.value)}
               required
@@ -94,6 +97,10 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
             <Label htmlFor="patch-sha">Commit SHA</Label>
             <Input
               id="patch-sha"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
               value={sha}
               onChange={(event) => setSha(event.target.value)}
               required
@@ -105,6 +112,9 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
             <Label htmlFor="patch-worktree">Worktree label</Label>
             <Input
               id="patch-worktree"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={worktree}
               onChange={(event) => setWorktree(event.target.value)}
               placeholder="Local worktree"
@@ -119,7 +129,7 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
               placeholder="Optional group"
             />
           </div>
-          <div className="sm:col-span-2 lg:col-span-4">
+          <div className="sm:col-span-2 lg:col-span-4 max-md:[&>button]:w-full">
             <Button
               type="submit"
               disabled={register.busy || !branch || !/^[a-f\d]{40}$/i.test(sha)}
@@ -138,8 +148,10 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
           ) : (
             <>
               {isAdmin && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{chosen.length} selected</span>
+                <div className="flex flex-wrap items-center gap-2 max-md:[&>button]:flex-1">
+                  <span className="text-sm text-muted-foreground max-md:w-full">
+                    {chosen.length} selected
+                  </span>
                   {bundles.map((name) => (
                     <Button
                       key={name}
@@ -180,6 +192,7 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
                     {isAdmin && row.status === "registered" && (
                       <input
                         type="checkbox"
+                        className="max-md:box-content max-md:h-5 max-md:w-5 max-md:shrink-0 max-md:-m-3 max-md:p-3"
                         aria-label={`Select ${row.summary}`}
                         checked={selected.has(row.id)}
                         onChange={(event) =>
@@ -193,8 +206,8 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium">{row.summary}</div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                      <div className="font-medium max-md:break-words">{row.summary}</div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground max-md:break-all">
                         <span className="font-mono">{row.commit_sha.slice(0, 10)}</span>
                         <span>{row.branch}</span>
                         {row.worktree_label && <span>Worktree: {row.worktree_label}</span>}
@@ -205,9 +218,14 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
                         <span>{formatDate(row.created_at)}</span>
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       {row.status === "pr_open" && row.pr_url ? (
-                        <a href={row.pr_url} target="_blank" rel="noreferrer" className="underline">
+                        <a
+                          href={row.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline max-md:-my-3 max-md:inline-block max-md:py-3"
+                        >
                           Pull request
                         </a>
                       ) : row.status === "applied" ? (
@@ -248,7 +266,7 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
               />
             </div>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 max-md:flex-col-reverse max-md:[&>button]:w-full">
             <Button variant="outline" onClick={() => setStrategy(null)}>
               Cancel
             </Button>

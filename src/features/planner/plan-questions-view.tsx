@@ -62,7 +62,11 @@ export function PlanQuestionsView({
   return (
     <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-8">
       <div className="mx-auto flex w-full max-w-[820px] flex-col gap-4">
-        <div className="flex items-center gap-2" role="group" aria-label="Question status">
+        <div
+          className="flex items-center gap-2 max-md:flex-wrap"
+          role="group"
+          aria-label="Question status"
+        >
           {(["open", "resolved"] as const).map((value) => (
             <button
               key={value}
@@ -70,7 +74,7 @@ export function PlanQuestionsView({
               aria-pressed={show === value}
               onClick={() => setShow(value)}
               className={cn(
-                "h-[30px] rounded-full border px-3 text-xs",
+                "h-[30px] rounded-full border px-3 text-xs max-md:h-10 max-md:px-3.5 max-md:text-[13px]",
                 show === value ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
               )}
             >
@@ -94,11 +98,11 @@ export function PlanQuestionsView({
                 <button
                   type="button"
                   onClick={() => onOpenTask(task.id)}
-                  className="flex items-center gap-2 self-start rounded text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-2 self-start rounded text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11 max-md:max-w-full max-md:text-[13px]"
                 >
                   <span
                     aria-hidden="true"
-                    className="h-2 w-2 rounded-full"
+                    className="h-2 w-2 rounded-full max-md:shrink-0"
                     style={{ backgroundColor: color }}
                   />
                   {sectionTitle} · {taskHeadline(task.title)}
@@ -141,7 +145,7 @@ function ResolvedLine({
         </p>
         <button
           type="button"
-          className="shrink-0 text-xs text-primary hover:underline"
+          className="shrink-0 text-xs text-primary hover:underline max-md:-my-2 max-md:min-h-11 max-md:px-2 max-md:text-[13px]"
           onClick={() => actions.dismiss.fire({ questionId: question.id, reopen: true })}
         >
           Reopen

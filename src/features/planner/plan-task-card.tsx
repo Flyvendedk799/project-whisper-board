@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { MoreHorizontal } from "lucide-react";
 import type { PlanAttachmentWithUrl, TaskWithAgent } from "@/data";
 import { hasLivePullRequest } from "@/lib/plan-refs";
 import { cardFace, nestedOutlineCount, plainTitle } from "@/lib/board-view";
@@ -36,6 +37,7 @@ export function PlanTaskCard({
   dropActive = false,
   onTagClick,
   activeTag = null,
+  onMore,
 }: {
   task: TaskWithAgent;
   expanded?: boolean;
@@ -48,6 +50,8 @@ export function PlanTaskCard({
   /** Clicking a tag chip filters the board by it. */
   onTagClick?: (tag: string) => void;
   activeTag?: string | null;
+  /** Phones only: opens the move and status sheet, the touch stand-in for dragging. */
+  onMore?: () => void;
 }) {
   const livePr = hasLivePullRequest(task);
   const style = STATUS_STYLE[task.status];
@@ -106,7 +110,7 @@ export function PlanTaskCard({
               onAdvance?.();
             }}
             className={cn(
-              "mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 p-0 text-[11px] font-semibold leading-none text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 p-0 text-[11px] font-semibold leading-none text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-7 max-md:w-7 max-md:before:absolute max-md:before:-inset-2 max-md:before:content-['']",
               style.border,
               done || task.status === "blocked" ? style.dot : "bg-transparent",
             )}
@@ -126,7 +130,7 @@ export function PlanTaskCard({
             {canExpand && onToggleExpand ? (
               <button
                 type="button"
-                className="mt-1 text-xs text-muted-foreground hover:text-foreground"
+                className="mt-1 text-xs text-muted-foreground hover:text-foreground max-md:-mb-2 max-md:inline-flex max-md:min-h-10 max-md:items-center max-md:pr-4"
                 aria-expanded={expanded}
                 aria-label={`${expanded ? "Hide" : "Show"} detail for ${face.headline}`}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -142,8 +146,23 @@ export function PlanTaskCard({
           <CopyIdButton
             id={task.id}
             label="task"
-            className="opacity-0 focus-visible:opacity-100 group-hover/card:opacity-100"
+            className="opacity-0 focus-visible:opacity-100 group-hover/card:opacity-100 max-md:hidden"
           />
+          {onMore ? (
+            <button
+              type="button"
+              aria-label={`Move or change status of ${face.headline}`}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMore();
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+              className="-mr-2 -mt-2.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
 
         {expanded && canExpand ? (
@@ -219,7 +238,7 @@ export function PlanTaskCard({
         ) : null}
 
         {hasFooter ? (
-          <div className="flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-muted-foreground max-md:gap-x-3">
             {task.assigned_agent_id ? (
               <span className="flex items-center gap-1.5">
                 <span
@@ -259,7 +278,7 @@ export function PlanTaskCard({
                 params={{ ticketId: ticket.id }}
                 search={{ from: "home" }}
                 onClick={(event) => event.stopPropagation()}
-                className="hover:underline"
+                className="hover:underline max-md:-my-2 max-md:inline-flex max-md:min-h-10 max-md:items-center max-md:px-1"
               >
                 #{ticket.ticket_number}
               </Link>
@@ -271,7 +290,7 @@ export function PlanTaskCard({
                 rel="noreferrer"
                 onClick={(event) => event.stopPropagation()}
                 className={cn(
-                  "font-medium hover:underline",
+                  "font-medium hover:underline max-md:-my-2 max-md:inline-flex max-md:min-h-10 max-md:items-center max-md:px-1",
                   PR_TONE[task.pr_status ?? "open"] ?? PR_TONE.open,
                 )}
               >

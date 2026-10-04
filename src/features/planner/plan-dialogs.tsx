@@ -16,7 +16,14 @@ import { cn } from "@/lib/utils";
 import { ColorPicker } from "./color-picker";
 import { TagEditor } from "./tag-editor";
 
-export const DIALOG_CONTENT = "sm:rounded-2xl";
+export const DIALOG_CONTENT = "md:rounded-2xl";
+/**
+ * Phones: the action row of a long form stays pinned to the bottom edge of the sheet, over the
+ * sheet's own padding, so Save is always one thumb tap away.
+ */
+export const STICKY_ACTIONS =
+  "max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mx-5 max-md:-mb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] max-md:border-t max-md:bg-background/95 max-md:px-5 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] max-md:pt-3 max-md:backdrop-blur";
+
 export const DIALOG_TITLE = "font-display text-[26px] font-normal leading-tight tracking-normal";
 
 /** Title and a section; the quick way to add a task from anywhere. */
@@ -72,6 +79,7 @@ export function NewTaskDialog({
             placeholder="What needs doing?"
             aria-label="Task title"
             maxLength={200}
+            enterKeyHint="done"
             className="h-[42px] text-[15px]"
           />
           <fieldset className="flex flex-col gap-2">
@@ -84,7 +92,7 @@ export function NewTaskDialog({
                   aria-pressed={sectionId === section.id}
                   onClick={() => setSectionId(section.id)}
                   className={cn(
-                    "h-[30px] rounded-full border px-3 text-xs",
+                    "h-[30px] max-w-full truncate rounded-full border px-3 text-xs max-md:h-10 max-md:px-3.5 max-md:text-sm",
                     sectionId === section.id
                       ? "border-primary bg-accent"
                       : "bg-card hover:bg-muted/60",
@@ -98,7 +106,7 @@ export function NewTaskDialog({
               <p className="text-[13px] text-muted-foreground">Add a section first.</p>
             ) : null}
           </fieldset>
-          <DialogFooter className="gap-2 sm:space-x-0">
+          <DialogFooter className={cn("gap-2 sm:space-x-0", STICKY_ACTIONS)}>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
@@ -192,6 +200,7 @@ export function SectionDialog({
             placeholder="e.g. Backlog, Design, Launch"
             aria-label="Section title"
             maxLength={100}
+            enterKeyHint="next"
             className="h-[42px] text-[15px]"
           />
           <div className="flex flex-col gap-1.5">
@@ -248,7 +257,7 @@ export function SectionDialog({
               onChange={setTags}
             />
           </div>
-          <DialogFooter className="gap-2 sm:space-x-0">
+          <DialogFooter className={cn("gap-2 sm:space-x-0", STICKY_ACTIONS)}>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

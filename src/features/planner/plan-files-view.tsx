@@ -69,7 +69,7 @@ export function PlanFilesView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-4 py-5 md:px-8 md:pb-10">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="no-scrollbar flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4">
         {KINDS.map(([value, label]) => (
           <button
             key={value}
@@ -77,21 +77,21 @@ export function PlanFilesView({
             aria-pressed={kind === value}
             onClick={() => onKind(value)}
             className={cn(
-              "h-[30px] rounded-full border px-3.5 text-[13px]",
+              "h-[30px] rounded-full border px-3.5 text-[13px] max-md:h-10 max-md:shrink-0 max-md:whitespace-nowrap",
               kind === value ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
             )}
           >
             {label}
           </button>
         ))}
-        <span className="flex-1" />
-        <span className="text-xs text-muted-foreground">
+        <span className="flex-1 max-md:hidden" />
+        <span className="text-xs text-muted-foreground max-md:hidden">
           Files on the plan itself, then everything attached to its tasks.
         </span>
       </div>
 
       <section className="flex flex-col gap-2.5" aria-labelledby="plan-files">
-        <div className="flex items-baseline gap-2.5">
+        <div className="flex items-baseline gap-2.5 max-md:flex-col max-md:gap-0.5">
           <h2 id="plan-files" className="font-display text-xl">
             Plan files
           </h2>
@@ -106,7 +106,7 @@ export function PlanFilesView({
           ariaLabel="Attach files to the plan"
         />
         {planFiles.length > 0 || planUploads.length > 0 ? (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3">
             {planFiles.map((file) => (
               <li key={file.id}>
                 <AttachmentTile roomy attachment={file} onOpen={() => setOpenId(file.id)} />
@@ -131,17 +131,17 @@ export function PlanFilesView({
 
       {groups.map(({ task, section, files }) => (
         <section key={task.id} className="flex flex-col gap-2.5">
-          <div className="flex items-baseline gap-2.5">
+          <div className="flex items-baseline gap-2.5 max-md:flex-col max-md:gap-0">
             <button
               type="button"
               onClick={() => onOpenTask(task.id)}
-              className="text-left font-display text-xl hover:text-primary"
+              className="text-left font-display text-xl hover:text-primary max-md:-my-1 max-md:min-h-11 max-md:py-2"
             >
               {taskHeadline(task.title)}
             </button>
             <span className="text-xs text-muted-foreground">{section}</span>
           </div>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3">
             {files.map((file) => (
               <li key={file.id}>
                 <AttachmentTile roomy attachment={file} onOpen={() => setOpenId(file.id)} />

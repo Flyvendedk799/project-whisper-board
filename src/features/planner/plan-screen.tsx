@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { planDetailQuery } from "@/data/planner";
 import type { PlanSection, PlanStatus, PlanWithSections } from "@/data";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
@@ -85,7 +86,7 @@ export function PlanScreen({
     return (
       <div
         role="status"
-        className="flex h-[calc(100dvh-3.5rem)] items-center justify-center gap-2 text-muted-foreground md:h-dvh"
+        className="flex items-center justify-center gap-2 text-muted-foreground max-md:h-mobile-view md:h-dvh"
       >
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
         Deleting plan…
@@ -94,7 +95,7 @@ export function PlanScreen({
   }
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-background md:h-dvh">
+    <div className="flex flex-col overflow-hidden bg-background max-md:h-mobile-view md:h-dvh">
       <QueryState
         query={planQuery}
         errorTitle="Couldn't load plan"
@@ -139,6 +140,7 @@ function PlanScreenBody({
   onDeleted?: (plan: { projectId: string | null }) => void | Promise<void>;
 }) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const meId = user?.id ?? null;
   const media = usePlanMedia();
   const actions = usePlanActions(planId);
@@ -220,9 +222,8 @@ function PlanScreenBody({
     (id: string) => {
       if (layout === "outline") {
         setSectionId(id);
-        return;
-      }
-      if (
+        if (!isMobile) return;
+      } else if (
         layout === "files" ||
         layout === "prs" ||
         layout === "questions" ||
@@ -230,14 +231,17 @@ function PlanScreenBody({
       ) {
         setLayoutChoice("columns");
       }
-      // The columns render on the next frame when switching from Files.
+      // The columns render on the next frame when switching from Files. On a phone the page
+      // scrolls too, so bring the section up under the sticky bars.
       requestAnimationFrame(() =>
-        document
-          .getElementById(`col-${id}`)
-          ?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" }),
+        document.getElementById(`col-${id}`)?.scrollIntoView({
+          behavior: "smooth",
+          inline: "start",
+          block: isMobile ? "start" : "nearest",
+        }),
       );
     },
-    [layout],
+    [layout, isMobile],
   );
 
   const toggleActivity = () => {
@@ -251,7 +255,7 @@ function PlanScreenBody({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto max-md:overscroll-contain max-md:[--plan-toolbar-h:3.875rem]">
       <PlanHeader
         plan={plan}
         aiMenu={<PlanAiMenu plan={plan} selectedTaskIds={hasActiveFilters(filters) ? order : []} />}
@@ -311,7 +315,7 @@ function PlanScreenBody({
         onToggleActivity={toggleActivity}
       />
 
-      <div className="flex min-h-[560px] flex-1 flex-col md:flex-row">
+      <div className="flex min-h-[560px] flex-1 flex-col max-md:min-h-[40dvh] max-md:flex-none md:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {empty && layout !== "patches" ? (
             <div className="min-h-0 flex-1 overflow-auto">
@@ -365,10 +369,43 @@ function PlanScreenBody({
           )}
         </div>
 
-        {activityOpen ? (
+        {activityOpen && !isMobile ? (
           <PlanActivityPanel plan={plan} onClose={toggleActivity} onOpenTask={onTaskChange} />
         ) : null}
       </div>
+
+      {isMobile && !empty && (layout === "columns" || layout === "outline") ? (
+        <div className="pointer-events-none sticky bottom-0 z-30 h-0 shrink-0">
+          <button
+            type="button"
+            aria-label="New task"
+            onClick={openNewTask}
+            className="pointer-events-auto absolute bottom-4 right-4 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Plus className="h-6 w-6" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
+      {isMobile ? (
+        <Dialog open={activityOpen} onOpenChange={(open) => !open && toggleActivity()}>
+          <DialogContent className="max-md:gap-0 max-md:overflow-hidden max-md:px-0 max-md:pb-0">
+            <DialogTitle className="sr-only">Activity</DialogTitle>
+            <DialogDescription className="sr-only">
+              What agents and teammates did on this plan.
+            </DialogDescription>
+            <PlanActivityPanel
+              sheet
+              plan={plan}
+              onClose={toggleActivity}
+              onOpenTask={(id) => {
+                setActivityOpen(false);
+                onTaskChange(id);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       <PlanTaskDrawer
         plan={plan}

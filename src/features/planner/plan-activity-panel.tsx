@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { planEventsQuery } from "@/data/planner";
 import type { EventWithRefs, PlanWithSections } from "@/data";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { eventVerb, initials, taskHeadline, tasksOf, timeAgo } from "./plan-model";
 
 /** The "Activity" side panel: what agents and teammates did, newest first. */
@@ -10,10 +11,13 @@ export function PlanActivityPanel({
   plan,
   onClose,
   onOpenTask,
+  sheet = false,
 }: {
   plan: PlanWithSections;
   onClose: () => void;
   onOpenTask: (taskId: string) => void;
+  /** Inside a bottom sheet (phones): the sheet brings its own close button and height. */
+  sheet?: boolean;
 }) {
   const events = useQuery(planEventsQuery(plan.id));
   const tasks = new Map(tasksOf(plan).map((task) => [task.id, task] as const));
@@ -22,16 +26,21 @@ export function PlanActivityPanel({
   return (
     <aside
       aria-label="Activity"
-      className="flex max-h-[70vh] w-full shrink-0 flex-col border-t bg-surface md:max-h-none md:w-[330px] md:border-l md:border-t-0"
+      className={cn(
+        "flex max-h-[70vh] w-full shrink-0 flex-col border-t bg-surface md:max-h-none md:w-[330px] md:border-l md:border-t-0",
+        sheet && "max-md:h-[75dvh] max-md:max-h-none max-md:border-t-0 max-md:bg-transparent",
+      )}
     >
       <div className="flex items-center gap-2 px-5 pb-3 pt-4">
         <h2 className="flex-1 font-display text-[22px] leading-none">Activity</h2>
-        <span className="text-xs text-muted-foreground">Updates live</span>
+        <span className={cn("text-xs text-muted-foreground", sheet && "max-md:hidden")}>
+          Updates live
+        </span>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground"
+          className={cn("h-7 w-7 text-muted-foreground", sheet && "max-md:hidden")}
           aria-label="Close activity"
           onClick={onClose}
         >
@@ -39,7 +48,7 @@ export function PlanActivityPanel({
         </Button>
       </div>
 
-      <ol className="flex flex-1 flex-col gap-4 overflow-auto px-5 pb-5">
+      <ol className="flex flex-1 flex-col gap-4 overflow-auto overscroll-contain px-5 pb-5 max-md:pb-[calc(1.25rem+var(--safe-bottom))]">
         {rows.map((event) => {
           const isAgent = Boolean(event.agent);
           const name =
@@ -82,7 +91,7 @@ export function PlanActivityPanel({
                     <button
                       type="button"
                       onClick={() => onOpenTask(task.id)}
-                      className="border-b border-border text-left text-foreground hover:border-foreground"
+                      className="border-b border-border text-left text-foreground hover:border-foreground max-md:-my-1.5 max-md:py-1.5"
                     >
                       {taskHeadline(task.title)}
                     </button>
