@@ -25,7 +25,12 @@ export function AppProviders({
         <AuthProvider>
           <Telemetry />
           {children}
-          <Toaster richColors position="top-right" closeButton />
+          <Toaster
+            richColors
+            position="top-right"
+            closeButton
+            mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 8px)", left: 12, right: 12 }}
+          />
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

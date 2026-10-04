@@ -42,14 +42,14 @@ export function RunningTimerBar() {
   const elapsed = formatMinutes(elapsedMinutes(running.started_at));
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2">
+    <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 max-md:inset-x-3 max-md:bottom-[calc(var(--mobile-tabbar-h)+0.5rem)] max-md:left-3 max-md:translate-x-0">
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg"
+        className="flex items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg max-md:h-[3.25rem] max-md:w-full max-md:pr-2"
       >
         <Timer className="h-4 w-4 shrink-0 animate-pulse text-primary" aria-hidden="true" />
-        <div className="min-w-0 text-sm">
+        <div className="min-w-0 flex-1 truncate text-sm">
           <span className="font-medium tabular-nums">{elapsed}</span>
           {running.ticket && (
             <>
@@ -70,7 +70,7 @@ export function RunningTimerBar() {
           variant="secondary"
           disabled={stop.busy}
           onClick={() => stop.fire({})}
-          className="h-7"
+          className="h-7 shrink-0 max-md:h-9"
         >
           <Square className="mr-1 h-3 w-3" aria-hidden="true" />
           Stop

@@ -9,33 +9,39 @@ import { useAssistant } from "./assistant-provider";
  * Mounted once in the app shell, inside `AssistantProvider`. Renders nothing
  * unless AI is set up.
  *
- * On a phone it sits above the Report button (and above that again when the
- * running-timer bar has lifted it), so neither covers the other.
+ * On a phone it sits above the bottom tab bar (and above that again when the
+ * running-timer bar is up), so neither covers the other.
  */
-export function AssistantRoot({ raised = false }: { raised?: boolean }) {
+export function AssistantRoot({
+  hidden = false,
+}: {
+  /** Phone only: the bottom bar is away (keyboard up, or a focused flow), so is the button. */
+  hidden?: boolean;
+}) {
   const { enabled, isOpen, toggle } = useAssistant();
   if (!enabled) return null;
 
   return (
     <>
       {isOpen && <AssistantPanel />}
-      <Button
-        size="icon"
-        onClick={toggle}
-        aria-label={isOpen ? "Close assistant" : "Open assistant"}
-        aria-expanded={isOpen}
-        title="Assistant"
-        className={cn(
-          "fixed right-5 z-40 h-12 w-12 rounded-full shadow-lg md:bottom-5",
-          raised ? "bottom-[10.25rem]" : "bottom-[5.75rem]",
-        )}
-      >
-        {isOpen ? (
-          <X className="h-5 w-5" aria-hidden="true" />
-        ) : (
-          <Sparkles className="h-5 w-5" aria-hidden="true" />
-        )}
-      </Button>
+      {hidden && !isOpen ? null : (
+        <Button
+          size="icon"
+          onClick={toggle}
+          aria-label={isOpen ? "Close assistant" : "Open assistant"}
+          aria-expanded={isOpen}
+          title="Assistant"
+          className={cn(
+            "fixed bottom-5 right-5 z-40 h-12 w-12 rounded-full shadow-lg max-md:bottom-[calc(var(--mobile-tabbar-h)+var(--mobile-timer-h)+0.75rem)] max-md:right-4 max-md:h-12 max-md:w-12",
+          )}
+        >
+          {isOpen ? (
+            <X className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
+          )}
+        </Button>
+      )}
     </>
   );
 }

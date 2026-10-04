@@ -85,11 +85,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
+      },
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
       { name: "application-name", content: "Boared" },
-      { name: "theme-color", content: "#faf6f0" },
+      { name: "theme-color", content: "#faf6f0", media: "(prefers-color-scheme: light)" },
+      { name: "theme-color", content: "#1c1814", media: "(prefers-color-scheme: dark)" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "format-detection", content: "telephone=no" },
       { property: "og:site_name", content: "Boared" },
       { property: "og:title", content: TITLE },
       { property: "og:description", content: DESCRIPTION },
