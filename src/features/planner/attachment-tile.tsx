@@ -52,7 +52,7 @@ export function SharedPill({ shared }: { shared: boolean }) {
   return (
     <span
       className={cn(
-        "rounded-full px-2 py-px text-[11px] text-accent-foreground",
+        "rounded-full px-2 py-px text-[11px] text-accent-foreground max-md:text-xs",
         shared ? "bg-chart-5/20" : "bg-muted",
       )}
     >
@@ -92,8 +92,8 @@ export function AttachmentTile({
       </div>
       <div className={cn("flex flex-col gap-0.5", roomy ? "px-3 py-2.5" : "px-2.5 py-2")}>
         <span className="truncate text-[13px] font-medium">{attachment.file_name}</span>
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground max-md:flex-col max-md:items-start max-md:gap-1 max-md:text-xs">
+          <span className="min-w-0 flex-1 truncate max-md:w-full max-md:flex-none">
             {attachment.size_bytes ? formatBytes(attachment.size_bytes) : ""}
             {uploader ? ` · ${uploader}` : ""}
           </span>
@@ -115,7 +115,11 @@ export function UploadTile({ item, onDismiss }: { item: UploadItem; onDismiss?: 
             <>
               <span className="px-3 text-center text-destructive">{item.error}</span>
               {onDismiss ? (
-                <button type="button" className="underline" onClick={onDismiss}>
+                <button
+                  type="button"
+                  className="underline max-md:min-h-11 max-md:px-4"
+                  onClick={onDismiss}
+                >
                   Dismiss
                 </button>
               ) : null}

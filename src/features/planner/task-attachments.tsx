@@ -37,7 +37,7 @@ export function TaskAttachments({
       />
 
       {files.length > 0 || uploading.length > 0 ? (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 max-md:grid-cols-2">
           {files.map((attachment) => (
             <li key={attachment.id}>
               <AttachmentTile attachment={attachment} onOpen={() => onOpenFile(attachment.id)} />

@@ -40,7 +40,7 @@ export function TaskTechnicalContext({
           Clear
         </Button>
       </div>
-      <div className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted/30 p-3 text-[13px] leading-relaxed">
+      <div className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted/30 p-3 text-[13px] leading-relaxed max-md:max-h-72 max-md:overscroll-contain max-md:text-sm">
         {context}
       </div>
       {files.length > 0 ? (
@@ -48,7 +48,7 @@ export function TaskTechnicalContext({
           {files.map((file) => (
             <li
               key={file}
-              className="max-w-full truncate rounded-md border bg-card px-1.5 py-px font-mono text-[11px] text-muted-foreground"
+              className="max-w-full truncate rounded-md border bg-card px-1.5 py-px font-mono text-[11px] text-muted-foreground max-md:text-xs"
               title={file}
             >
               {file}

@@ -20,7 +20,7 @@ export function ColorPicker({
     <div
       role="group"
       aria-label={label}
-      className={cn("flex flex-wrap items-center gap-1.5", className)}
+      className={cn("flex flex-wrap items-center gap-1.5 max-md:gap-2", className)}
     >
       <button
         type="button"
@@ -28,7 +28,7 @@ export function ColorPicker({
         title="Default colour"
         onClick={() => onChange(null)}
         className={cn(
-          "h-6 rounded-full border px-2 text-[11px] text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "h-6 rounded-full border px-2 text-[11px] text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-10 max-md:px-3.5 max-md:text-xs",
           !value && "border-primary bg-accent text-foreground",
         )}
       >
@@ -46,7 +46,7 @@ export function ColorPicker({
             onClick={() => onChange(selected ? null : entry.value)}
             style={{ backgroundColor: entry.value }}
             className={cn(
-              "flex h-6 w-6 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex h-6 w-6 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-10 max-md:w-10",
               selected && "ring-2 ring-foreground/60",
             )}
           >
@@ -59,7 +59,7 @@ export function ColorPicker({
           title={colorLabel(value)}
           aria-label={`${colorLabel(value)} colour in use`}
           style={{ backgroundColor: value }}
-          className="h-6 w-6 rounded-full ring-2 ring-foreground/60 ring-offset-2 ring-offset-background"
+          className="h-6 w-6 rounded-full ring-2 ring-foreground/60 ring-offset-2 ring-offset-background max-md:h-10 max-md:w-10"
         />
       ) : null}
     </div>

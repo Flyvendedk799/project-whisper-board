@@ -33,12 +33,13 @@ export function FileDropzone({
         if (dropped.length) onFiles(dropped);
       }}
       className={cn(
-        "flex cursor-pointer flex-col items-center gap-1 rounded-xl border-[1.5px] border-dashed p-[18px] text-center transition-colors",
+        "flex cursor-pointer flex-col items-center gap-1 rounded-xl border-[1.5px] border-dashed p-[18px] text-center transition-colors max-md:min-h-20 max-md:justify-center",
         over ? "border-primary bg-accent" : "border-input bg-background hover:bg-muted/40",
       )}
     >
       <span className="text-sm">
-        <b className="font-medium">Choose files</b>, {prompt}
+        <b className="font-medium">Choose files</b>
+        <span className="max-md:hidden">, {prompt}</span>
       </span>
       <span className="text-xs text-muted-foreground">{PLAN_ATTACHMENT_ACCEPT_HINT}</span>
       <input

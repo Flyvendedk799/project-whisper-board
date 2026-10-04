@@ -27,6 +27,7 @@ export function TagChip({
     <span
       className={cn(
         "inline-flex max-w-full items-center gap-0.5 rounded-full border bg-muted/50 px-1.5 py-px text-[11px] leading-snug text-muted-foreground",
+        onRemove && "max-md:pl-2.5 max-md:text-xs",
         active && "border-primary bg-accent text-foreground",
         className,
       )}
@@ -52,7 +53,7 @@ export function TagChip({
           type="button"
           aria-label={`Remove tag ${tag}`}
           onClick={onRemove}
-          className="rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring max-md:-my-2.5 max-md:-mr-2 max-md:grid max-md:h-10 max-md:w-10 max-md:place-items-center"
         >
           <X className="h-3 w-3" aria-hidden="true" />
         </button>
@@ -92,7 +93,7 @@ export function TagEditor({
   return (
     <div className="flex flex-col gap-1.5">
       {tags.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 max-md:gap-2">
           {tags.map((tag) => (
             <TagChip key={tag} tag={tag} onRemove={() => onChange(tags.filter((t) => t !== tag))} />
           ))}
@@ -119,7 +120,10 @@ export function TagEditor({
         }}
         onBlur={() => text.trim() && commit(text)}
         maxLength={40}
-        className="h-9 rounded-md border bg-card px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        autoCapitalize="none"
+        autoCorrect="off"
+        enterKeyHint="done"
+        className="h-9 rounded-md border bg-card px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 max-md:h-11"
       />
       <datalist id={listId}>
         {suggestions

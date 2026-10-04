@@ -91,18 +91,21 @@ export const MarkupCanvas = forwardRef<
       width={width}
       height={height}
       aria-label="Draw on the image"
-      className="absolute inset-0 h-full w-full cursor-crosshair touch-none"
+      className="absolute inset-0 h-full w-full cursor-crosshair touch-none select-none [-webkit-touch-callout:none]"
       onPointerDown={(event) => {
+        // A second finger (a pinch, a palm) never starts or replaces a stroke.
+        if (!event.isPrimary) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         current.current = { tool, color, points: [point(event)] };
       }}
       onPointerMove={(event) => {
-        if (!current.current) return;
+        if (!current.current || !event.isPrimary) return;
         current.current = extendStroke(current.current, point(event));
         redraw();
       }}
-      onPointerUp={() => {
+      onPointerUp={(event) => {
+        if (!event.isPrimary || !current.current) return;
         const stroke = current.current;
         current.current = null;
         if (stroke && isMeaningfulStroke(stroke)) strokes.current.push(stroke);

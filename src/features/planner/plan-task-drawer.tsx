@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +38,7 @@ import { TaskQuestions } from "./task-questions";
 import { TaskSteps } from "./task-steps";
 import { TaskTechnicalContext } from "./task-technical-context";
 import type { PlanActions } from "./use-plan-actions";
+import { useNarrowViewport } from "./use-narrow-viewport";
 import { useSyncedField } from "./use-synced-field";
 
 /**
@@ -67,7 +75,7 @@ export function PlanTaskDrawer({
   return (
     <Sheet open={Boolean(taskId)} onOpenChange={(open) => !open && onSelect(null)}>
       <SheetContent
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-[940px]"
+        className="flex w-full flex-col gap-0 p-0 max-md:h-dvh max-md:w-full max-md:max-w-none sm:max-w-[940px]"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <SheetTitle className="sr-only">{task ? taskHeadline(task.title) : "Task"}</SheetTitle>
@@ -108,10 +116,12 @@ function DrawerBody({
   aiMenu?: React.ReactNode;
 }) {
   const media = usePlanMedia();
+  const narrow = useNarrowViewport();
   const events = useQuery(planEventsQuery(plan.id));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [lightboxId, setLightboxId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const section = plan.sections.find((s) => s.id === task.section_id);
   const tagSuggestions = useMemo(() => collectTags(plan).map((entry) => entry.tag), [plan]);
@@ -150,80 +160,184 @@ function DrawerBody({
     return () => window.removeEventListener("paste", onPaste);
   }, [lightboxId, media, task.id]);
 
+  // On a phone the title is a textarea that grows with its text, so a long
+  // title is readable instead of cut off in a one-line field.
+  useLayoutEffect(() => {
+    const field = titleRef.current;
+    if (!narrow || !field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [narrow, title.value]);
+
   const go = (delta: number) => {
     const next = order[position + delta];
     if (next) onSelect(next);
   };
 
+  const copyLink = () => {
+    const link = taskLink(window.location.origin, plan.id, task.id);
+    navigator.clipboard
+      .writeText(link)
+      .then(() => toast.success("Link copied"))
+      .catch(() => toast.error("Couldn't copy the link"));
+  };
+
+  const copyId = () => {
+    navigator.clipboard
+      .writeText(task.id)
+      .then(() => toast.success("Copied task id"))
+      .catch(() => toast.error("Couldn't copy the id"));
+  };
+
   return (
     <>
-      <div className="flex items-center gap-2.5 border-b px-5 py-2.5 pr-14 text-[13px] text-muted-foreground">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Previous task"
-          disabled={position <= 0}
-          onClick={() => go(-1)}
-        >
-          <ChevronUp className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Next task"
-          disabled={position < 0 || position >= order.length - 1}
-          onClick={() => go(1)}
-        >
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-mono text-xs uppercase">T-{task.id.slice(0, 4)}</span>
-          {section ? ` · ${section.title}` : ""}
-          {position >= 0 ? (
-            <span className="ml-1.5 text-xs">
-              {position + 1} of {order.length}
-            </span>
-          ) : null}
-        </span>
-        {aiMenu}
-        <CopyIdButton id={task.id} label="task" />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => {
-            const link = taskLink(window.location.origin, plan.id, task.id);
-            navigator.clipboard
-              .writeText(link)
-              .then(() => toast.success("Link copied"))
-              .catch(() => toast.error("Couldn't copy the link"));
-          }}
-        >
-          Copy link
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={() => setConfirmDelete(true)}
-        >
-          Delete
-        </Button>
-      </div>
+      {narrow ? (
+        <div className="flex min-h-[calc(3.5rem+var(--safe-top))] shrink-0 items-center gap-1 border-b bg-background pb-0 pl-4 pr-14 pt-[var(--safe-top)] text-muted-foreground">
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate">
+              <span className="font-mono text-xs uppercase text-foreground">
+                T-{task.id.slice(0, 4)}
+              </span>
+              {position >= 0 ? (
+                <span className="ml-1.5 text-xs">
+                  {position + 1} of {order.length}
+                </span>
+              ) : null}
+            </div>
+            {section ? <div className="truncate text-xs">{section.title}</div> : null}
+          </div>
+          {aiMenu}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Previous task"
+            disabled={position <= 0}
+            onClick={() => go(-1)}
+          >
+            <ChevronUp className="h-5 w-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Next task"
+            disabled={position < 0 || position >= order.length - 1}
+            onClick={() => go(1)}
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" aria-label="More actions">
+                <MoreHorizontal className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={copyId}>Copy task id</DropdownMenuItem>
+              <DropdownMenuItem onSelect={copyLink}>Copy link</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                onSelect={() => setConfirmDelete(true)}
+              >
+                Delete task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2.5 border-b px-5 py-2.5 pr-14 text-[13px] text-muted-foreground">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Previous task"
+            disabled={position <= 0}
+            onClick={() => go(-1)}
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Next task"
+            disabled={position < 0 || position >= order.length - 1}
+            onClick={() => go(1)}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-mono text-xs uppercase">T-{task.id.slice(0, 4)}</span>
+            {section ? ` · ${section.title}` : ""}
+            {position >= 0 ? (
+              <span className="ml-1.5 text-xs">
+                {position + 1} of {order.length}
+              </span>
+            ) : null}
+          </span>
+          {aiMenu}
+          <CopyIdButton id={task.id} label="task" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={copyLink}
+          >
+            Copy link
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete
+          </Button>
+        </div>
+      )}
 
-      <div className="flex flex-1 flex-col overflow-auto md:flex-row md:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-7 px-5 pb-10 pt-6 md:px-7">
-          <Input
-            {...title.bind}
-            aria-label="Task title"
-            className="-mx-2 h-auto border-transparent bg-transparent px-2 py-1.5 font-display text-[32px] leading-tight shadow-none hover:bg-muted/50 focus-visible:border-primary focus-visible:bg-card md:text-[32px]"
-          />
+      <div className="flex flex-1 flex-col overflow-auto overscroll-contain md:flex-row md:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-7 px-5 pb-10 pt-6 max-md:gap-6 max-md:px-4 max-md:pb-0 max-md:pt-4 md:px-7">
+          {narrow ? (
+            <Textarea
+              {...title.bind}
+              ref={titleRef}
+              rows={1}
+              aria-label="Task title"
+              enterKeyHint="done"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              className="-mx-2 min-h-0 w-auto resize-none overflow-hidden border-transparent bg-transparent px-2 py-1.5 font-display text-[26px]! leading-tight shadow-none focus-visible:border-primary focus-visible:bg-card"
+            />
+          ) : (
+            <Input
+              {...title.bind}
+              aria-label="Task title"
+              className="-mx-2 h-auto border-transparent bg-transparent px-2 py-1.5 font-display text-[32px] leading-tight shadow-none hover:bg-muted/50 focus-visible:border-primary focus-visible:bg-card md:text-[32px]"
+            />
+          )}
+
+          {narrow ? (
+            <TaskProperties
+              variant="summary"
+              task={task}
+              planId={plan.id}
+              actions={actions}
+              createdBy={createdBy}
+              tagSuggestions={tagSuggestions}
+              work={workTargetOf(plan)}
+            />
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <label
@@ -236,7 +350,7 @@ function DrawerBody({
               id={`brief-${task.id}`}
               {...brief.bind}
               placeholder="What should be done, and what does done look like? Markdown supported."
-              className="min-h-[110px] resize-y rounded-[10px] bg-background text-sm leading-relaxed"
+              className="min-h-[110px] resize-y rounded-[10px] bg-background text-sm leading-relaxed max-md:min-h-[140px]"
             />
           </div>
 
@@ -245,8 +359,8 @@ function DrawerBody({
               href={`#questions-${task.id}`}
               className={
                 questions.blocking > 0
-                  ? "rounded-lg bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive"
-                  : "rounded-lg bg-warning/15 px-3.5 py-2.5 text-[13px]"
+                  ? "rounded-lg bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive max-md:py-3 max-md:text-sm"
+                  : "rounded-lg bg-warning/15 px-3.5 py-2.5 text-[13px] max-md:py-3 max-md:text-sm"
               }
             >
               {questions.blocking > 0
@@ -260,6 +374,17 @@ function DrawerBody({
           <TaskQuestions task={task} actions={actions} />
           <TaskTechnicalContext task={task} actions={actions} />
           <TaskAttachments task={task} onOpenFile={setLightboxId} />
+          {narrow ? (
+            <TaskProperties
+              variant="details"
+              task={task}
+              planId={plan.id}
+              actions={actions}
+              createdBy={createdBy}
+              tagSuggestions={tagSuggestions}
+              work={workTargetOf(plan)}
+            />
+          ) : null}
           <TaskDiscussion
             taskId={task.id}
             planId={plan.id}
@@ -268,16 +393,18 @@ function DrawerBody({
           />
         </div>
 
-        <div className="border-t bg-surface px-5 pb-10 pt-6 md:w-[272px] md:shrink-0 md:self-stretch md:border-l md:border-t-0">
-          <TaskProperties
-            task={task}
-            planId={plan.id}
-            actions={actions}
-            createdBy={createdBy}
-            tagSuggestions={tagSuggestions}
-            work={workTargetOf(plan)}
-          />
-        </div>
+        {narrow ? null : (
+          <div className="border-t bg-surface px-5 pb-10 pt-6 md:w-[272px] md:shrink-0 md:self-stretch md:border-l md:border-t-0">
+            <TaskProperties
+              task={task}
+              planId={plan.id}
+              actions={actions}
+              createdBy={createdBy}
+              tagSuggestions={tagSuggestions}
+              work={workTargetOf(plan)}
+            />
+          </div>
+        )}
       </div>
 
       <AttachmentLightbox
