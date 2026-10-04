@@ -1438,6 +1438,7 @@ export type Database = {
           estimate_hours: number | null
           eta_date: string | null
           first_response_at: string | null
+          follow_up_kind: string | null
           id: string
           labels: string[]
           priority: Database["public"]["Enums"]["ticket_priority"]
@@ -1468,6 +1469,7 @@ export type Database = {
           estimate_hours?: number | null
           eta_date?: string | null
           first_response_at?: string | null
+          follow_up_kind?: string | null
           id?: string
           labels?: string[]
           priority?: Database["public"]["Enums"]["ticket_priority"]
@@ -1498,6 +1500,7 @@ export type Database = {
           estimate_hours?: number | null
           eta_date?: string | null
           first_response_at?: string | null
+          follow_up_kind?: string | null
           id?: string
           labels?: string[]
           priority?: Database["public"]["Enums"]["ticket_priority"]
@@ -1960,6 +1963,66 @@ export type Database = {
             referencedColumns: ["id"]
           }
         ]
+      }
+      plan_patches: {
+        Row: {
+          id: string
+          plan_id: string
+          branch: string
+          commit_sha: string
+          worktree_label: string
+          bundle_name: string
+          summary: string
+          file_count: number
+          additions: number
+          deletions: number
+          status: string
+          pr_url: string | null
+          created_by: string | null
+          created_at: string
+          applied_at: string | null
+        }
+        Insert: {
+          id?: string
+          plan_id: string
+          branch: string
+          commit_sha: string
+          worktree_label?: string
+          bundle_name?: string
+          summary: string
+          file_count?: number
+          additions?: number
+          deletions?: number
+          status?: string
+          pr_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          applied_at?: string | null
+        }
+        Update: {
+          id?: string
+          plan_id?: string
+          branch?: string
+          commit_sha?: string
+          worktree_label?: string
+          bundle_name?: string
+          summary?: string
+          file_count?: number
+          additions?: number
+          deletions?: number
+          status?: string
+          pr_url?: string | null
+          created_by?: string | null
+          created_at?: string
+          applied_at?: string | null
+        }
+        Relationships: [{
+          foreignKeyName: "plan_patches_plan_id_fkey"
+          columns: ["plan_id"]
+          isOneToOne: false
+          referencedRelation: "plans"
+          referencedColumns: ["id"]
+        }]
       }
       plan_sections: {
         Row: {
@@ -2614,6 +2677,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      post_ticket_followup: {
+        Args: { _ticket_id: string; _body: string; _kind: string }
+        Returns: string
+      }
       ticket_queue_counts: {
         Args: { _viewer_id: string; _workspace_id: string }
         Returns: Json

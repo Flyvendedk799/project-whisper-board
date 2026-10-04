@@ -178,6 +178,12 @@ function describeEvent(event: EventWithActor): React.ReactNode {
       return to ? `estimated ${to} hours` : "removed the estimate";
     case "attached":
       return "attached a file";
+    case "title_changed":
+      return to ? `changed the title to “${to}”` : "changed the title";
+    case "description_changed":
+      return "updated the description";
+    case "follow_up_requested":
+      return to ? `opened a follow-up for ${to}` : "opened a follow-up";
     case "planner_linked":
       return to ? `added planner task “${to}”` : "linked a planner task";
     case "planner_done":

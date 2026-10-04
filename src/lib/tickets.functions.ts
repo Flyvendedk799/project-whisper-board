@@ -164,6 +164,44 @@ export const updateTicket = createServerFn({ method: "POST" })
     }),
   );
 
+/** Reporter-only correction of the ticket they filed; logged by the database trigger. */
+export const editOwnTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        ticketId: z.string().uuid(),
+        title: z.string().trim().min(1).max(200),
+        description: z.string().max(20_000).nullable(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("tickets.editOwn", async () => {
+      const { data: ticket, error: readError } = await context.supabase
+        .from("tickets")
+        .select("reporter_id")
+        .eq("id", data.ticketId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!ticket || ticket.reporter_id !== context.userId) {
+        throw new AppError("forbidden", "Only the person who filed this ticket can edit it.", {
+          status: 403,
+        });
+      }
+      const { data: changed, error } = await context.supabase
+        .from("tickets")
+        .update({ title: data.title, description: data.description })
+        .eq("id", data.ticketId)
+        .eq("reporter_id", context.userId)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!changed) throw new AppError("forbidden", "Ticket could not be edited.", { status: 403 });
+      return { ok: true };
+    }),
+  );
+
 /**
  * One statement for the whole selection rather than a request per ticket.
  * Returns which ids actually changed, so the UI can report an honest count
@@ -286,12 +324,25 @@ export const addComment = createServerFn({ method: "POST" })
         isInternal: z.boolean().default(false),
         /** Profile ids named with @ in the body. */
         mentions: z.array(z.string().uuid()).max(20).default([]),
+        followUpKind: z.enum(["improvement", "fix"]).optional(),
       })
       .parse(input),
   )
   .handler(({ data, context }) =>
     guard("tickets.addComment", async () => {
       const { supabase, userId } = context;
+
+      if (data.followUpKind) {
+        if (data.isInternal)
+          throw new AppError("invalid", "A follow-up must be a visible comment.");
+        const { data: id, error } = await supabase.rpc("post_ticket_followup", {
+          _ticket_id: data.ticketId,
+          _body: data.body,
+          _kind: data.followUpKind,
+        });
+        if (error) throw error;
+        return { id };
+      }
 
       const { data: comment, error } = await supabase
         .from("ticket_comments")

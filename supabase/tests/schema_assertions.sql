@@ -260,6 +260,32 @@ select assert(
   'moving between two closed statuses does not post a second time'
 );
 
+-- A client can reopen their own closed ticket with a visible follow-up comment.
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select public.post_ticket_followup(
+  'cccccccc-0000-0000-0000-000000000002', '<p>The fix still needs work.</p>', 'fix'
+);
+select assert(
+  (select status = 'open' and follow_up_kind = 'fix' from public.tickets
+   where id = 'cccccccc-0000-0000-0000-000000000002'),
+  'follow-up reopens the ticket with a visible reason'
+);
+select assert(
+  (select count(*) from public.ticket_comments
+   where ticket_id = 'cccccccc-0000-0000-0000-000000000002'
+     and body = '<p>The fix still needs work.</p>') = 1,
+  'the follow-up and its comment are written together'
+);
+update public.tickets set title = 'Add CSV download' where id = 'cccccccc-0000-0000-0000-000000000002';
+select assert(
+  (select count(*) from public.ticket_events
+   where ticket_id = 'cccccccc-0000-0000-0000-000000000002'
+     and kind = 'title_changed' and new_value = 'Add CSV download') = 1,
+  'a reporter edit appears in the audit timeline'
+);
+reset role;
+
 -- ---------------------------------------------------------------------------
 \echo 'project progress'
 -- ---------------------------------------------------------------------------

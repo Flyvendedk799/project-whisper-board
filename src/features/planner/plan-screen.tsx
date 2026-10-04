@@ -29,6 +29,7 @@ import { PlanDeleteDialog } from "./plan-delete-dialog";
 import { NewTaskDialog, SectionDialog, DIALOG_CONTENT, DIALOG_TITLE } from "./plan-dialogs";
 import { PlanFilesView } from "./plan-files-view";
 import { PlanPullRequests } from "./plan-pull-requests";
+import { PlanPatches } from "./plan-patches";
 import { PlanQuestionsView } from "./plan-questions-view";
 import { collectTags } from "@/lib/plan-fields";
 import { hasLivePullRequest } from "@/lib/plan-refs";
@@ -221,7 +222,12 @@ function PlanScreenBody({
         setSectionId(id);
         return;
       }
-      if (layout === "files" || layout === "prs" || layout === "questions") {
+      if (
+        layout === "files" ||
+        layout === "prs" ||
+        layout === "questions" ||
+        layout === "patches"
+      ) {
         setLayoutChoice("columns");
       }
       // The columns render on the next frame when switching from Files.
@@ -273,7 +279,12 @@ function PlanScreenBody({
           onFocusSection: focusSection,
           onFilterStatus: (status) => {
             setFilters((current) => ({ ...current, status }));
-            if (layout === "files" || layout === "prs" || layout === "questions") {
+            if (
+              layout === "files" ||
+              layout === "prs" ||
+              layout === "questions" ||
+              layout === "patches"
+            ) {
               setLayoutChoice("columns");
             }
           },
@@ -287,6 +298,7 @@ function PlanScreenBody({
         layout={layout}
         onLayout={setLayoutChoice}
         fileCount={media.visible.length}
+        hasRepo={Boolean(plan.github_repo)}
         prCount={pullRequestCount}
         questions={questions}
         tags={tags}
@@ -301,7 +313,7 @@ function PlanScreenBody({
 
       <div className="flex min-h-[560px] flex-1 flex-col md:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {empty ? (
+          {empty && layout !== "patches" ? (
             <div className="min-h-0 flex-1 overflow-auto">
               <PlanGettingStarted
                 hasProject={Boolean(plan.project_id)}
@@ -314,6 +326,8 @@ function PlanScreenBody({
                 onImportTickets={() => importTickets.fire({ planId })}
               />
             </div>
+          ) : layout === "patches" ? (
+            <PlanPatches plan={plan} />
           ) : layout === "prs" ? (
             <PlanPullRequests planId={planId} />
           ) : layout === "questions" ? (

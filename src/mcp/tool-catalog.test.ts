@@ -25,7 +25,7 @@ function registeredTools(): string[] {
 }
 
 const catalogNames = TOOL_CATALOG.map((tool) => tool.name);
-const skill = read(".agents/skills/ai-planner/SKILL.md");
+const skill = read(".agents/skills/ai-planner/SKILL.md").replace(/\r\n/g, "\n");
 
 describe("tool catalog and server.ts", () => {
   it("registers every tool once", () => {

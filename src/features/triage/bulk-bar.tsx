@@ -21,6 +21,7 @@ export function BulkBar({
   onPriority,
   onAssignee,
   onDelete,
+  onCreatePlan,
   onClear,
 }: {
   count: number;
@@ -33,6 +34,7 @@ export function BulkBar({
   onAssignee: (assigneeId: string | null) => void;
   /** Asks to delete the selection; the caller owns the confirmation. */
   onDelete: () => void;
+  onCreatePlan: () => void;
   onClear: () => void;
 }) {
   if (count === 0) return null;
@@ -81,6 +83,16 @@ export function BulkBar({
           Assign to me
         </Button>
       )}
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 rounded-full bg-card px-3 text-xs"
+        disabled={busy}
+        onClick={onCreatePlan}
+      >
+        Create plan
+      </Button>
 
       <Button
         variant="outline"

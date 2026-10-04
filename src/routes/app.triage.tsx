@@ -13,6 +13,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { FilterBar } from "@/features/triage/filter-bar";
 import { TicketBoard } from "@/features/triage/ticket-board";
 import { BulkBar } from "@/features/triage/bulk-bar";
+import { CreatePlanFromTicketsDialog } from "@/features/triage/create-plan-from-tickets";
 import { ViewsRail } from "@/features/triage/views-rail";
 import { TicketDeleteDialog } from "@/features/tickets/ticket-delete-dialog";
 import { TicketListHeader, TicketRow } from "@/features/tickets/ticket-row";
@@ -52,6 +53,7 @@ function TriagePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewsOpen, setViewsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [creatingPlan, setCreatingPlan] = useState(false);
   const isMobile = useIsMobile();
 
   const viewerId = user?.id ?? "";
@@ -228,6 +230,12 @@ function TriagePage() {
         onOpenChange={setDeleting}
         onDeleted={() => setSelected(new Set())}
       />
+      <CreatePlanFromTicketsDialog
+        open={creatingPlan}
+        onOpenChange={setCreatingPlan}
+        ticketIds={[...selected]}
+        onCreated={() => setSelected(new Set())}
+      />
 
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-[204px] shrink-0 border-r lg:block">
@@ -268,6 +276,7 @@ function TriagePage() {
             }
             onAssignee={(assigneeId) => bulk.fire({ ticketIds: [...selected], assigneeId })}
             onDelete={() => setDeleting(true)}
+            onCreatePlan={() => setCreatingPlan(true)}
             onClear={() => setSelected(new Set())}
           />
 

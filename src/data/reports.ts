@@ -45,6 +45,151 @@ export type ReportSnapshot = {
   }>;
 };
 
+export type ProjectChange = {
+  id: string;
+  title: string;
+  date: string;
+  category: "Fix" | "Improvement" | "Addition" | "Change";
+  source: "ticket" | "plan";
+  ticketId: string | null;
+  planId: string | null;
+  withPlan: boolean;
+  status: string;
+};
+
+export type ChangeFilters = {
+  bugs: boolean;
+  features: boolean;
+  source: "all" | "with_plan" | "without_plan" | "plan_only";
+  completedOnly: boolean;
+};
+
+/** Compiles visible tickets and finished standalone plan tasks into a change log. */
+export function compileProjectChanges(
+  tickets: Array<{
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    updated_at: string;
+    follow_up_kind: string | null;
+  }>,
+  linkedTasks: Array<{ ticket_id: string | null; plan_id: string; id: string }>,
+  standaloneTasks: Array<{
+    id: string;
+    title: string;
+    completed_at: string | null;
+    plan_id: string;
+    status: string;
+  }>,
+  filters: ChangeFilters,
+): ProjectChange[] {
+  const planByTicket = new Map(
+    linkedTasks.filter((task) => task.ticket_id).map((task) => [task.ticket_id, task.plan_id]),
+  );
+  const ticketRows: ProjectChange[] = tickets
+    .filter((ticket) => (ticket.type === "bug" ? filters.bugs : filters.features))
+    .filter((ticket) => !filters.completedOnly || ticket.status === "done")
+    .filter(() => filters.source !== "plan_only")
+    .filter((ticket) => filters.source !== "with_plan" || planByTicket.has(ticket.id))
+    .filter((ticket) => filters.source !== "without_plan" || !planByTicket.has(ticket.id))
+    .map((ticket) => ({
+      id: `ticket-${ticket.id}`,
+      title: ticket.title,
+      date: ticket.updated_at,
+      category:
+        ticket.follow_up_kind === "improvement"
+          ? "Improvement"
+          : ticket.type === "bug" || ticket.follow_up_kind === "fix"
+            ? "Fix"
+            : "Addition",
+      source: "ticket",
+      ticketId: ticket.id,
+      planId: planByTicket.get(ticket.id) ?? null,
+      withPlan: planByTicket.has(ticket.id),
+      status: ticket.status,
+    }));
+  const planRows: ProjectChange[] =
+    filters.source === "without_plan"
+      ? []
+      : standaloneTasks
+          .filter((task) => task.status === "done" && task.completed_at)
+          .map((task) => ({
+            id: `task-${task.id}`,
+            title: task.title,
+            date: task.completed_at!,
+            category: "Change",
+            source: "plan",
+            ticketId: null,
+            planId: task.plan_id,
+            withPlan: true,
+            status: task.status,
+          }));
+  return [...ticketRows, ...planRows].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function projectChangesQuery(
+  workspaceId: string | null | undefined,
+  projectId: string,
+  from: string,
+  to: string,
+) {
+  return queryOptions({
+    queryKey: [...qk.reports(workspaceId ?? undefined), "changes", projectId, from, to] as const,
+    enabled: Boolean(workspaceId && projectId && from && to),
+    queryFn: async () => {
+      const start = `${from}T00:00:00.000Z`;
+      const end = new Date(`${to}T00:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() + 1);
+      const endIso = end.toISOString();
+      const [ticketsRes, plansRes] = await Promise.all([
+        supabase
+          .from("tickets")
+          .select("id, title, type, status, updated_at, follow_up_kind")
+          .eq("workspace_id", workspaceId!)
+          .eq("project_id", projectId)
+          .gte("updated_at", start)
+          .lt("updated_at", endIso)
+          .order("updated_at", { ascending: false })
+          .limit(500),
+        supabase
+          .from("plans")
+          .select("id")
+          .eq("workspace_id", workspaceId!)
+          .eq("project_id", projectId),
+      ]);
+      if (ticketsRes.error) throw new DataError("reports.changeTickets", ticketsRes.error);
+      if (plansRes.error) throw new DataError("reports.changePlans", plansRes.error);
+      const ticketIds = (ticketsRes.data ?? []).map((ticket) => ticket.id);
+      const planIds = (plansRes.data ?? []).map((plan) => plan.id);
+      const [linkedRes, tasksRes] = await Promise.all([
+        ticketIds.length
+          ? supabase.from("plan_tasks").select("id, ticket_id, plan_id").in("ticket_id", ticketIds)
+          : Promise.resolve({ data: [], error: null }),
+        planIds.length
+          ? supabase
+              .from("plan_tasks")
+              .select("id, title, completed_at, plan_id, status")
+              .in("plan_id", planIds)
+              .is("ticket_id", null)
+              .eq("status", "done")
+              .gte("completed_at", start)
+              .lt("completed_at", endIso)
+              .limit(500)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (linkedRes.error) throw new DataError("reports.changeLinks", linkedRes.error);
+      if (tasksRes.error) throw new DataError("reports.changeTasks", tasksRes.error);
+      return {
+        tickets: ticketsRes.data ?? [],
+        linkedTasks: linkedRes.data ?? [],
+        standaloneTasks: tasksRes.data ?? [],
+        limited: (ticketsRes.data?.length ?? 0) === 500 || (tasksRes.data?.length ?? 0) === 500,
+      };
+    },
+  });
+}
+
 function weekKey(iso: string): string {
   const date = new Date(iso);
   const day = date.getDay();

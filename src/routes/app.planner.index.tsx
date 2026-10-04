@@ -67,7 +67,7 @@ function PlannerIndexPage() {
   const plans = useQuery(planListQuery(workspaceId, filterProjectId));
   const projects = useQuery(projectListQuery(workspaceId));
   const [isCreating, setIsCreating] = useState(Boolean(openCreate));
-  const [showArchived, setShowArchived] = useState(false);
+  const [planView, setPlanView] = useState<"open" | "all">("open");
   const [deleting, setDeleting] = useState<PlanListItem | null>(null);
 
   const [title, setTitle] = useState("");
@@ -150,8 +150,10 @@ function PlannerIndexPage() {
   };
 
   const allRows = plans.data?.plans ?? [];
-  const archivedCount = allRows.filter((plan) => plan.status === "archived").length;
-  const rows = showArchived ? allRows : allRows.filter((plan) => plan.status !== "archived");
+  const rows =
+    planView === "all"
+      ? allRows
+      : allRows.filter((plan) => plan.status !== "completed" && plan.status !== "archived");
   const setProjectFilter = (project: string | undefined) =>
     void navigate({ search: (prev: PlannerSearch) => ({ ...prev, project }) });
 
@@ -166,11 +168,20 @@ function PlannerIndexPage() {
         }
         action={
           <>
-            {archivedCount > 0 ? (
-              <Button variant="outline" onClick={() => setShowArchived((value) => !value)}>
-                {showArchived ? "Hide archived" : `Show archived (${archivedCount})`}
+            <div role="group" aria-label="Plan status view" className="flex gap-1">
+              <Button
+                variant={planView === "open" ? "default" : "outline"}
+                onClick={() => setPlanView("open")}
+              >
+                Open
               </Button>
-            ) : null}
+              <Button
+                variant={planView === "all" ? "default" : "outline"}
+                onClick={() => setPlanView("all")}
+              >
+                All
+              </Button>
+            </div>
             <Button onClick={() => setIsCreating(true)}>New plan</Button>
           </>
         }
@@ -221,11 +232,15 @@ function PlannerIndexPage() {
             rows.length === 0 ? (
               <div className="rounded-[14px] border bg-card">
                 <EmptyState
-                  title="No active plans"
-                  description="Archived plans are hidden. Choose “Show archived” to find them."
+                  title={planView === "open" ? "No open plans" : "No plans"}
+                  description={
+                    planView === "open"
+                      ? "Completed and archived plans are in All."
+                      : "Create a plan to get started."
+                  }
                   action={
-                    <Button variant="outline" onClick={() => setShowArchived(true)}>
-                      Show archived
+                    <Button variant="outline" onClick={() => setPlanView("all")}>
+                      Show all
                     </Button>
                   }
                 />

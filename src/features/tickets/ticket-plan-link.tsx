@@ -27,12 +27,14 @@ import { createTaskFromTicket } from "@/lib/planner.functions";
 import { planListQuery, ticketTasksQuery } from "@/data/planner";
 import { qk } from "@/data/keys";
 import type { PlanListItem } from "@/data";
+import { CreatePlanFromTicketsDialog } from "@/features/triage/create-plan-from-tickets";
 
 export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; projectId: string }) {
   const { workspaceId } = useAuth();
   const tasksQuery = useQuery(ticketTasksQuery(ticketId));
-  const plansQuery = useQuery(planListQuery(workspaceId, projectId));
+  const plansQuery = useQuery(planListQuery(workspaceId));
   const [open, setOpen] = useState(false);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [planId, setPlanId] = useState("");
 
   const create = useServerAction(useServerFn(createTaskFromTicket), {
@@ -45,7 +47,9 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
     },
   });
 
-  const plans = (plansQuery.data?.plans ?? []) as PlanListItem[];
+  const plans = ((plansQuery.data?.plans ?? []) as PlanListItem[]).filter(
+    (plan) => plan.project_id === projectId || plan.project_id === null,
+  );
   const tasks = tasksQuery.data ?? [];
 
   return (
@@ -57,6 +61,14 @@ export function TicketPlanLink({ ticketId, projectId }: { ticketId: string; proj
           Add to plan
         </Button>
       </div>
+      <Button variant="outline" size="sm" onClick={() => setNewPlanOpen(true)}>
+        New plan from this ticket
+      </Button>
+      <CreatePlanFromTicketsDialog
+        open={newPlanOpen}
+        onOpenChange={setNewPlanOpen}
+        ticketIds={[ticketId]}
+      />
 
       {tasks.length === 0 ? (
         <p className="text-xs text-muted-foreground">
