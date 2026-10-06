@@ -1,1 +1,4 @@
 project_id = "yjathlhennhrcxtndjth"
+[auth.email.template.invite]
+subject = "You have been invited to {{ if .Data.project_name }}{{ .Data.project_name }}{{ else }}{{ .Data.workspace_name }}{{ end }} by {{ .Data.inviter_name }}"
+content_path = "supabase/templates/invite.html"
