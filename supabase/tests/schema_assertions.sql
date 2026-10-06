@@ -572,10 +572,13 @@ select assert(
 update public.plan_task_attachments set shared_with_agents = false
 where id = 'eeeeeeee-0000-0000-0000-000000000020';
 select assert(
-  (select shared_with_agents from public.plan_task_attachments
-   where id = 'eeeeeeee-0000-0000-0000-000000000020'),
-  'but cannot hide or delete a file somebody else uploaded'
+  not (select shared_with_agents from public.plan_task_attachments
+       where id = 'eeeeeeee-0000-0000-0000-000000000020'),
+  'a project-member client who can view the plan can change files like an admin'
 );
+-- Restore for later uploader checks.
+update public.plan_task_attachments set shared_with_agents = true
+where id = 'eeeeeeee-0000-0000-0000-000000000020';
 
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(
@@ -664,9 +667,20 @@ select assert(
 delete from public.plan_task_attachments where id = 'eeeeeeee-0000-0000-0000-000000000040';
 select assert(
   (select count(*) from public.plan_task_attachments
-   where id = 'eeeeeeee-0000-0000-0000-000000000040') = 1,
-  'but cannot delete a plan file somebody else uploaded'
+   where id = 'eeeeeeee-0000-0000-0000-000000000040') = 0,
+  'a project-member client who can view the plan can delete files like an admin'
 );
+-- Put the admin''s plan file back for later isolation checks.
+reset role;
+insert into public.plan_task_attachments
+  (id, plan_id, uploader_id, storage_path, file_name, mime_type, size_bytes)
+values ('eeeeeeee-0000-0000-0000-000000000040', 'eeeeeeee-0000-0000-0000-000000000001',
+        '11111111-1111-1111-1111-111111111111',
+        '11111111-1111-1111-1111-111111111111/eeeeeeee-0000-0000-0000-000000000001/plan/a-brief.pdf',
+        'brief.pdf', 'application/pdf', 2048)
+on conflict (id) do nothing;
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(
@@ -901,7 +915,7 @@ select assert(
 -- ---------------------------------------------------------------------------
 -- Default for omitted clients_can_view is false (admin-created / agency-only).
 -- Client-created plans must set clients_can_view = true at insert.
--- Admins can flip the flag in settings. Create/edit stay admin-only today.
+-- Admins can flip the flag in settings. Create stays admin-only; edit follows can_view_plan.
 
 -- Earlier attachment checks opted Delivery in; put it back to the column default.
 update public.plans set clients_can_view = false
@@ -1012,6 +1026,101 @@ reset role;
 -- Restore the Delivery plan for later assertions that may still expect it.
 update public.plans set clients_can_view = true
 where id = 'eeeeeeee-0000-0000-0000-000000000001';
+
+-- ---------------------------------------------------------------------------
+\echo 'client plan edit'
+-- ---------------------------------------------------------------------------
+-- can_edit_plan mirrors can_view_plan. Clients with view may mutate; without, not.
+-- Creating a plan stays admin-only.
+
+select assert(
+  public.can_edit_plan('eeeeeeee-0000-0000-0000-000000000001',
+                       '22222222-2222-2222-2222-222222222222'),
+  'can_edit_plan is true for a client who can view the plan'
+);
+select assert(
+  not public.can_edit_plan('eeeeeeee-0000-0000-0000-000000000050',
+                           '22222222-2222-2222-2222-222222222222'),
+  'can_edit_plan is false for a client who cannot view the plan'
+);
+select assert(
+  public.can_edit_plan('eeeeeeee-0000-0000-0000-000000000001',
+                       '11111111-1111-1111-1111-111111111111'),
+  'can_edit_plan stays true for the workspace admin'
+);
+
+-- Visible plan: client can update title and a task.
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+update public.plans set title = 'Delivery (client edit)'
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
+select assert(
+  (select title from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 'Delivery (client edit)',
+  'a client with view access can update the plan'
+);
+update public.plan_tasks set title = 'Ship it (client)'
+where id = 'eeeeeeee-0000-0000-0000-000000000010';
+select assert(
+  (select title from public.plan_tasks
+   where id = 'eeeeeeee-0000-0000-0000-000000000010') = 'Ship it (client)',
+  'and can update that plan''s tasks'
+);
+insert into public.plan_sections (id, plan_id, title, position) values
+  ('eeeeeeee-0000-0000-0000-000000000070', 'eeeeeeee-0000-0000-0000-000000000001',
+   'Client section', 99);
+select assert(
+  (select count(*) from public.plan_sections
+   where id = 'eeeeeeee-0000-0000-0000-000000000070') = 1,
+  'and can insert sections on a visible plan'
+);
+
+-- Hidden from this client (other project): no update.
+update public.plans set title = 'should not stick'
+where id = 'eeeeeeee-0000-0000-0000-000000000050';
+reset role;
+select assert(
+  (select title from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000050') = 'Internal only',
+  'a client without view cannot update a hidden plan'
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+-- Creating a plan stays admin-only for clients.
+do $$
+begin
+  begin
+    insert into public.plans (id, workspace_id, project_id, title, clients_can_view)
+    values ('eeeeeeee-0000-0000-0000-000000000071', '00000000-0000-0000-0000-000000000001',
+            'bbbbbbbb-0000-0000-0000-000000000003', 'Client-created blocked', true);
+    raise exception 'FAILED: client was allowed to create a plan';
+  exception when insufficient_privilege or check_violation then
+    raise notice '  ok  creating a plan stays admin-only for clients';
+  when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    -- RLS often surfaces as a generic error / 0 rows depending on policy style;
+    -- treat "new row violates row-level security" as success.
+    if sqlerrm ilike '%row-level security%' then
+      raise notice '  ok  creating a plan stays admin-only for clients';
+    else
+      raise;
+    end if;
+  end;
+end $$;
+reset role;
+
+-- Admin can still update after client edits.
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+update public.plans set title = 'Delivery'
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
+select assert(
+  (select title from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 'Delivery',
+  'the workspace admin can still update the plan'
+);
+reset role;
 
 -- ---------------------------------------------------------------------------
 \echo 'realtime'

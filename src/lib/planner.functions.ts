@@ -510,7 +510,7 @@ export const deletePlan = createServerFn({ method: "POST" })
         .select("id");
       if (error) throw error;
       if (!removed?.length) {
-        throw new AppError("forbidden", "Only workspace admins can delete a plan.", {
+        throw new AppError("forbidden", "You cannot delete this plan.", {
           status: 403,
         });
       }
@@ -2236,7 +2236,7 @@ export const deletePlanAttachment = createServerFn({ method: "POST" })
       if (!deleted?.length) {
         throw new AppError(
           "forbidden",
-          "Only the person who added a file or an admin can remove it.",
+          "Only the person who added a file, or someone who can edit this plan, can remove it.",
           {
             status: 403,
           },
@@ -2271,7 +2271,7 @@ export const setPlanAttachmentShared = createServerFn({ method: "POST" })
       if (!updated?.length) {
         throw new AppError(
           "forbidden",
-          "Only the person who added a file or an admin can change who sees it.",
+          "Only the person who added a file, or someone who can edit this plan, can change who sees it.",
           {
             status: 403,
           },

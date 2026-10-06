@@ -148,13 +148,19 @@ function MemberRow({
             {name}
             {isSelf ? " (you)" : ""}
           </span>
-          {member.pending ? <StatusPill tone="warning">Pending</StatusPill> : null}
+          {member.pending ? (
+            <StatusPill tone="warning">Pending</StatusPill>
+          ) : (
+            <StatusPill tone="success">Accepted</StatusPill>
+          )}
         </div>
         <div className="truncate text-xs text-muted-foreground">
           {member.profile?.email}
           {member.pending && member.invited_at
             ? ` · Invited ${formatRelative(member.invited_at)}`
-            : ""}
+            : !member.pending && member.last_sign_in_at
+              ? ` · Signed in ${formatRelative(member.last_sign_in_at)}`
+              : ""}
         </div>
       </div>
       <StatusPill className="max-md:hidden">{ROLE_LABEL[member.role]}</StatusPill>
