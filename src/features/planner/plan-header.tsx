@@ -405,7 +405,7 @@ function readExpanded(planId: string): boolean {
  * The plan's description, two lines until asked for more. The choice is
  * remembered per plan, so a plan you keep open stays open.
  */
-function PlanDescription({ planId, text }: { planId: string; text: string }) {
+export function PlanDescription({ planId, text }: { planId: string; text: string }) {
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
