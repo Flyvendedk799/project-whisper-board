@@ -4,6 +4,13 @@ import type { Database } from "@/integrations/supabase/types";
 import { Constants } from "@/integrations/supabase/types";
 import { verifyApiKey } from "@/lib/api-auth";
 import { allowsAccount } from "@/lib/api-scopes";
+import {
+  apiKeyPrincipal,
+  principalUserId,
+  principalWorkspaceId,
+  type ApiKeyPrincipal,
+  type IntegrationPrincipal,
+} from "@/lib/integration-principal";
 import { matchAccountRoute } from "@/lib/account-route";
 import { parseRepoSlug } from "@/lib/github-url";
 import { decoratePlanForAgents } from "@/features/planner/agent-media";
@@ -62,9 +69,10 @@ const ticketTaskCreate = z.object({
 const TICKET_COLUMNS =
   "id, ticket_number, title, description, status, priority, type, project_id, assignee_id, labels, due_date, eta_date, created_at, updated_at";
 
-export async function requireAccountAccess(
-  request: Request,
-): Promise<{ workspaceId: string; userId: string | null } | Response> {
+/**
+ * API-key gate for /api/v1. OAuth MCP tokens must not authenticate this route.
+ */
+export async function requireAccountAccess(request: Request): Promise<ApiKeyPrincipal | Response> {
   const auth = await verifyApiKey(request.headers.get("authorization"));
   if (!auth) return json({ error: "Unauthorized" }, 401);
   if (!allowsAccount(auth.scopes)) {
@@ -75,7 +83,7 @@ export async function requireAccountAccess(
       403,
     );
   }
-  return { workspaceId: auth.workspaceId, userId: auth.userId };
+  return apiKeyPrincipal(auth);
 }
 
 export function getAccountAdmin(): Admin {
@@ -147,11 +155,11 @@ async function nextPosition(admin: Admin, sectionId: string): Promise<number> {
 
 export async function handleAccountRequest(
   request: Request,
-  workspaceId: string,
+  principal: IntegrationPrincipal,
   path: string,
-  /** The key's owner: calls made with a key act as them. */
-  actorId: string | null = null,
 ): Promise<Response> {
+  const workspaceId = principalWorkspaceId(principal);
+  const actorId = principalUserId(principal);
   const admin = getAccountAdmin();
   const match = matchAccountRoute(path);
   if (!match) return json({ error: "Not found" }, 404);

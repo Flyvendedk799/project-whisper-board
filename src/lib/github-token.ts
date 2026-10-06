@@ -51,12 +51,19 @@ export interface GitHubConnection {
  * The order of preference, and nothing else. Your own token wins over the shared one; neither means
  * "not connected". Pure so the order is stated once and tested.
  */
+export type PickTokenOptions = {
+  /** When false, never use GITHUB_PAT. Hosted MCP OAuth must pass false. Default true. */
+  allowSharedFallback?: boolean;
+};
+
 export function pickToken(
   stored: string | null | undefined,
   env: string | null | undefined,
+  options: PickTokenOptions = {},
 ): ResolvedGitHub | null {
   const own = stored?.trim();
   if (own) return { token: own, source: "user" };
+  if (options.allowSharedFallback === false) return null;
   const shared = env?.trim();
   if (shared) return { token: shared, source: "workspace" };
   return null;
@@ -150,9 +157,12 @@ export function createGitHubTokens(deps: GitHubTokenDeps) {
   }
 
   /** No network: which token a call would use, and whose it is. */
-  async function resolve(userId: string | null | undefined): Promise<ResolvedGitHub | null> {
+  async function resolve(
+    userId: string | null | undefined,
+    options: PickTokenOptions = {},
+  ): Promise<ResolvedGitHub | null> {
     const own = userId ? await readOwn(userId) : { token: null, unreadable: false };
-    return pickToken(own.token, env.GITHUB_PAT);
+    return pickToken(own.token, env.GITHUB_PAT, options);
   }
 
   async function status(userId: string): Promise<GitHubConnection> {
@@ -262,12 +272,32 @@ export type GitHubAccess = {
   token: string | null;
 };
 
-/** What a call made on behalf of this person (or, for an API key, the person who made it) can use. */
+export type GitHubForOptions = PickTokenOptions & {
+  tokens?: GitHubTokens;
+};
+
+/**
+ * What a call made on behalf of this person (or, for an API key, the person who made it) can use.
+ * Pass `allowSharedFallback: false` for hosted MCP OAuth so GITHUB_PAT is never used silently.
+ */
 export async function githubFor(
   userId: string | null | undefined,
-  tokens: GitHubTokens = githubTokens(),
+  tokensOrOptions?: GitHubTokens | GitHubForOptions,
+  maybeOptions?: PickTokenOptions,
 ): Promise<GitHubAccess> {
-  const resolved = await tokens.resolve(userId);
+  let tokens: GitHubTokens = githubTokens();
+  let options: PickTokenOptions = {};
+
+  if (tokensOrOptions && typeof tokensOrOptions === "object" && "resolve" in tokensOrOptions) {
+    tokens = tokensOrOptions;
+    options = maybeOptions ?? {};
+  } else if (tokensOrOptions && typeof tokensOrOptions === "object") {
+    const opts = tokensOrOptions as GitHubForOptions;
+    tokens = opts.tokens ?? githubTokens();
+    options = { allowSharedFallback: opts.allowSharedFallback };
+  }
+
+  const resolved = await tokens.resolve(userId, options);
   if (!resolved) return { port: null, source: "none", token: null };
   return { port: octokitPort(resolved.token), source: resolved.source, token: resolved.token };
 }
