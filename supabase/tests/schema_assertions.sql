@@ -554,11 +554,16 @@ begin
 end $$;
 
 -- Who can see and change them.
+-- Admin-created plans default hidden; opt the Delivery plan in so these
+-- attachment/step RLS checks still exercise client project-member reads.
+update public.plans set clients_can_view = true
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
+
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select assert(
   (select count(*) from public.plan_task_attachments) = 2,
-  'a project-member client reads the plan''s attachments by default'
+  'a project-member client reads the plan''s attachments when clients_can_view'
 );
 select assert(
   (select count(*) from public.plan_task_steps) = 1,
@@ -894,14 +899,58 @@ select assert(
 -- ---------------------------------------------------------------------------
 \echo 'client plan visibility'
 -- ---------------------------------------------------------------------------
--- Default: clients_can_view is true, so a client on the project sees the plan.
--- Admins can flip the flag to hide it. Create/edit stay admin-only.
+-- Default for omitted clients_can_view is false (admin-created / agency-only).
+-- Client-created plans must set clients_can_view = true at insert.
+-- Admins can flip the flag in settings. Create/edit stay admin-only today.
+
+-- Earlier attachment checks opted Delivery in; put it back to the column default.
+update public.plans set clients_can_view = false
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
 
 select assert(
-  (select clients_can_view from public.plans
-   where id = 'eeeeeeee-0000-0000-0000-000000000001'),
-  'new plans are visible to clients by default'
+  not (select clients_can_view from public.plans
+       where id = 'eeeeeeee-0000-0000-0000-000000000001'),
+  'admin-created plans use clients_can_view = false by default'
 );
+
+-- Column default itself (insert omitting the column).
+insert into public.plans (id, workspace_id, project_id, title) values
+  ('eeeeeeee-0000-0000-0000-000000000051', '00000000-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000003', 'Agency draft');
+select assert(
+  not (select clients_can_view from public.plans
+       where id = 'eeeeeeee-0000-0000-0000-000000000051'),
+  'omitting clients_can_view on insert uses default false'
+);
+
+-- Client-created path: explicit true at insert (as app/API must do).
+insert into public.plans (id, workspace_id, project_id, title, clients_can_view, created_by) values
+  ('eeeeeeee-0000-0000-0000-000000000052', '00000000-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000003', 'Client request', true,
+   '22222222-2222-2222-2222-222222222222');
+select assert(
+  (select clients_can_view from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000052'),
+  'a client-created plan sets clients_can_view true'
+);
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 0,
+  'a client on the project does not see an admin-default (hidden) plan'
+);
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000052') = 1,
+  'a client on the project sees a client-created (visible) plan'
+);
+reset role;
+
+-- Admin opts in via settings toggle.
+update public.plans set clients_can_view = true
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
 
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
@@ -917,7 +966,7 @@ select assert(
 );
 reset role;
 
--- Hide from clients.
+-- Hide from clients again (toggle off).
 update public.plans set clients_can_view = false
 where id = 'eeeeeeee-0000-0000-0000-000000000001';
 

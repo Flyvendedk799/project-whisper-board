@@ -795,6 +795,19 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         // Where the work lands: a new branch, an existing one, or the base branch itself.
         const workTarget = parseWorkTarget(body, githubBase);
 
+        // Visibility follows the key owner's workspace role: admins default hidden from
+        // clients; a non-admin key (if ever allowed) creates plans clients can view.
+        let clientsCanView = false;
+        if (auth.userId) {
+          const { data: member } = await admin
+            .from("workspace_members")
+            .select("role")
+            .eq("workspace_id", workspaceId)
+            .eq("user_id", auth.userId)
+            .maybeSingle();
+          clientsCanView = member != null && member.role !== "admin";
+        }
+
         const { data: plan, error } = await admin
           .from("plans")
           .insert({
@@ -806,6 +819,8 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
             github_base: githubBase,
             ...workTarget,
             ...(status && { status }),
+            created_by: auth.userId ?? null,
+            clients_can_view: clientsCanView,
           })
           .select("*")
           .single();
