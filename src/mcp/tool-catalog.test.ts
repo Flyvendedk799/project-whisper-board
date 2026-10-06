@@ -101,6 +101,8 @@ describe("tool catalog entries", () => {
       "add_task_steps",
       "create_section",
       "update_section",
+      "create_plan",
+      "update_plan",
       "create_task",
       "update_task",
       "agent_guide",

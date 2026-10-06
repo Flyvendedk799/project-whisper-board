@@ -433,6 +433,10 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
     withPolicy(ports, "create_plan", () => planner.post("plans", input)),
   );
 
+  tool("update_plan", ({ plan_id, ...patch }: { plan_id: string; [key: string]: unknown }) =>
+    withPolicy(ports, "update_plan", () => planner.post(`plans/${plan_id}`, patch)),
+  );
+
   tool(
     "import_plan_markdown",
     ({ plan_id, markdown, mode }: { plan_id: string; markdown: string; mode?: string }) =>

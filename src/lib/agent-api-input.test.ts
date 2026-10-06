@@ -15,6 +15,8 @@ import {
   parseStepLines,
   parseStepPatch,
   parseStepsInput,
+  mergePlanUpdate,
+  parsePlanUpdate,
   parseTaskCreate,
   parseTaskUpdate,
   parseWorkTarget,
@@ -80,6 +82,63 @@ describe("parseWorkTarget", () => {
     expect(problem(() => parseWorkTarget({ github_work_branch: "x" }, null))).toMatch(
       /needs a `github_work_mode`/,
     );
+  });
+});
+
+describe("parsePlanUpdate / mergePlanUpdate", () => {
+  const empty = {
+    github_repo: null,
+    github_base: null,
+    github_work_mode: null,
+    github_work_branch: null,
+  };
+
+  it("updates description freely", () => {
+    expect(parsePlanUpdate({ description: " Blueprint " })).toEqual({ description: "Blueprint" });
+    expect(mergePlanUpdate(empty, { description: "Blueprint" })).toEqual({
+      description: "Blueprint",
+    });
+    expect(mergePlanUpdate(empty, { description: null })).toEqual({ description: null });
+  });
+
+  it("fills github_repo only when missing", () => {
+    expect(parsePlanUpdate({ github_repo: "Acme/App" })).toEqual({ github_repo: "Acme/App" });
+    expect(mergePlanUpdate(empty, { github_repo: "Acme/App" })).toEqual({
+      github_repo: "Acme/App",
+    });
+    expect(
+      problem(() =>
+        mergePlanUpdate({ ...empty, github_repo: "acme/app" }, { github_repo: "Acme/App" }),
+      ),
+    ).toMatch(/already set/);
+    // Same value is a no-op for that field; with nothing else it is "nothing to change".
+    expect(
+      problem(() =>
+        mergePlanUpdate({ ...empty, github_repo: "Acme/App" }, { github_repo: "Acme/App" }),
+      ),
+    ).toMatch(/Nothing to change/);
+  });
+
+  it("fills work_target when mode is missing", () => {
+    expect(
+      mergePlanUpdate(
+        { ...empty, github_base: "main" },
+        { github_work_mode: "new", github_work_branch: "feat/x" },
+      ),
+    ).toEqual({ github_work_mode: "new", github_work_branch: "feat/x" });
+    expect(
+      problem(() =>
+        mergePlanUpdate(
+          { ...empty, github_work_mode: "base", github_base: "main" },
+          { github_work_mode: "new", github_work_branch: "feat/x" },
+        ),
+      ),
+    ).toMatch(/already set/);
+  });
+
+  it("refuses an empty body and a bad repo", () => {
+    expect(problem(() => parsePlanUpdate({}))).toMatch(/at least one/);
+    expect(problem(() => parsePlanUpdate({ github_repo: "not-a-repo" }))).toMatch(/owner\/name/);
   });
 });
 
