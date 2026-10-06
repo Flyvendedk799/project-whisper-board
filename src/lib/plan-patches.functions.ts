@@ -24,14 +24,7 @@ async function access(
     .maybeSingle();
   if (error) throw error;
   const found = requireFound(plan, "plan");
-  const { data: member } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", found.workspace_id)
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (member?.role !== "admin")
-    throw new AppError("forbidden", "Only workspace admins can deliver patches.", { status: 403 });
+  // RLS already required can_view_plan to load the plan; editors match that set.
   const repo = found.github_repo && parseRepoSlug(found.github_repo);
   if (!repo) throw new AppError("github_repo", "Connect a repository in plan settings first.");
   const { githubFor } = await import("@/lib/github-token");

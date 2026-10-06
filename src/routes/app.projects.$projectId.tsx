@@ -418,6 +418,9 @@ function PeoplePanel({
   });
 
   const onProject = new Set((members.data ?? []).map((member) => member.user_id));
+  const inviteStatusByUser = new Map(
+    (workspaceMembers.data ?? []).map((member) => [member.user_id, member.pending] as const),
+  );
   const workspaceClients = (workspaceMembers.data ?? []).filter(
     (member) =>
       (member.role === "client" || member.role === "client_admin") &&
@@ -460,8 +463,15 @@ function PeoplePanel({
           <ul className="space-y-2">
             {workspaceClients.map((member) => (
               <li key={member.user_id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate">
-                  {member.profile?.full_name || member.profile?.email || "Client"}
+                <span className="flex min-w-0 items-center gap-2 truncate">
+                  <span className="truncate">
+                    {member.profile?.full_name || member.profile?.email || "Client"}
+                  </span>
+                  {member.pending ? (
+                    <StatusPill tone="warning">Pending</StatusPill>
+                  ) : (
+                    <StatusPill tone="success">Accepted</StatusPill>
+                  )}
                 </span>
                 <Button
                   size="sm"
@@ -566,13 +576,24 @@ function PeoplePanel({
                   const role = member.role;
                   const canToggle =
                     canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
+                  const pending = inviteStatusByUser.get(member.user_id) ?? false;
 
                   return (
                     <div key={member.id} className="flex items-center gap-3 p-4 max-md:flex-wrap">
-                      <PersonAvatar person={member.profile ?? { id: member.user_id }} />
+                      <PersonAvatar
+                        person={member.profile ?? { id: member.user_id }}
+                        pending={pending}
+                      />
                       <div className="min-w-0 flex-1 max-md:basis-32">
-                        <div className="truncate text-sm font-medium">
-                          {member.profile?.full_name ?? member.profile?.email}
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {member.profile?.full_name ?? member.profile?.email}
+                          </span>
+                          {pending ? (
+                            <StatusPill tone="warning">Pending</StatusPill>
+                          ) : (
+                            <StatusPill tone="success">Accepted</StatusPill>
+                          )}
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
                           {member.profile?.email}

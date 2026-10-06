@@ -32,6 +32,7 @@ create table if not exists auth.users (
 alter table auth.users add column if not exists invited_at timestamptz;
 alter table auth.users add column if not exists email_confirmed_at timestamptz;
 alter table auth.users add column if not exists last_sign_in_at timestamptz;
+alter table auth.users add column if not exists banned_until timestamptz;
 
 -- Supabase derives auth.uid() from the request JWT. Locally we drive it from a
 -- session GUC so tests can impersonate a user with `set local request.jwt.claim.sub`.

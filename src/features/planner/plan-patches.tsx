@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { QueryState } from "@/components/query-state";
-import { useAuth } from "@/components/auth-provider";
 import { planPatchesQuery } from "@/data/planner";
 import { qk } from "@/data/keys";
 import { useServerAction } from "@/lib/use-server-action";
@@ -21,7 +20,6 @@ import { formatDate } from "@/lib/utils-format";
 import type { PlanWithSections } from "@/data/types";
 
 export function PlanPatches({ plan }: { plan: PlanWithSections }) {
-  const { isAdmin } = useAuth();
   const query = useQuery(planPatchesQuery(plan.id));
   const [branch, setBranch] = useState("");
   const [sha, setSha] = useState("");
@@ -66,79 +64,74 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
           {plan.github_base || "the repository base"}.
         </p>
       </div>
-      {isAdmin && (
-        <form
-          className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            register.fire({
-              planId: plan.id,
-              branch,
-              commitSha: sha,
-              worktreeLabel: worktree,
-              bundleName: bundle,
-            });
-          }}
-        >
-          <div className="space-y-1">
-            <Label htmlFor="patch-branch">Source branch</Label>
-            <Input
-              id="patch-branch"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              value={branch}
-              onChange={(event) => setBranch(event.target.value)}
-              required
-              placeholder="fix/ticket-123"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="patch-sha">Commit SHA</Label>
-            <Input
-              id="patch-sha"
-              autoCapitalize="none"
-              autoCorrect="off"
-              autoComplete="off"
-              spellCheck={false}
-              value={sha}
-              onChange={(event) => setSha(event.target.value)}
-              required
-              pattern="[a-fA-F0-9]{40}"
-              placeholder="40-character SHA"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="patch-worktree">Worktree label</Label>
-            <Input
-              id="patch-worktree"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              value={worktree}
-              onChange={(event) => setWorktree(event.target.value)}
-              placeholder="Local worktree"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="patch-bundle">Bundle name</Label>
-            <Input
-              id="patch-bundle"
-              value={bundle}
-              onChange={(event) => setBundle(event.target.value)}
-              placeholder="Optional group"
-            />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-4 max-md:[&>button]:w-full">
-            <Button
-              type="submit"
-              disabled={register.busy || !branch || !/^[a-f\d]{40}$/i.test(sha)}
-            >
-              {register.busy ? "Checking GitHub…" : "Register commit"}
-            </Button>
-          </div>
-        </form>
-      )}
+      <form
+        className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          register.fire({
+            planId: plan.id,
+            branch,
+            commitSha: sha,
+            worktreeLabel: worktree,
+            bundleName: bundle,
+          });
+        }}
+      >
+        <div className="space-y-1">
+          <Label htmlFor="patch-branch">Source branch</Label>
+          <Input
+            id="patch-branch"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={branch}
+            onChange={(event) => setBranch(event.target.value)}
+            required
+            placeholder="fix/ticket-123"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="patch-sha">Commit SHA</Label>
+          <Input
+            id="patch-sha"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            value={sha}
+            onChange={(event) => setSha(event.target.value)}
+            required
+            pattern="[a-fA-F0-9]{40}"
+            placeholder="40-character SHA"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="patch-worktree">Worktree label</Label>
+          <Input
+            id="patch-worktree"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={worktree}
+            onChange={(event) => setWorktree(event.target.value)}
+            placeholder="Local worktree"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="patch-bundle">Bundle name</Label>
+          <Input
+            id="patch-bundle"
+            value={bundle}
+            onChange={(event) => setBundle(event.target.value)}
+            placeholder="Optional group"
+          />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-4 max-md:[&>button]:w-full">
+          <Button type="submit" disabled={register.busy || !branch || !/^[a-f\d]{40}$/i.test(sha)}>
+            {register.busy ? "Checking GitHub…" : "Register commit"}
+          </Button>
+        </div>
+      </form>
       <QueryState query={query} errorTitle="Couldn't load patches">
         {() =>
           rows.length === 0 ? (
@@ -147,49 +140,47 @@ export function PlanPatches({ plan }: { plan: PlanWithSections }) {
             </p>
           ) : (
             <>
-              {isAdmin && (
-                <div className="flex flex-wrap items-center gap-2 max-md:[&>button]:flex-1">
-                  <span className="text-sm text-muted-foreground max-md:w-full">
-                    {chosen.length} selected
-                  </span>
-                  {bundles.map((name) => (
-                    <Button
-                      key={name}
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setSelected(
-                          new Set(
-                            ready.filter((row) => row.bundle_name === name).map((row) => row.id),
-                          ),
-                        )
-                      }
-                    >
-                      Select {name}
-                    </Button>
-                  ))}
+              <div className="flex flex-wrap items-center gap-2 max-md:[&>button]:flex-1">
+                <span className="text-sm text-muted-foreground max-md:w-full">
+                  {chosen.length} selected
+                </span>
+                {bundles.map((name) => (
                   <Button
+                    key={name}
                     variant="outline"
                     size="sm"
-                    disabled={!chosen.length || tooLargeForDirect}
-                    onClick={() => setStrategy("direct")}
+                    onClick={() =>
+                      setSelected(
+                        new Set(
+                          ready.filter((row) => row.bundle_name === name).map((row) => row.id),
+                        ),
+                      )
+                    }
                   >
-                    Review direct delivery
+                    Select {name}
                   </Button>
-                  <Button size="sm" disabled={!chosen.length} onClick={() => setStrategy("pr")}>
-                    Open pull request
-                  </Button>
-                  {tooLargeForDirect && (
-                    <span className="text-xs text-muted-foreground">
-                      Larger bundles use a pull request.
-                    </span>
-                  )}
-                </div>
-              )}
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!chosen.length || tooLargeForDirect}
+                  onClick={() => setStrategy("direct")}
+                >
+                  Review direct delivery
+                </Button>
+                <Button size="sm" disabled={!chosen.length} onClick={() => setStrategy("pr")}>
+                  Open pull request
+                </Button>
+                {tooLargeForDirect && (
+                  <span className="text-xs text-muted-foreground">
+                    Larger bundles use a pull request.
+                  </span>
+                )}
+              </div>
               <ul className="space-y-2">
                 {rows.map((row) => (
                   <li key={row.id} className="flex items-start gap-3 rounded-xl border bg-card p-4">
-                    {isAdmin && row.status === "registered" && (
+                    {row.status === "registered" && (
                       <input
                         type="checkbox"
                         className="max-md:box-content max-md:h-5 max-md:w-5 max-md:shrink-0 max-md:-m-3 max-md:p-3"

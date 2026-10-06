@@ -63,7 +63,7 @@ const PLAN_TONE = {
 function PlannerIndexPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const { project: filterProjectId, create: openCreate } = Route.useSearch();
-  const { workspaceId } = useAuth();
+  const { workspaceId, isAdmin } = useAuth();
   const plans = useQuery(planListQuery(workspaceId, filterProjectId));
   const projects = useQuery(projectListQuery(workspaceId));
   const [isCreating, setIsCreating] = useState(Boolean(openCreate));
@@ -75,11 +75,11 @@ function PlannerIndexPage() {
   const [projectId, setProjectId] = useState(filterProjectId ?? "");
 
   useEffect(() => {
-    if (openCreate) {
+    if (openCreate && isAdmin) {
       setIsCreating(true);
       setProjectId(filterProjectId ?? "");
     }
-  }, [openCreate, filterProjectId]);
+  }, [openCreate, filterProjectId, isAdmin]);
 
   useEffect(() => {
     if (filterProjectId) setProjectId(filterProjectId);
@@ -182,7 +182,7 @@ function PlannerIndexPage() {
                 All
               </Button>
             </div>
-            <Button onClick={() => setIsCreating(true)}>New plan</Button>
+            {isAdmin ? <Button onClick={() => setIsCreating(true)}>New plan</Button> : null}
           </>
         }
       />
