@@ -155,32 +155,82 @@ export async function deliver(targets: NotifyTarget[]): Promise<{ inApp: number;
       .filter(Boolean)
       .join("\n");
 
-    const result = quiet
-      ? { delivered: false, skippedReason: "Quiet hours" as string | undefined, error: undefined }
-      : await email.send({ to: profile.email, subject: target.emailSubject, text });
-
-    const { error } = await db.from("outbound_messages").insert({
-      channel: "email",
-      template: target.template ?? target.kind,
-      to_address: profile.email,
-      to_user_id: target.userId,
+    const delivered = await sendAndRecord(db, email, {
+      to: profile.email,
+      toUserId: target.userId,
       subject: target.emailSubject,
-      body_text: text,
-      status: result.delivered ? "sent" : result.skippedReason ? "skipped" : "failed",
-      provider: email.name,
-      provider_message_id:
-        "providerMessageId" in result ? (result.providerMessageId ?? null) : null,
-      error: result.error ?? result.skippedReason ?? null,
-      related_type: target.relatedType ?? null,
-      related_id: target.relatedId ?? null,
-      ...(target.workspaceId ? { workspace_id: target.workspaceId } : {}),
-      sent_at: result.delivered ? new Date().toISOString() : null,
+      text,
+      template: target.template ?? target.kind,
+      relatedType: target.relatedType,
+      relatedId: target.relatedId,
+      workspaceId: target.workspaceId,
+      skippedReason: quiet ? "Quiet hours" : undefined,
     });
-    if (error) console.error("[notifications] outbox insert failed:", error.message);
-    if (result.delivered) emails += 1;
+    if (delivered) emails += 1;
   }
 
   return { inApp: inAppRows.length, emails };
+}
+
+export interface AccountEmail {
+  to: string;
+  toUserId?: string | null;
+  subject: string;
+  text: string;
+  html?: string;
+  template: string;
+  relatedType?: string;
+  relatedId?: string;
+  workspaceId?: string | null;
+}
+
+/**
+ * Sends one email through the configured provider and records it in
+ * `outbound_messages` (the Outbox), sent or not. Returns whether it was sent.
+ * Never throws for a provider failure: that is recorded on the row instead.
+ */
+async function sendAndRecord(
+  db: ReturnType<typeof admin>,
+  email: Awaited<ReturnType<typeof getEmailProvider>>,
+  message: AccountEmail & { skippedReason?: string },
+): Promise<boolean> {
+  const result = message.skippedReason
+    ? { delivered: false, skippedReason: message.skippedReason, error: undefined }
+    : await email.send({
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        ...(message.html ? { html: message.html } : {}),
+      });
+
+  const { error } = await db.from("outbound_messages").insert({
+    channel: "email",
+    template: message.template,
+    to_address: message.to,
+    to_user_id: message.toUserId ?? null,
+    subject: message.subject,
+    body_text: message.text,
+    body_html: message.html ?? null,
+    status: result.delivered ? "sent" : result.skippedReason ? "skipped" : "failed",
+    provider: email.name,
+    provider_message_id: "providerMessageId" in result ? (result.providerMessageId ?? null) : null,
+    error: result.error ?? result.skippedReason ?? null,
+    related_type: message.relatedType ?? null,
+    related_id: message.relatedId ?? null,
+    ...(message.workspaceId ? { workspace_id: message.workspaceId } : {}),
+    sent_at: result.delivered ? new Date().toISOString() : null,
+  });
+  if (error) console.error("[notifications] outbox insert failed:", error.message);
+  return result.delivered;
+}
+
+/**
+ * Account mail the person needs regardless of their notification settings
+ * (e.g. an invitation), so preferences and quiet hours do not apply. Same
+ * provider and Outbox as notifications; no in-app row.
+ */
+export async function sendAccountEmail(message: AccountEmail): Promise<boolean> {
+  return sendAndRecord(admin(), await getEmailProvider(), message);
 }
 
 /** Everyone who should hear about activity on a ticket, minus whoever caused it. */

@@ -66,8 +66,13 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        // A same-site path (e.g. an invite's accept page) survives the email round trip.
         emailRedirectTo: `${window.location.origin}${
-          finishingSignup ? "/app/create-workspace" : "/app"
+          redirect?.startsWith("/") && !redirect.startsWith("//")
+            ? redirect
+            : finishingSignup
+              ? "/app/create-workspace"
+              : "/app"
         }`,
       },
     });
