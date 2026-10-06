@@ -58,9 +58,9 @@ export function PublicAgentsPage({
           Put an AI agent on your board.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl px-2 text-base text-muted-foreground md:text-lg">
-          Connect Claude Code, Cursor or Antigravity to Boared. An agent reads your plans, claims
-          and works tasks, picks up the tickets people file, asks when it is unsure, and opens the
-          pull request. You watch the card move.
+          Connect Claude Code, Codex, Cursor or Antigravity to Boared. An agent reads your plans,
+          claims and works tasks, picks up the tickets people file, asks when it is unsure, and
+          opens the pull request. You watch the card move.
         </p>
         <div className="mx-auto mt-8 flex w-full max-w-md flex-col items-stretch justify-center gap-3 sm:max-w-none sm:flex-row sm:items-center">
           <Button

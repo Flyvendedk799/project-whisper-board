@@ -215,6 +215,12 @@ The **Agents & MCP** page in Boared (admins) shows these snippets filled in for 
 claude mcp add --scope user consflow-planner -- npx --prefix <path-to-boared> tsx <path-to-boared>/src/mcp/server.ts
 ```
 
+**Codex**
+
+```bash
+codex mcp add consflow-planner -- npx --prefix <path-to-boared> tsx <path-to-boared>/src/mcp/server.ts
+```
+
 **Cursor** (`~/.cursor/mcp.json` or `.cursor/mcp.json`)
 
 ```json
@@ -237,5 +243,12 @@ claude mcp add --scope user consflow-planner -- npx --prefix <path-to-boared> ts
 ```bash
 agy mcp add consflow-planner npx --prefix <path-to-boared> tsx <path-to-boared>/src/mcp/server.ts
 ```
+
+On Windows use `npx.cmd` where these say `npx`. The server reads the key from `~/.boared.env`, so none of the
+commands above needs it.
+
+**Where the skill goes** (this file, as `ai-planner/SKILL.md`): `~/.claude/skills/` for Claude Code,
+`~/.agents/skills/` for Codex, `~/.cursor/skills/` for Cursor, `~/.gemini/config/skills/` for Antigravity. In a
+repository, `.agents/skills/` covers Codex, Cursor and Antigravity.
 
 No MCP? Every tool above is one REST request: use the table and `curl`.

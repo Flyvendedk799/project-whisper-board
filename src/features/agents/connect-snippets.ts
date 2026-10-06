@@ -34,6 +34,7 @@ export interface McpSnippets {
   install: string;
   env: string;
   claudeCode: string;
+  codex: string;
   cursor: string;
   antigravity: string;
   curl: string;
@@ -64,6 +65,12 @@ export function mcpSnippets({
     env: `PLANNER_API_KEY=${apiKey}\nPLANNER_API_URL=${apiUrl}\n`,
     claudeCode: [
       `claude mcp add --scope user ${MCP_SERVER_NAME}`,
+      `  --env PLANNER_API_KEY=${shellQuote(apiKey)}`,
+      `  --env PLANNER_API_URL=${shellQuote(apiUrl)}`,
+      `  -- npx --prefix ${shellQuote(root)} tsx ${shellQuote(entry)}`,
+    ].join(" \\\n"),
+    codex: [
+      `codex mcp add ${MCP_SERVER_NAME}`,
       `  --env PLANNER_API_KEY=${shellQuote(apiKey)}`,
       `  --env PLANNER_API_URL=${shellQuote(apiUrl)}`,
       `  -- npx --prefix ${shellQuote(root)} tsx ${shellQuote(entry)}`,
