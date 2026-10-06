@@ -18,8 +18,10 @@ export function WorkflowTab() {
         <h2 className="font-display text-xl">How an agent works a task</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           These rules are sent to every agent as the MCP server&rsquo;s instructions and by the{" "}
-          <code className="text-xs">agent_guide</code> tool, and the skill repeats them. They keep
-          the board honest: you see who has what, what is done, and what is waiting on you.
+          <code className="text-xs">agent_guide</code> tool, and the skill repeats them. Remote
+          agents can use Hosted MCP at <code className="text-xs">/api/mcp</code> with OAuth instead
+          of a local API key. They keep the board honest: you see who has what, what is done, and
+          what is waiting on you.
         </p>
         <div className="mt-3">
           <CopyButton

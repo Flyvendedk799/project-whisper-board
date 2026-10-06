@@ -70,6 +70,9 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
 ];
 
 /** The short version sent to every MCP client in the server's `instructions`. */
+/** Hosted endpoint for remote agents (OAuth). Local stdio still uses PLANNER_API_KEY. */
+export const HOSTED_MCP_URL = "https://boared.online/api/mcp";
+
 export const MCP_INSTRUCTIONS = [
   "Boared AI Planner: humans and AI agents share plans, sections and tasks on one board, next to the workspace's projects and tickets.",
   "",
