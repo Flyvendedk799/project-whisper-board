@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { assertWorkspaceAdmin, assertWorkspaceInviter } from "@/lib/workspace.functions";
+import { appUrl } from "@/lib/app-origin";
 
 function admin() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -32,10 +33,11 @@ export const inviteClient = createServerFn({ method: "POST" })
       throw new Error("Forbidden: only admins can invite that role");
     }
 
-    const origin = process.env.SITE_URL || "";
-    const redirectTo = origin
-      ? `${origin}/invite/accept${data.projectId ? `?project=${data.projectId}` : ""}`
-      : undefined;
+    // Always explicit: without it Supabase Auth falls back to its own SITE_URL,
+    // which on a self-hosted stack defaults to localhost.
+    const redirectTo = appUrl(
+      `/invite/accept${data.projectId ? `?project=${data.projectId}` : ""}`,
+    );
 
     const meta: Record<string, string> = {
       workspace_id: data.workspaceId,
@@ -166,8 +168,7 @@ export const resendInvite = createServerFn({ method: "POST" })
       );
     }
 
-    const origin = process.env.SITE_URL || "";
-    const redirectTo = origin ? `${origin}/invite/accept` : undefined;
+    const redirectTo = appUrl("/invite/accept");
     const meta: Record<string, string> = {
       workspace_id: data.workspaceId,
       invite_role: member.role,

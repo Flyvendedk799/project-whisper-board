@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard } from "@/lib/server-errors";
 import { getEmailProvider } from "@/lib/providers/server";
+import { appUrl } from "@/lib/app-origin";
 import { channelEnabled } from "@/data/notifications";
 import type { Database } from "@/integrations/supabase/types";
 import { extractMentionIds } from "@/lib/mentions";
@@ -40,9 +41,13 @@ function admin() {
   });
 }
 
+/** Absolute link for an email; a bare path only if no origin is known at all. */
 function siteUrl(path: string): string {
-  const origin = (process.env.SITE_URL ?? "").replace(/\/$/, "");
-  return origin ? `${origin}${path}` : path;
+  try {
+    return appUrl(path);
+  } catch {
+    return path;
+  }
 }
 
 /** Local hour for the recipient, so 3am in their timezone is not 3am in ours. */
