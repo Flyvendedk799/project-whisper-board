@@ -9,7 +9,7 @@ import { PasswordInput } from "@/features/auth/password-input";
 import { Segmented } from "@/components/status-pill";
 import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
-import { isSafeInternalPath } from "@/lib/mcp-oauth/authorization";
+import { isSafeInternalPath } from "@/lib/mcp-oauth/utils";
 
 export const Route = createFileRoute("/login")({
   validateSearch: z.object({

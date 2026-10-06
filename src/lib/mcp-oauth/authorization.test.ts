@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isSafeInternalPath, parseScopeList, validateScopes } from "./authorization";
+import { parseScopeList, validateScopes } from "./authorization";
+import { isSafeInternalPath } from "./utils";
 import { exactRedirectMatch } from "./clients";
 import { pkceChallengeS256 } from "./crypto";
 import { authorizationServerMetadata, protectedResourceMetadata } from "./metadata";
