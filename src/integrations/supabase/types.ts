@@ -242,6 +242,300 @@ export type Database = {
           },
         ]
       }
+
+      mcp_oauth_audit: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          event: string
+          grant_id: string | null
+          id: string
+          outcome: string | null
+          request_id: string | null
+          target_id: string | null
+          target_type: string | null
+          tool_name: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          event: string
+          grant_id?: string | null
+          id?: string
+          outcome?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          tool_name?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          event?: string
+          grant_id?: string | null
+          id?: string
+          outcome?: string | null
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          tool_name?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      mcp_oauth_authorization_requests: {
+        Row: {
+          binding_nonce_hash: string
+          bound_user_id: string | null
+          client_id: string
+          code_challenge: string
+          code_challenge_method: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          redirect_uri: string
+          requested_scopes: string[]
+          resource: string
+          state: string | null
+        }
+        Insert: {
+          binding_nonce_hash: string
+          bound_user_id?: string | null
+          client_id: string
+          code_challenge: string
+          code_challenge_method?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          redirect_uri: string
+          requested_scopes: string[]
+          resource: string
+          state?: string | null
+        }
+        Update: {
+          binding_nonce_hash?: string
+          bound_user_id?: string | null
+          client_id?: string
+          code_challenge?: string
+          code_challenge_method?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          redirect_uri?: string
+          requested_scopes?: string[]
+          resource?: string
+          state?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_oauth_authorization_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_oauth_clients"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      mcp_oauth_clients: {
+        Row: {
+          allowed_scopes: string[]
+          auth_method: Database["public"]["Enums"]["mcp_oauth_auth_method"]
+          client_id: string
+          client_name: string
+          client_secret_hash: string | null
+          created_at: string
+          disabled_at: string | null
+          redirect_uris: string[]
+        }
+        Insert: {
+          allowed_scopes?: string[]
+          auth_method?: Database["public"]["Enums"]["mcp_oauth_auth_method"]
+          client_id: string
+          client_name: string
+          client_secret_hash?: string | null
+          created_at?: string
+          disabled_at?: string | null
+          redirect_uris: string[]
+        }
+        Update: {
+          allowed_scopes?: string[]
+          auth_method?: Database["public"]["Enums"]["mcp_oauth_auth_method"]
+          client_id?: string
+          client_name?: string
+          client_secret_hash?: string | null
+          created_at?: string
+          disabled_at?: string | null
+          redirect_uris?: string[]
+        }
+        Relationships: []
+      }
+      mcp_oauth_codes: {
+        Row: {
+          client_id: string
+          code_challenge: string
+          code_hash: string
+          consumed_at: string | null
+          expires_at: string
+          grant_id: string
+          redirect_uri: string
+          resource: string
+        }
+        Insert: {
+          client_id: string
+          code_challenge: string
+          code_hash: string
+          consumed_at?: string | null
+          expires_at: string
+          grant_id: string
+          redirect_uri: string
+          resource: string
+        }
+        Update: {
+          client_id?: string
+          code_challenge?: string
+          code_hash?: string
+          consumed_at?: string | null
+          expires_at?: string
+          grant_id?: string
+          redirect_uri?: string
+          resource?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_oauth_codes_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_oauth_grants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcp_oauth_grants: {
+        Row: {
+          client_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          issuer: string
+          last_used_at: string | null
+          resource: string
+          revoked_at: string | null
+          scopes: string[]
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          issuer: string
+          last_used_at?: string | null
+          resource: string
+          revoked_at?: string | null
+          scopes: string[]
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          issuer?: string
+          last_used_at?: string | null
+          resource?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_oauth_grants_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_oauth_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "mcp_oauth_grants_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcp_oauth_tokens: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          family_id: string
+          grant_id: string
+          id: string
+          kind: Database["public"]["Enums"]["mcp_oauth_token_kind"]
+          not_before: string
+          parent_id: string | null
+          revoked_at: string | null
+          scopes: string[]
+          token_hash: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          family_id: string
+          grant_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["mcp_oauth_token_kind"]
+          not_before?: string
+          parent_id?: string | null
+          revoked_at?: string | null
+          scopes: string[]
+          token_hash: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          family_id?: string
+          grant_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["mcp_oauth_token_kind"]
+          not_before?: string
+          parent_id?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_oauth_tokens_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_oauth_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mcp_oauth_tokens_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_oauth_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       meeting_action_items: {
         Row: {
           created_at: string
@@ -2690,6 +2984,43 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+
+      mcp_oauth_user_is_live_admin: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
+      redeem_mcp_oauth_code: {
+        Args: {
+          _code_hash: string
+          _client_id: string
+          _redirect_uri: string
+          _resource: string
+          _code_verifier: string
+          _access_token_hash: string
+          _refresh_token_hash: string
+          _access_ttl_seconds: number
+          _refresh_ttl_seconds: number
+        }
+        Returns: Json
+      }
+      rotate_mcp_oauth_refresh_token: {
+        Args: {
+          _refresh_token_hash: string
+          _client_id: string
+          _resource: string
+          _requested_scopes: string[]
+          _access_token_hash: string
+          _new_refresh_token_hash: string
+          _access_ttl_seconds: number
+          _refresh_ttl_seconds: number
+        }
+        Returns: Json
+      }
+      revoke_mcp_oauth_grant: {
+        Args: { _grant_id: string; _actor_user_id: string }
+        Returns: Json
+      }
+
       post_ticket_followup: {
         Args: { _ticket_id: string; _body: string; _kind: string }
         Returns: string
@@ -2817,6 +3148,8 @@ export type Database = {
         | "done"
         | "blocked"
       action_item_status: "open" | "converted" | "done" | "dismissed"
+      mcp_oauth_auth_method: "none" | "client_secret_basic" | "client_secret_post"
+      mcp_oauth_token_kind: "access" | "refresh"
       app_role: "admin" | "client_admin" | "client"
       invoice_status: "draft" | "sent" | "paid" | "overdue" | "void"
       meeting_status: "scheduled" | "completed" | "cancelled"
@@ -2993,6 +3326,8 @@ export const Constants = {
   public: {
     Enums: {
       action_item_status: ["open", "converted", "done", "dismissed"],
+      mcp_oauth_auth_method: ["none", "client_secret_basic", "client_secret_post"],
+      mcp_oauth_token_kind: ["access", "refresh"],
       app_role: ["admin", "client_admin", "client"],
       invoice_status: ["draft", "sent", "paid", "overdue", "void"],
       meeting_status: ["scheduled", "completed", "cancelled"],
