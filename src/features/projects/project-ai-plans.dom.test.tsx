@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe("ProjectAiPlansTab", () => {
-  it("lets a client open a project plan (default visibility)", async () => {
+  it("lets a client open a project plan when it is visible", async () => {
     auth.isAdmin = false;
     renderWithQuery(<ProjectAiPlansTab projectId="p1" />);
 

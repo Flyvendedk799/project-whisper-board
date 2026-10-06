@@ -56,7 +56,7 @@ export function PlanSettingsForm({
     isWorkMode(plan.github_work_mode) ? plan.github_work_mode : null,
   );
   const [workBranch, setWorkBranch] = useState(plan.github_work_branch ?? "");
-  const [clientsCanView, setClientsCanView] = useState(plan.clients_can_view ?? true);
+  const [clientsCanView, setClientsCanView] = useState(plan.clients_can_view ?? false);
   const [createOnGitHub, setCreateOnGitHub] = useState(true);
   const githubReachable = !useGitHubRepos().isError;
 
@@ -225,8 +225,8 @@ export function PlanSettingsForm({
             Clients can view this plan
           </Label>
           <p className="text-xs text-muted-foreground">
-            On by default. Project members with a client role can open the plan. Turn off to keep it
-            agency-only.
+            Off by default for plans you create as an admin. Turn on so project members with a
+            client role can open it. Plans a client creates are visible automatically.
           </p>
         </div>
         <Switch

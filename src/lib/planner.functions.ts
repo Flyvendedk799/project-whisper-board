@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
+import { clientsCanViewDefaultForRole } from "@/lib/plan-visibility";
 import {
   OPEN_TICKET_STATUSES,
   linkedTaskRow,
@@ -164,7 +165,7 @@ async function resolveWorkspaceMembership(
   userId: string,
   workspaceId?: string,
 ) {
-  let query = supabase.from("workspace_members").select("workspace_id").eq("user_id", userId);
+  let query = supabase.from("workspace_members").select("workspace_id, role").eq("user_id", userId);
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   const { data: membership } = await query.limit(1).single();
   return requireFound(membership, "workspace_membership");
@@ -288,6 +289,7 @@ export const createPlan = createServerFn({ method: "POST" })
           github_work_mode: data.githubWorkMode ?? null,
           github_work_branch: data.githubWorkBranch?.trim() || null,
           created_by: userId,
+          clients_can_view: clientsCanViewDefaultForRole(membership.role),
         })
         .select("id")
         .single();
@@ -348,6 +350,7 @@ export const createPlanFromTickets = createServerFn({ method: "POST" })
           github_repo: oneProject?.github_repo ?? null,
           github_base: oneProject?.github_default_branch ?? null,
           created_by: userId,
+          clients_can_view: clientsCanViewDefaultForRole(membership.role),
         })
         .select("id")
         .single();
