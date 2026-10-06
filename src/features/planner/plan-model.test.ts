@@ -16,6 +16,7 @@ import {
   planLevelAttachments,
   matchesFileKind,
   matchesFilters,
+  collectAssignees,
   matchesSearch,
   nextStatus,
   NO_FILTERS,
@@ -152,6 +153,29 @@ describe("filters", () => {
     expect(matchesFilters(agent, { ...NO_FILTERS, priority: "low" }, "me")).toBe(false);
     expect(matchesFilters(mine, { ...NO_FILTERS, q: "  safari " }, "me")).toBe(true);
     expect(matchesFilters(mine, { ...NO_FILTERS, q: "billing" }, "me")).toBe(false);
+  });
+
+  it("filters by one person", () => {
+    const filters = { ...NO_FILTERS, assignee: "me" };
+    expect(matchesFilters(mine, filters, null)).toBe(true);
+    expect(matchesFilters(agent, filters, null)).toBe(false);
+    expect(matchesFilters(nobody, filters, null)).toBe(false);
+    expect(hasActiveFilters(filters)).toBe(true);
+  });
+
+  it("collects the people tasks are assigned to, by name, with counts", () => {
+    const ada = { id: "u-ada", full_name: "Ada", email: null, avatar_url: null };
+    const bo = { id: "u-bo", full_name: "Bo", email: null, avatar_url: null };
+    const assignees = collectAssignees([
+      task("a", "s", 1, { assigned_user_id: "u-bo", assigned_user: bo }),
+      task("b", "s", 2, { assigned_user_id: "u-ada" }),
+      task("c", "s", 3, { assigned_user_id: "u-ada", assigned_user: ada }),
+      task("d", "s", 4, { assigned_agent_id: "bot" }),
+    ]);
+    expect(assignees).toEqual([
+      { id: "u-ada", person: ada, count: 2 },
+      { id: "u-bo", person: bo, count: 1 },
+    ]);
   });
 
   it("'Mine' matches nothing when nobody is signed in", () => {

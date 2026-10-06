@@ -27,9 +27,11 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   WHO_LABEL,
+  type PlanAssignee,
   type TaskFilters,
   type WhoFilter,
 } from "./plan-model";
+import { PersonAvatar, personName } from "@/components/person-avatar";
 
 export type PlanLayout = "columns" | "outline" | "files" | "prs" | "questions" | "patches";
 
@@ -148,6 +150,7 @@ function FilterSheet({
   total,
   tags,
   questions,
+  assignees,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -157,6 +160,7 @@ function FilterSheet({
   total: number;
   tags: ReadonlyArray<{ tag: string; count: number }>;
   questions: { open: number; total: number };
+  assignees: ReadonlyArray<PlanAssignee>;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -190,10 +194,21 @@ function FilterSheet({
           {(Object.keys(WHO_LABEL) as WhoFilter[]).map((who) => (
             <Chip
               key={who}
-              selected={filters.who === who}
-              onClick={() => onFilters({ ...filters, who })}
+              selected={filters.who === who && !filters.assignee}
+              onClick={() => onFilters({ ...filters, who, assignee: null })}
             >
               {WHO_LABEL[who]}
+            </Chip>
+          ))}
+          {assignees.map(({ id, person, count }) => (
+            <Chip
+              key={id}
+              selected={filters.assignee === id}
+              onClick={() => onFilters({ ...filters, who: "all", assignee: id })}
+            >
+              <PersonAvatar person={person ?? { id }} size="xs" />
+              {personName(person)}
+              <span className="text-xs text-muted-foreground">{count}</span>
             </Chip>
           ))}
         </FilterGroup>
@@ -279,6 +294,8 @@ export const PlanToolbar = forwardRef<
     questions?: { open: number; total: number };
     /** Tags in use on the plan's sections and tasks, most used first. */
     tags?: ReadonlyArray<{ tag: string; count: number }>;
+    /** People tasks on the plan are assigned to, for the assignee filter. */
+    assignees?: ReadonlyArray<PlanAssignee>;
     filters: TaskFilters;
     onFilters: (filters: TaskFilters) => void;
     statusCounts: Record<PlanTaskStatus, number>;
@@ -296,6 +313,7 @@ export const PlanToolbar = forwardRef<
     prCount = 0,
     questions = { open: 0, total: 0 },
     tags = [],
+    assignees = [],
     filters,
     onFilters,
     statusCounts,
@@ -315,6 +333,7 @@ export const PlanToolbar = forwardRef<
       filters.priority,
       filters.tag,
       filters.who !== "all" ? filters.who : null,
+      filters.assignee,
       filters.questions ? "questions" : null,
     ].filter(Boolean).length;
     const views: Array<[PlanLayout, string]> = [
@@ -439,6 +458,7 @@ export const PlanToolbar = forwardRef<
           total={total}
           tags={tags}
           questions={questions}
+          assignees={assignees}
         />
       </div>
     );
@@ -550,13 +570,30 @@ export const PlanToolbar = forwardRef<
         ))}
       </FilterMenu>
 
-      <FilterMenu label="Assignee" current={WHO_LABEL[filters.who]} active={filters.who !== "all"}>
+      <FilterMenu
+        label="Assignee"
+        current={
+          filters.assignee
+            ? personName(assignees.find((entry) => entry.id === filters.assignee)?.person)
+            : WHO_LABEL[filters.who]
+        }
+        active={filters.who !== "all" || Boolean(filters.assignee)}
+      >
         {(Object.keys(WHO_LABEL) as WhoFilter[]).map((who) => (
           <Option
             key={who}
             label={WHO_LABEL[who]}
-            selected={filters.who === who}
-            onSelect={() => onFilters({ ...filters, who })}
+            selected={filters.who === who && !filters.assignee}
+            onSelect={() => onFilters({ ...filters, who, assignee: null })}
+          />
+        ))}
+        {assignees.map(({ id, person, count }) => (
+          <Option
+            key={id}
+            label={personName(person)}
+            count={count}
+            selected={filters.assignee === id}
+            onSelect={() => onFilters({ ...filters, who: "all", assignee: id })}
           />
         ))}
       </FilterMenu>
