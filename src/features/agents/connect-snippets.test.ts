@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hostedMcpSnippets,
   MCP_SERVER_NAME,
   mcpSnippets,
   plannerApiUrl,
@@ -66,5 +67,17 @@ describe("mcpSnippets", () => {
     );
     const spaced = mcpSnippets({ origin: "https://x.test", repoPath: "/my files/boared" });
     expect(spaced.claudeCode).toContain("--prefix '/my files/boared'");
+  });
+});
+
+describe("hostedMcpSnippets", () => {
+  it("points at Streamable HTTP without embedding secrets", () => {
+    const hosted = hostedMcpSnippets("https://boared.online");
+    expect(hosted.mcpUrl).toBe("https://boared.online/api/mcp");
+    expect(hosted.cursor).toContain("https://boared.online/api/mcp");
+    expect(hosted.cursor.toLowerCase()).not.toContain("secret");
+    expect(hosted.cursor).not.toContain("cpk_");
+    expect(hosted.claudeCode).toContain("--transport http");
+    expect(hosted.note.toLowerCase()).toContain("oauth");
   });
 });

@@ -73,3 +73,32 @@ export function mcpSnippets({
     curl: `curl -s -H "Authorization: Bearer $PLANNER_API_KEY" ${apiUrl}/plans`,
   };
 }
+
+/** Remote hosted MCP (Streamable HTTP + OAuth). No secrets in snippets. */
+export function hostedMcpUrl(origin: string): string {
+  return `${origin.replace(/\/+$/, "")}/api/mcp`;
+}
+
+export interface HostedMcpSnippets {
+  mcpUrl: string;
+  cursor: string;
+  claudeCode: string;
+  note: string;
+}
+
+export function hostedMcpSnippets(origin: string): HostedMcpSnippets {
+  const mcpUrl = hostedMcpUrl(origin);
+  const cursor = {
+    mcpServers: {
+      [MCP_SERVER_NAME]: {
+        url: mcpUrl,
+      },
+    },
+  };
+  return {
+    mcpUrl,
+    cursor: JSON.stringify(cursor, null, 2),
+    claudeCode: `claude mcp add --transport http ${MCP_SERVER_NAME} ${shellQuote(mcpUrl)}`,
+    note: "Your client opens a browser login to Boared, you approve as a workspace admin, then it uses OAuth tokens. No API key is pasted into the config.",
+  };
+}

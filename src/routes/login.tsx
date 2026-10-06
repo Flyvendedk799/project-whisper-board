@@ -9,6 +9,7 @@ import { PasswordInput } from "@/features/auth/password-input";
 import { Segmented } from "@/components/status-pill";
 import { AuthCard } from "@/features/auth/auth-card";
 import { toast } from "sonner";
+import { isSafeInternalPath } from "@/lib/mcp-oauth/authorization";
 
 export const Route = createFileRoute("/login")({
   validateSearch: z.object({
@@ -38,9 +39,11 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const safeRedirect = redirect && isSafeInternalPath(redirect) ? redirect : undefined;
+
   function afterSignIn() {
-    if (redirect) {
-      void navigate({ href: redirect });
+    if (safeRedirect) {
+      void navigate({ href: safeRedirect });
       return;
     }
     if (finishingSignup) {
@@ -68,11 +71,7 @@ function LoginPage() {
       options: {
         // A same-site path (e.g. an invite's accept page) survives the email round trip.
         emailRedirectTo: `${window.location.origin}${
-          redirect?.startsWith("/") && !redirect.startsWith("//")
-            ? redirect
-            : finishingSignup
-              ? "/app/create-workspace"
-              : "/app"
+          safeRedirect ? safeRedirect : finishingSignup ? "/app/create-workspace" : "/app"
         }`,
       },
     });
