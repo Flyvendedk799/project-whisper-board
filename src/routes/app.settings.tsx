@@ -33,6 +33,7 @@ import { updateWorkspace } from "@/lib/workspace.functions";
 import { ApiKeyManager } from "@/features/settings/api-key-manager";
 import { SlaPoliciesCard } from "@/features/settings/sla-policies-card";
 import { LabelsCard } from "@/features/settings/labels-card";
+import { AvatarField } from "@/features/settings/avatar-field";
 import { supabase } from "@/integrations/supabase/client";
 import { notificationPreferencesQuery, channelEnabled } from "@/data/notifications";
 import { qk } from "@/data/keys";
@@ -221,6 +222,8 @@ function ProfileCard() {
   return (
     <Card className="space-y-4 rounded-[14px] p-5 max-md:p-4">
       <h2 className="font-display text-[22px] leading-tight">Your details</h2>
+
+      <AvatarField />
 
       <form
         onSubmit={(event) => {

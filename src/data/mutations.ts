@@ -136,6 +136,14 @@ export const updateProfile = (input: { id: string; fullName: string }) =>
     .select("id")
     .single();
 
+export const updateProfileAvatar = (input: { id: string; avatarUrl: string | null }) =>
+  supabase
+    .from("profiles")
+    .update({ avatar_url: input.avatarUrl })
+    .eq("id", input.id)
+    .select("id")
+    .single();
+
 export const insertAttachment = (input: Insert<"ticket_attachments">) =>
   supabase.from("ticket_attachments").insert(input).select("*").single();
 

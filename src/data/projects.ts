@@ -292,6 +292,24 @@ export function toWorkspacePeople(rows: readonly WorkspaceMemberRow[]): Workspac
     );
 }
 
+/** The signed-in person's own profile: their photo in the shell and in Settings. */
+export function ownProfileQuery(userId: string | null | undefined) {
+  return queryOptions({
+    queryKey: qk.profile(userId ?? "none"),
+    enabled: Boolean(userId),
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<PersonRef | null> => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(PERSON_REF_COLUMNS)
+        .eq("id", userId!)
+        .maybeSingle<PersonRef>();
+      if (error) throw new DataError("profiles.own", error);
+      return data;
+    },
+  });
+}
+
 /** Everyone in the active workspace, for assignee pickers and @mentions. */
 export function workspacePeopleQuery(workspaceId: string | null | undefined) {
   return queryOptions({
