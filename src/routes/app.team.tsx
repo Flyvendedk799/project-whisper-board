@@ -26,11 +26,18 @@ import { EmptyState, StatusPill } from "@/components/status-pill";
 import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
-import { inviteClient, removeWorkspaceMember, setWorkspaceMemberRole } from "@/lib/admin.functions";
-import { workspaceMembersQuery } from "@/data/projects";
+import {
+  inviteClient,
+  removeWorkspaceMember,
+  resendInvite,
+  setWorkspaceMemberRole,
+} from "@/lib/admin.functions";
+import { workspaceMembersQuery, type WorkspaceMemberRow } from "@/data/projects";
 import { qk } from "@/data/keys";
 import { ROLE_LABEL, type AppRole } from "@/data/enums";
-import { initials } from "@/lib/utils-format";
+import { formatRelative } from "@/lib/utils-format";
+import { PersonAvatar, personName } from "@/components/person-avatar";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export const Route = createFileRoute("/app/team")({
   head: () => ({ meta: [{ title: "Team · Boared" }] }),
@@ -104,14 +111,12 @@ function MemberRow({
   workspaceId,
   isSelf,
 }: {
-  member: {
-    user_id: string;
-    role: AppRole;
-    profile: { full_name: string | null; email: string | null } | null;
-  };
+  member: WorkspaceMemberRow;
   workspaceId: string;
   isSelf: boolean;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const name = personName(member.profile, "Invited");
   const setRole = useServerAction(useServerFn(setWorkspaceMemberRole), {
     label: "team.setRole",
     success: "Role updated",
@@ -119,24 +124,38 @@ function MemberRow({
   });
   const remove = useServerAction(useServerFn(removeWorkspaceMember), {
     label: "team.remove",
-    success: "Removed from the workspace",
+    success: member.pending ? "Invite revoked" : "Removed from the workspace",
     invalidate: [qk.workspacePeople(workspaceId), qk.profiles()],
+    onSuccess: () => setConfirming(false),
+  });
+  const resend = useServerAction(useServerFn(resendInvite), {
+    label: "team.resendInvite",
+    success: (result) =>
+      result.via === "invite" ? "Invite sent again" : "Sent them a link to set a password",
+    invalidate: [qk.workspacePeople(workspaceId)],
   });
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3.5 hover:bg-surface max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-y-3 max-md:py-4">
-      <span
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold max-md:h-10 max-md:w-10 max-md:text-xs"
-        aria-hidden="true"
-      >
-        {initials(member.profile?.full_name ?? member.profile?.email)}
-      </span>
+      <PersonAvatar
+        person={member.profile ?? { id: member.user_id }}
+        pending={member.pending}
+        className="max-md:h-10 max-md:w-10 max-md:text-xs"
+      />
       <div className="min-w-0 flex-1 max-md:col-span-2">
-        <div className="truncate font-medium">
-          {member.profile?.full_name || member.profile?.email || "Invited"}
-          {isSelf ? " (you)" : ""}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">
+            {name}
+            {isSelf ? " (you)" : ""}
+          </span>
+          {member.pending ? <StatusPill tone="warning">Pending</StatusPill> : null}
         </div>
-        <div className="truncate text-xs text-muted-foreground">{member.profile?.email}</div>
+        <div className="truncate text-xs text-muted-foreground">
+          {member.profile?.email}
+          {member.pending && member.invited_at
+            ? ` · Invited ${formatRelative(member.invited_at)}`
+            : ""}
+        </div>
       </div>
       <StatusPill className="max-md:hidden">{ROLE_LABEL[member.role]}</StatusPill>
       <Select
@@ -148,7 +167,7 @@ function MemberRow({
       >
         <SelectTrigger
           className="h-[34px] w-36 max-md:col-span-2 max-md:col-start-1 max-md:w-full"
-          aria-label="Role"
+          aria-label={`Role for ${name}`}
         >
           <SelectValue />
         </SelectTrigger>
@@ -160,15 +179,45 @@ function MemberRow({
           ))}
         </SelectContent>
       </Select>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={isSelf || remove.busy}
-        onClick={() => remove.fire({ workspaceId, userId: member.user_id })}
+      <div className="flex items-center gap-1 max-md:justify-end">
+        {member.pending ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={resend.busy}
+            aria-label={`Resend invite to ${name}`}
+            onClick={() => resend.fire({ workspaceId, userId: member.user_id })}
+          >
+            {resend.busy ? "Sending…" : "Resend"}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={isSelf || remove.busy}
+          aria-label={`${member.pending ? "Revoke invite for" : "Remove"} ${name}`}
+          onClick={() => setConfirming(true)}
+        >
+          {member.pending ? "Revoke" : "Remove"}
+        </Button>
+      </div>
+      <ConfirmDeleteDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={member.pending ? `Revoke ${name}'s invite?` : `Remove ${name}?`}
+        confirmLabel={member.pending ? "Revoke invite" : "Remove"}
+        busyLabel={member.pending ? "Revoking…" : "Removing…"}
+        busy={remove.busy}
+        onConfirm={() => remove.fire({ workspaceId, userId: member.user_id })}
       >
-        Remove
-      </Button>
+        <p>
+          {member.pending
+            ? "The link they were sent no longer gets them into this workspace. You can invite them again later."
+            : "They lose access to this workspace and its projects. Their tickets and comments stay."}
+        </p>
+      </ConfirmDeleteDialog>
     </li>
   );
 }
