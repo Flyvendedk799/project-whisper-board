@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bug, ChevronsUpDown, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { PersonAvatar } from "@/components/person-avatar";
+import { useOwnPerson } from "@/hooks/use-own-person";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -236,6 +238,7 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut, workspaceId } = useAuth();
+  const me = useOwnPerson();
 
   const counts = useQuery({
     ...ticketCountsQuery(user?.id ?? "", workspaceId),
@@ -323,10 +326,9 @@ function SidebarInner({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (
           {isAdmin ? "Agency view" : "Client view"}
         </div>
         <div className="flex items-center gap-2.5 px-1">
+          <PersonAvatar person={me} />
           <div className="min-w-0 flex-1 text-xs">
-            <div className="truncate font-medium">
-              {user?.user_metadata?.full_name || user?.email}
-            </div>
+            <div className="truncate font-medium">{me?.full_name || user?.email}</div>
             <div className="truncate text-muted-foreground">{user?.email}</div>
           </div>
           <ThemeToggle />

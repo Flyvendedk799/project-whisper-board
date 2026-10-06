@@ -29,7 +29,7 @@ import {
 } from "@/data/projects";
 import { deleteOrganization, updateOrganization } from "@/data/mutations";
 import { mergeOrganizations, setClientOrganization } from "@/lib/admin.functions";
-import { initials } from "@/lib/utils-format";
+import { PersonAvatar } from "@/components/person-avatar";
 import { qk } from "@/data/keys";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_TONE, ROLE_LABEL } from "@/data/enums";
 
@@ -204,12 +204,10 @@ function OrganizationPage() {
                     <ul className="divide-y overflow-hidden rounded-[14px] border bg-card">
                       {here.map((person) => (
                         <li key={person.user_id} className="flex items-center gap-3 px-4 py-3">
-                          <span
-                            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
-                            aria-hidden="true"
-                          >
-                            {initials(person.profile?.full_name ?? person.profile?.email)}
-                          </span>
+                          <PersonAvatar
+                            person={person.profile ?? { id: person.user_id }}
+                            pending={person.pending}
+                          />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium">
                               {person.profile?.full_name || person.profile?.email || "Client"}
