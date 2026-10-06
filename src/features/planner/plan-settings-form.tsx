@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useServerAction } from "@/lib/use-server-action";
 import { qk } from "@/data/keys";
 import { updatePlan } from "@/lib/planner.functions";
@@ -55,6 +56,7 @@ export function PlanSettingsForm({
     isWorkMode(plan.github_work_mode) ? plan.github_work_mode : null,
   );
   const [workBranch, setWorkBranch] = useState(plan.github_work_branch ?? "");
+  const [clientsCanView, setClientsCanView] = useState(plan.clients_can_view ?? true);
   const [createOnGitHub, setCreateOnGitHub] = useState(true);
   const githubReachable = !useGitHubRepos().isError;
 
@@ -89,6 +91,7 @@ export function PlanSettingsForm({
         githubBase: baseName || null,
         githubWorkMode: repoSlug ? workMode : null,
         githubWorkBranch: repoSlug ? branch : null,
+        clientsCanView,
       });
     } catch {
       return; // The action already told the user why.
@@ -215,6 +218,24 @@ export function PlanSettingsForm({
           Use project repository ({selectedProject.github_repo})
         </button>
       ) : null}
+
+      <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 max-md:min-h-14">
+        <div className="min-w-0 space-y-1">
+          <Label htmlFor="clients-can-view" className="text-sm font-medium">
+            Clients can view this plan
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            On by default. Project members with a client role can open the plan. Turn off to keep it
+            agency-only.
+          </p>
+        </div>
+        <Switch
+          id="clients-can-view"
+          className="max-md:mt-1"
+          checked={clientsCanView}
+          onCheckedChange={setClientsCanView}
+        />
+      </div>
 
       {repoSlug ? (
         <fieldset className="flex flex-col gap-2.5 rounded-xl border p-3.5">

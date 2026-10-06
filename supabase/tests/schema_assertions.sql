@@ -332,6 +332,8 @@ select assert(
 insert into public.projects (id, organization_id, title, created_by) values
   ('bbbbbbbb-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
    'Plan only', '11111111-1111-1111-1111-111111111111');
+insert into public.project_members (project_id, user_id, role) values
+  ('bbbbbbbb-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'client');
 insert into public.milestones (project_id, title, position) values
   ('bbbbbbbb-0000-0000-0000-000000000003', 'Later', 0);
 insert into public.plans (id, workspace_id, project_id, title) values
@@ -556,7 +558,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select assert(
   (select count(*) from public.plan_task_attachments) = 2,
-  'a workspace member reads the plan''s attachments'
+  'a project-member client reads the plan''s attachments by default'
 );
 select assert(
   (select count(*) from public.plan_task_steps) = 1,
@@ -888,6 +890,79 @@ select assert(
    where kind = 'assigned' and actor_id = '11111111-1111-1111-1111-111111111111') = 1,
   'an assignment notification records who assigned it'
 );
+
+-- ---------------------------------------------------------------------------
+\echo 'client plan visibility'
+-- ---------------------------------------------------------------------------
+-- Default: clients_can_view is true, so a client on the project sees the plan.
+-- Admins can flip the flag to hide it. Create/edit stay admin-only.
+
+select assert(
+  (select clients_can_view from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001'),
+  'new plans are visible to clients by default'
+);
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 1,
+  'a client on the project sees the plan when clients_can_view is true'
+);
+select assert(
+  (select count(*) from public.plan_tasks
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') >= 1,
+  'and can read that plan''s tasks'
+);
+reset role;
+
+-- Hide from clients.
+update public.plans set clients_can_view = false
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 0,
+  'an admin restriction hides the plan from the client'
+);
+select assert(
+  (select count(*) from public.plan_tasks
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 0,
+  'and hides its tasks too'
+);
+
+-- Admin still sees it.
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 1,
+  'the workspace admin still sees a restricted plan'
+);
+reset role;
+
+-- A plan on a project the client is not on stays hidden even when shared.
+insert into public.projects (id, organization_id, title, created_by) values
+  ('bbbbbbbb-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'Other project', '11111111-1111-1111-1111-111111111111');
+insert into public.plans (id, workspace_id, project_id, title, clients_can_view) values
+  ('eeeeeeee-0000-0000-0000-000000000050', '00000000-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000004', 'Internal only', true);
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000050') = 0,
+  'a client does not see plans for projects they are not on'
+);
+reset role;
+
+-- Restore the Delivery plan for later assertions that may still expect it.
+update public.plans set clients_can_view = true
+where id = 'eeeeeeee-0000-0000-0000-000000000001';
 
 -- ---------------------------------------------------------------------------
 \echo 'realtime'

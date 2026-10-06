@@ -23,7 +23,7 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
           description={
             isAdmin
               ? "Create an AI plan to orchestrate agent tasks for this project."
-              : "When your agency plans work here, progress will show up on this tab."
+              : "When your agency plans work here, it will show up on this tab."
           }
           action={
             isAdmin ? (
@@ -39,39 +39,18 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
     >
       {(data) => {
         const rows = data.plans as PlanListItem[];
-        if (!isAdmin) {
-          const tasks = rows.reduce((total, plan) => total + (plan.task_count ?? 0), 0);
-          const done = rows.reduce((total, plan) => total + (plan.done_task_count ?? 0), 0);
-          const percent = tasks === 0 ? 0 : Math.round((100 * done) / tasks);
-          return (
-            <Card className="space-y-2 p-5 max-md:p-4">
-              <h3 className="font-display text-xl">Plan progress</h3>
-              <p className="text-sm text-muted-foreground">
-                {done} of {tasks} planned tasks are done ({percent}%).
-              </p>
-              <ul className="space-y-2">
-                {rows.map((plan) => (
-                  <li key={plan.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate">{plan.title}</span>
-                    <span className="shrink-0 text-muted-foreground tabular-nums">
-                      {plan.done_task_count ?? 0}/{plan.task_count ?? 0}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          );
-        }
         return (
           <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button asChild size="sm" className="max-md:w-full">
-                <Link to="/app/planner" search={{ project: projectId, create: true }}>
-                  <BrainCircuit className="mr-1.5 h-4 w-4" />
-                  New plan
-                </Link>
-              </Button>
-            </div>
+            {isAdmin ? (
+              <div className="flex justify-end">
+                <Button asChild size="sm" className="max-md:w-full">
+                  <Link to="/app/planner" search={{ project: projectId, create: true }}>
+                    <BrainCircuit className="mr-1.5 h-4 w-4" />
+                    New plan
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {rows.map((plan) => (
                 <Link

@@ -176,7 +176,7 @@ function ProjectPage() {
                   <span className="tabular-nums">{p.progress}%</span>
                 </span>
                 {p.end_date && <span>Target {formatDate(p.end_date)}</span>}
-                <ProjectPlanProgress projectId={projectId} linked={isAdmin} />
+                <ProjectPlanProgress projectId={projectId} linked />
                 {isAdmin && p.budget_cents != null && (
                   <span>
                     Budget {p.currency} {(p.budget_cents / 100).toLocaleString()}
