@@ -198,15 +198,17 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   milestone: "Milestones",
   invoice: "Invoices",
   meeting: "Meetings",
+  assigned: "Assignments",
 };
 
 export const NOTIFICATION_KIND_DESCRIPTION: Record<NotificationKind, string> = {
-  mention: "Someone writes @you in a comment.",
+  mention: "Someone writes @you in a reply, an internal note or a planner note.",
   comment: "Someone replies on a ticket you're following.",
   ticket_update: "A ticket's status, priority or ETA changes.",
   milestone: "A milestone is completed.",
   invoice: "An invoice is sent, paid or falls overdue.",
   meeting: "A meeting is scheduled, moved or wrapped up.",
+  assigned: "Someone assigns a ticket or a planner task to you.",
 };
 
 /** Sentence fragments completing "<who> ..." in the activity feed. */

@@ -6,16 +6,10 @@ import { cardFace, nestedOutlineCount, plainTitle } from "@/lib/board-view";
 import { readTaskOutline, stepsProgress, type TaskOutlineNode } from "@/lib/plan-markdown";
 import { cn } from "@/lib/utils";
 import { questionCounts } from "@/lib/plan-fields";
-import {
-  advanceTip,
-  coverImages,
-  initials,
-  PRIORITY_STYLE,
-  STATUS_STYLE,
-  taskColor,
-} from "./plan-model";
+import { advanceTip, coverImages, PRIORITY_STYLE, STATUS_STYLE, taskColor } from "./plan-model";
 import { CopyIdButton } from "./copy-id-button";
 import { TagChip } from "./tag-editor";
+import { PersonAvatar, personName } from "@/components/person-avatar";
 
 const PR_TONE: Record<string, string> = {
   open: "text-success",
@@ -251,14 +245,16 @@ export function PlanTaskCard({
               </span>
             ) : null}
             {task.assigned_user_id ? (
-              <span className="flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-accent text-[9px] font-semibold text-foreground"
-                >
-                  {initials(task.assigned_user?.full_name)}
+              <span
+                className="flex min-w-0 items-center gap-1.5"
+                title={personName(task.assigned_user)}
+              >
+                <PersonAvatar person={task.assigned_user} size="xs" />
+                <span className="truncate">
+                  {task.assigned_user?.full_name?.split(" ")[0] ||
+                    task.assigned_user?.email?.split("@")[0] ||
+                    "Teammate"}
                 </span>
-                {task.assigned_user?.full_name?.split(" ")[0] || "User"}
               </span>
             ) : null}
             <span className="flex-1" />

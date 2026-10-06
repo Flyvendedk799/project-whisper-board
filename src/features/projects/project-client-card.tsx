@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-provider";
 import { organizationsQuery, projectMembersQuery } from "@/data/projects";
 import { ROLE_LABEL } from "@/data/enums";
-import { initials } from "@/lib/utils-format";
+import { PersonAvatar } from "@/components/person-avatar";
 import type { Project } from "@/data/types";
 
 /**
@@ -47,12 +47,7 @@ export function ProjectClientCard({
         <ul className="mt-4 space-y-2.5">
           {contacts.map((member) => (
             <li key={member.id} className="flex items-center gap-3">
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
-                aria-hidden="true"
-              >
-                {initials(member.profile?.full_name ?? member.profile?.email)}
-              </span>
+              <PersonAvatar person={member.profile ?? { id: member.user_id }} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">
                   {member.profile?.full_name ?? member.profile?.email}

@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { PersonAvatar } from "@/components/person-avatar";
+import { useOwnPerson } from "@/hooks/use-own-person";
 import { useTheme } from "@/components/theme-provider";
 import { NotificationBell } from "@/components/notification-bell";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -274,8 +276,8 @@ function MoreSheet({
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { resolved, toggle } = useTheme();
-  const name = user?.user_metadata?.full_name || user?.email || "";
-  const initial = (name.trim()[0] ?? "?").toUpperCase();
+  const me = useOwnPerson();
+  const name = me?.full_name || user?.email || "";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -289,9 +291,7 @@ function MoreSheet({
         </SheetDescription>
 
         <div className="flex items-center gap-3 px-5 pb-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-accent font-display text-xl">
-            {initial}
-          </div>
+          <PersonAvatar person={me} size="lg" className="h-11 w-11 text-sm" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{name}</div>
             <div className="truncate text-xs text-muted-foreground">

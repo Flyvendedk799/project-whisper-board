@@ -1,3 +1,4 @@
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,12 +62,20 @@ export function PlanHeader({
   plan,
   actions,
   aiMenu,
+  layout,
 }: {
   plan: PlanWithSections;
   actions: PlanHeaderActions;
+  /**
+   * The board's current view. The columns view already shows every section side
+   * by side, so the roadmap strip would only repeat it (and scroll sideways):
+   * there the header keeps one compact progress line instead.
+   */
+  layout?: string;
   /** The plan's AI menu (Audit plan and friends), shown only when AI is configured. */
   aiMenu?: React.ReactNode;
 }) {
+  const compact = layout === "columns";
   const tasks = tasksOf(plan);
   const overall = progressOf(tasks);
   const attention = attentionChips(tasks);
@@ -148,11 +157,7 @@ export function PlanHeader({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {plan.description ? (
-              <p className="mt-1.5 max-w-[660px] leading-normal max-md:line-clamp-2 max-md:break-words text-muted-foreground">
-                {plan.description}
-              </p>
-            ) : null}
+            {plan.description ? <PlanDescription planId={plan.id} text={plan.description} /> : null}
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted-foreground max-md:break-all max-md:text-[13px]">
               {plan.github_repo ? (
                 <>
@@ -261,10 +266,27 @@ export function PlanHeader({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2.5 max-md:gap-y-3">
-            <span className="font-display text-[28px] leading-none">{overall.percent}%</span>
-            <span className="text-muted-foreground">
+            <span className={cn("font-display leading-none", compact ? "text-lg" : "text-[28px]")}>
+              {overall.percent}%
+            </span>
+            <span className={cn("text-muted-foreground", compact && "text-[13px]")}>
               {overall.done} of {overall.total} tasks done
             </span>
+            {compact ? (
+              <span
+                role="progressbar"
+                aria-label="Plan progress"
+                aria-valuenow={overall.percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                className="block h-1.5 w-32 overflow-hidden rounded-full bg-muted max-md:hidden"
+              >
+                <span
+                  className="block h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${overall.percent}%` }}
+                />
+              </span>
+            ) : null}
             <span className="flex-1" />
             <span
               aria-hidden="true"
@@ -302,68 +324,147 @@ export function PlanHeader({
             ) : null}
           </div>
 
-          <ul
-            aria-label="Roadmap"
-            className="max-md:hidden flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5 max-md:no-scrollbar max-md:-mx-4 max-md:snap-x max-md:snap-proximity max-md:scroll-px-4 max-md:overscroll-x-contain max-md:px-4"
-          >
-            {plan.sections.map((section, index) => {
-              const mine = sortedTasks(section.tasks ?? []);
-              const progress = progressOf(mine);
-              const color = sectionColor(section.color, index);
-              return (
-                <li
-                  key={section.id}
-                  className="min-w-[180px] max-w-[280px] flex-1 basis-[180px] max-md:snap-start"
-                >
-                  <button
-                    type="button"
-                    onClick={() => actions.onFocusSection(section.id)}
-                    aria-label={`${section.title}: ${progress.done} of ${progress.total} done`}
-                    className="flex h-full min-h-14 w-full flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          {compact ? null : (
+            <ul
+              aria-label="Roadmap"
+              className="max-md:hidden flex items-stretch gap-2.5 overflow-x-auto overflow-y-hidden px-0.5 pb-2 pt-0.5 max-md:no-scrollbar max-md:-mx-4 max-md:snap-x max-md:snap-proximity max-md:scroll-px-4 max-md:overscroll-x-contain max-md:px-4"
+            >
+              {plan.sections.map((section, index) => {
+                const mine = sortedTasks(section.tasks ?? []);
+                const progress = progressOf(mine);
+                const color = sectionColor(section.color, index);
+                return (
+                  <li
+                    key={section.id}
+                    className="min-w-[180px] max-w-[280px] flex-1 basis-[180px] max-md:snap-start"
                   >
-                    <span className="flex items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span className="flex-1 text-[13px] font-medium leading-tight">
-                        {section.title}
-                      </span>
-                      <span className="font-display text-lg leading-none">
-                        {progress.done}/{progress.total}
-                      </span>
-                    </span>
-                    <span
-                      role="progressbar"
-                      aria-label={`${section.title} progress`}
-                      aria-valuenow={progress.percent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      className="block h-[5px] overflow-hidden rounded-full bg-muted"
+                    <button
+                      type="button"
+                      onClick={() => actions.onFocusSection(section.id)}
+                      aria-label={`${section.title}: ${progress.done} of ${progress.total} done`}
+                      className="flex h-full min-h-14 w-full flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
+                      <span className="flex items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="flex-1 text-[13px] font-medium leading-tight">
+                          {section.title}
+                        </span>
+                        <span className="font-display text-lg leading-none">
+                          {progress.done}/{progress.total}
+                        </span>
+                      </span>
                       <span
-                        className="block h-full transition-[width] duration-300"
-                        style={{ width: `${progress.percent}%`, backgroundColor: color }}
-                      />
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-            <li className="flex max-md:snap-start">
-              <button
-                type="button"
-                onClick={actions.onAddSection}
-                className="rounded-xl border border-dashed px-4 text-[13px] text-muted-foreground hover:bg-muted/60 max-md:min-h-14 max-md:whitespace-nowrap"
-              >
-                + Section
-              </button>
-            </li>
-          </ul>
+                        role="progressbar"
+                        aria-label={`${section.title} progress`}
+                        aria-valuenow={progress.percent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        className="block h-[5px] overflow-hidden rounded-full bg-muted"
+                      >
+                        <span
+                          className="block h-full transition-[width] duration-300"
+                          style={{ width: `${progress.percent}%`, backgroundColor: color }}
+                        />
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+              <li className="flex max-md:snap-start">
+                <button
+                  type="button"
+                  onClick={actions.onAddSection}
+                  className="rounded-xl border border-dashed px-4 text-[13px] text-muted-foreground hover:bg-muted/60 max-md:min-h-14 max-md:whitespace-nowrap"
+                >
+                  + Section
+                </button>
+              </li>
+            </ul>
+          )}
         </div>
       </div>
     </header>
+  );
+}
+
+const DESCRIPTION_KEY = "boared.plan.description.expanded";
+
+function readExpanded(planId: string): boolean {
+  try {
+    return localStorage.getItem(`${DESCRIPTION_KEY}.${planId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The plan's description, two lines until asked for more. The choice is
+ * remembered per plan, so a plan you keep open stays open.
+ */
+export function PlanDescription({ planId, text }: { planId: string; text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  const id = useId();
+
+  useEffect(() => setExpanded(readExpanded(planId)), [planId]);
+
+  // Show the toggle only when the text really is longer than two lines.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => {
+      if (expanded) return;
+      setOverflows(element.scrollHeight > element.clientHeight + 1);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [text, expanded]);
+
+  const long = overflows || text.length > 180 || text.includes("\n");
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    try {
+      if (next) localStorage.setItem(`${DESCRIPTION_KEY}.${planId}`, "1");
+      else localStorage.removeItem(`${DESCRIPTION_KEY}.${planId}`);
+    } catch {
+      /* private mode: it just will not be remembered */
+    }
+  };
+
+  return (
+    <div className="mt-1.5 max-w-[660px]">
+      <p
+        ref={ref}
+        id={id}
+        className={cn(
+          "whitespace-pre-line break-words leading-normal text-muted-foreground",
+          !expanded && "line-clamp-2",
+        )}
+      >
+        {text}
+      </p>
+      {long ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={toggle}
+          className="mt-0.5 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-9"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -27,15 +27,16 @@ import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useDataMutation, useServerAction } from "@/lib/use-server-action";
 import { setClientOrganization } from "@/lib/admin.functions";
-import { initials } from "@/lib/utils-format";
+import { PersonAvatar } from "@/components/person-avatar";
 import {
   organizationMembersQuery,
   organizationsQuery,
   peopleByOrganization,
   projectListQuery,
   workspaceMembersQuery,
+  type WorkspaceMemberRow,
 } from "@/data/projects";
-import { ROLE_LABEL, type AppRole } from "@/data/enums";
+import { ROLE_LABEL } from "@/data/enums";
 import { createOrganization } from "@/data/mutations";
 import { qk } from "@/data/keys";
 
@@ -160,11 +161,7 @@ function PersonRow({
   orgs,
   companyId,
 }: {
-  member: {
-    user_id: string;
-    role: AppRole;
-    profile: { full_name: string | null; email: string | null } | null;
-  };
+  member: Pick<WorkspaceMemberRow, "user_id" | "role" | "profile" | "pending">;
   workspaceId: string;
   orgs: Array<{ id: string; name: string }>;
   companyId: string | undefined;
@@ -177,12 +174,7 @@ function PersonRow({
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-surface max-md:gap-x-3 max-md:gap-y-2">
-      <span
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold"
-        aria-hidden="true"
-      >
-        {initials(member.profile?.full_name ?? member.profile?.email)}
-      </span>
+      <PersonAvatar person={member.profile ?? { id: member.user_id }} pending={member.pending} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
           {member.profile?.full_name || member.profile?.email || "Client"}

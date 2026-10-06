@@ -152,6 +152,30 @@ export function tasksOf(plan: Pick<PlanWithSections, "sections"> | null | undefi
   return (plan?.sections ?? []).flatMap((section) => section.tasks ?? []);
 }
 
+export type PlanAssignee = {
+  id: string;
+  person: NonNullable<TaskWithAgent["assigned_user"]> | null;
+  count: number;
+};
+
+/** The people tasks on a plan are assigned to, by name, for the assignee filter. */
+export function collectAssignees(
+  tasks: ReadonlyArray<Pick<TaskWithAgent, "assigned_user_id" | "assigned_user">>,
+): PlanAssignee[] {
+  const byId = new Map<string, PlanAssignee>();
+  for (const task of tasks) {
+    const id = task.assigned_user_id;
+    if (!id) continue;
+    const entry = byId.get(id) ?? { id, person: null, count: 0 };
+    entry.count += 1;
+    entry.person ??= task.assigned_user ?? null;
+    byId.set(id, entry);
+  }
+  const label = (entry: PlanAssignee) =>
+    entry.person?.full_name?.trim() || entry.person?.email?.trim() || "";
+  return [...byId.values()].sort((a, b) => label(a).localeCompare(label(b)));
+}
+
 export function progressOf(tasks: ReadonlyArray<Pick<TaskWithAgent, "status">>): {
   done: number;
   total: number;
@@ -234,6 +258,8 @@ export interface TaskFilters {
   tag: string | null;
   /** Only tasks with an open question. */
   questions: boolean;
+  /** Only tasks assigned to this person. */
+  assignee: string | null;
 }
 
 export const NO_FILTERS: TaskFilters = {
@@ -243,6 +269,7 @@ export const NO_FILTERS: TaskFilters = {
   priority: null,
   tag: null,
   questions: false,
+  assignee: null,
 };
 
 export const WHO_LABEL: Record<WhoFilter, string> = {
@@ -259,7 +286,8 @@ export function hasActiveFilters(filters: TaskFilters): boolean {
     filters.who !== "all" ||
     filters.priority ||
     filters.tag ||
-    filters.questions,
+    filters.questions ||
+    filters.assignee,
   );
 }
 
@@ -297,6 +325,7 @@ export function matchesFilters(
     return false;
   }
   if (filters.questions && questionCounts(task.questions).open === 0) return false;
+  if (filters.assignee && task.assigned_user_id !== filters.assignee) return false;
   if (!matchesSearch(task, filters.q, sectionTags)) return false;
   switch (filters.who) {
     case "me":

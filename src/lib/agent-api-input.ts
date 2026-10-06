@@ -221,6 +221,8 @@ export interface TaskFields {
   color?: string | null;
   acceptance_criteria?: string | null;
   branch_name?: string | null;
+  /** The teammate it is assigned to (a workspace member's user id), or null to clear. */
+  assigned_user_id?: string | null;
 }
 
 function taskFields(body: Body): TaskFields {
@@ -249,6 +251,9 @@ function taskFields(body: Body): TaskFields {
       throw new AppError("validation", `"${branch}" is not a valid branch name.`);
     }
     fields.branch_name = branch;
+  }
+  if (body.assigned_user_id !== undefined) {
+    fields.assigned_user_id = optionalUuid(body.assigned_user_id, "`assigned_user_id`");
   }
   return fields;
 }
@@ -289,7 +294,7 @@ export function parseTaskUpdate(body: Body): TaskFields {
   if (Object.keys(fields).length === 0) {
     throw new AppError(
       "validation",
-      "Send at least one of title, description, priority, complexity, tags, color, acceptance_criteria, branch_name.",
+      "Send at least one of title, description, priority, complexity, tags, color, acceptance_criteria, branch_name, assigned_user_id.",
     );
   }
   return fields;
@@ -298,6 +303,29 @@ export function parseTaskUpdate(body: Body): TaskFields {
 // ---------------------------------------------------------------------------
 // Questions
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
+
+export const MAX_COMMENT_BODY = 20000;
+
+/**
+ * A comment from an agent. Mentions go in the body as `@[Name](user:<id>)`
+ * (the ids come from GET people); `mentions` is an optional list of ids for
+ * clients that would rather pass them separately.
+ */
+export function parseCommentInput(body: Body): {
+  body: string;
+  agentId: string | null;
+  mentions: string[];
+} {
+  return {
+    body: requireText(body.body, "`body` (the comment)", MAX_COMMENT_BODY),
+    agentId: optionalUuid(body.agent_id, "`agent_id`"),
+    mentions: uuidList(body.mentions, "`mentions`", 20),
+  };
+}
 
 export function parseQuestionInput(body: Body): {
   body: string;

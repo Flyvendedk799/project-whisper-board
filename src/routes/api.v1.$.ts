@@ -15,5 +15,5 @@ export const Route = createFileRoute("/api/v1/$")({
 async function handle(request: Request, splat?: string) {
   const auth = await requireAccountAccess(request);
   if (auth instanceof Response) return auth;
-  return handleAccountRequest(request, auth.workspaceId, splat || "");
+  return handleAccountRequest(request, auth.workspaceId, splat || "", auth.userId);
 }

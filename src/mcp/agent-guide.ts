@@ -45,7 +45,7 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
   {
     id: "comment",
     title: "Comment only when there is something to say",
-    body: "A decision, a blocker, a result. Not 'starting' or 'still working': the status and ticks already say that. report_progress posts a comment only when `note` is not empty, so leave it out when you have nothing to add.",
+    body: "A decision, a blocker, a result. Not 'starting' or 'still working': the status and ticks already say that. report_progress posts a comment only when `note` is not empty, so leave it out when you have nothing to add. To bring a person in, @mention them with their token from list_people (`@[Name](user:<user_id>)`): they are notified.",
   },
   {
     id: "ask",

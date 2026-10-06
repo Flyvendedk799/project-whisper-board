@@ -190,39 +190,122 @@ export type WorkspaceMemberRow = {
   role: AppRole;
   created_at: string;
   profile: PersonRef | null;
+  /** Invited and never signed in. */
+  pending: boolean;
+  /** Only filled in for admins and client leads. */
+  invited_at: string | null;
+  last_sign_in_at: string | null;
 };
+
+/** A person in the workspace, as pickers and chips use them. */
+export type WorkspacePerson = PersonRef & { role: AppRole; pending: boolean };
+
+/** PostgREST and Postgres both say "no such function" while a migration is still on its way. */
+function isMissingFunction(error: { code?: string; message?: string }) {
+  return (
+    error.code === "PGRST202" ||
+    error.code === "42883" ||
+    /could not find the function/i.test(error.message ?? "")
+  );
+}
+
+/**
+ * Everyone in a workspace with their profile and invite state, from
+ * `workspace_people()`. Falls back to the member and profile tables (no
+ * pending state) if the database has not been migrated yet, so a deploy that
+ * lands before its migration still lists people.
+ */
+export async function loadWorkspaceMembers(workspaceId: string): Promise<WorkspaceMemberRow[]> {
+  const { data, error } = await supabase.rpc("workspace_people", { _workspace_id: workspaceId });
+  if (!error) {
+    return (data ?? []).map((row) => ({
+      user_id: row.user_id,
+      role: row.role,
+      created_at: row.joined_at,
+      pending: Boolean(row.pending),
+      invited_at: row.invited_at ?? null,
+      last_sign_in_at: row.last_sign_in_at ?? null,
+      profile: {
+        id: row.user_id,
+        full_name: row.full_name,
+        email: row.email,
+        avatar_url: row.avatar_url,
+      },
+    }));
+  }
+  if (!isMissingFunction(error)) throw new DataError("workspace_people", error);
+
+  const { data: members, error: membersError } = await supabase
+    .from("workspace_members")
+    .select("user_id, role, created_at")
+    .eq("workspace_id", workspaceId)
+    .order("created_at");
+  if (membersError) throw new DataError("workspace_members.list", membersError);
+  const rows = members ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select(PERSON_REF_COLUMNS)
+    .in(
+      "id",
+      rows.map((row) => row.user_id),
+    )
+    .returns<PersonRef[]>();
+  if (profileError) throw new DataError("profiles.list", profileError);
+
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+  return rows.map((row) => ({
+    user_id: row.user_id,
+    role: row.role,
+    created_at: row.created_at,
+    pending: false,
+    invited_at: null,
+    last_sign_in_at: null,
+    profile: byId.get(row.user_id) ?? null,
+  }));
+}
 
 export function workspaceMembersQuery(workspaceId: string | null | undefined) {
   return queryOptions({
     queryKey: [...qk.workspacePeople(workspaceId ?? undefined), "roles"] as const,
     enabled: Boolean(workspaceId),
-    queryFn: async (): Promise<WorkspaceMemberRow[]> => {
-      const { data: members, error } = await supabase
-        .from("workspace_members")
-        .select("user_id, role, created_at")
-        .eq("workspace_id", workspaceId!)
-        .order("created_at");
-      if (error) throw new DataError("workspace_members.list", error);
-      const rows = members ?? [];
-      if (rows.length === 0) return [];
+    queryFn: () => loadWorkspaceMembers(workspaceId!),
+  });
+}
 
-      const { data: profiles, error: profileError } = await supabase
+/** Members as people, signed-in first, then by name. */
+export function toWorkspacePeople(rows: readonly WorkspaceMemberRow[]): WorkspacePerson[] {
+  return rows
+    .map((row) => ({
+      id: row.user_id,
+      full_name: row.profile?.full_name ?? null,
+      email: row.profile?.email ?? null,
+      avatar_url: row.profile?.avatar_url ?? null,
+      role: row.role,
+      pending: row.pending,
+    }))
+    .sort(
+      (a, b) =>
+        Number(a.pending) - Number(b.pending) ||
+        (a.full_name ?? a.email ?? "").localeCompare(b.full_name ?? b.email ?? ""),
+    );
+}
+
+/** The signed-in person's own profile: their photo in the shell and in Settings. */
+export function ownProfileQuery(userId: string | null | undefined) {
+  return queryOptions({
+    queryKey: qk.profile(userId ?? "none"),
+    enabled: Boolean(userId),
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<PersonRef | null> => {
+      const { data, error } = await supabase
         .from("profiles")
         .select(PERSON_REF_COLUMNS)
-        .in(
-          "id",
-          rows.map((row) => row.user_id),
-        )
-        .returns<PersonRef[]>();
-      if (profileError) throw new DataError("profiles.list", profileError);
-
-      const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-      return rows.map((row) => ({
-        user_id: row.user_id,
-        role: row.role,
-        created_at: row.created_at,
-        profile: byId.get(row.user_id) ?? null,
-      }));
+        .eq("id", userId!)
+        .maybeSingle<PersonRef>();
+      if (error) throw new DataError("profiles.own", error);
+      return data;
     },
   });
 }
@@ -233,26 +316,8 @@ export function workspacePeopleQuery(workspaceId: string | null | undefined) {
     queryKey: qk.workspacePeople(workspaceId ?? undefined),
     enabled: Boolean(workspaceId),
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<PersonRef[]> => {
-      const { data: members, error: membersError } = await supabase
-        .from("workspace_members")
-        .select("user_id")
-        .eq("workspace_id", workspaceId!);
-      if (membersError) throw new DataError("workspace_members.list", membersError);
-
-      const ids = (members ?? []).map((m) => m.user_id);
-      if (ids.length === 0) return [];
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(PERSON_REF_COLUMNS)
-        .in("id", ids)
-        .order("full_name")
-        .returns<PersonRef[]>();
-
-      if (error) throw new DataError("profiles.list", error);
-      return data ?? [];
-    },
+    queryFn: async (): Promise<WorkspacePerson[]> =>
+      toWorkspacePeople(await loadWorkspaceMembers(workspaceId!)),
   });
 }
 

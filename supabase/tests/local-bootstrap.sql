@@ -27,6 +27,11 @@ create table if not exists auth.users (
   raw_user_meta_data jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+-- The sign-in bookkeeping Supabase keeps; workspace_people() reads it to tell a
+-- pending invite from someone who has signed in.
+alter table auth.users add column if not exists invited_at timestamptz;
+alter table auth.users add column if not exists email_confirmed_at timestamptz;
+alter table auth.users add column if not exists last_sign_in_at timestamptz;
 
 -- Supabase derives auth.uid() from the request JWT. Locally we drive it from a
 -- session GUC so tests can impersonate a user with `set local request.jwt.claim.sub`.
@@ -67,3 +72,9 @@ begin
 end $$;
 
 grant usage on schema public, auth, storage to anon, authenticated, service_role;
+
+-- Supabase grants table privileges to these roles when a table is created, so a
+-- later `revoke` in a migration sticks. Default privileges reproduce that; a
+-- blanket grant after the migrations would quietly undo every such revoke.
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;

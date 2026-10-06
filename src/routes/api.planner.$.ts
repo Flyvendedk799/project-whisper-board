@@ -14,6 +14,7 @@ import {
   optionalUuid,
   parseAnswerInput,
   parseBlockInput,
+  parseCommentInput,
   parseFeaturesInput,
   parseFeatureUpdate,
   parseProgressInput,
@@ -56,6 +57,14 @@ import {
   uploadAgentAttachment,
 } from "@/lib/agent-attachments";
 import { Constants, type Database } from "@/integrations/supabase/types";
+import {
+  notifyAssignment,
+  notifyMentions,
+  resolveMentions,
+  workspaceMemberRoles,
+} from "@/lib/notifications.functions";
+import { planTaskLink } from "@/lib/notify-targets";
+import { mentionLabel, mentionsToPlainText, mentionToken } from "@/lib/mentions";
 
 type Admin = SupabaseClient<Database>;
 type EventKind = Database["public"]["Enums"]["plan_event_kind"];
@@ -243,6 +252,65 @@ async function currentStatus(admin: Admin, taskId: string) {
   return data?.status ?? null;
 }
 
+/** An assignee has to be a member of the workspace: they are notified, by email too. */
+async function assertWorkspaceMember(workspaceId: string, userId: string) {
+  const members = await workspaceMemberRoles(workspaceId, [userId]);
+  if (!members.has(userId)) {
+    throw new AppError(
+      "validation",
+      "`assigned_user_id` is not a member of this workspace. GET people lists who is.",
+    );
+  }
+}
+
+/** What a notification calls an agent, or the key's owner when no agent is named. */
+async function agentLabel(admin: Admin, agentId: string | null): Promise<string | undefined> {
+  if (!agentId) return undefined;
+  const { data } = await admin.from("plan_agents").select("name").eq("id", agentId).maybeSingle();
+  return data?.name ? `${data.name} (agent)` : "An agent";
+}
+
+/**
+ * Post a comment on a task for an agent. Mentions in the body
+ * (`@[Name](user:<id>)`) and in `extraMentions` are checked against the
+ * workspace, kept on the comment as `metadata.mentions`, and notified. The
+ * body is stored exactly as sent.
+ */
+async function postAgentComment(
+  admin: Admin,
+  workspaceId: string,
+  task: { id: string; plan_id: string; title: string },
+  input: { body: string; agentId: string | null; extraMentions?: string[]; ownerId: string | null },
+) {
+  const mentions = await resolveMentions(workspaceId, input.body, input.extraMentions ?? []);
+  const { data: comment, error } = await admin
+    .from("plan_task_comments")
+    .insert({
+      task_id: task.id,
+      body: input.body,
+      agent_id: input.agentId,
+      ...(mentions.length > 0 ? { metadata: { mentions } } : {}),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  if (mentions.length > 0) {
+    const label = await agentLabel(admin, input.agentId);
+    await notifyMentions({
+      actorId: input.agentId ? null : input.ownerId,
+      actorLabel: label,
+      mentioned: mentions,
+      text: input.body,
+      workspaceId,
+      where: `“${task.title}”`,
+      link: planTaskLink(task.plan_id, task.id),
+      relatedType: "plan_task",
+      relatedId: task.id,
+    });
+  }
+  return comment;
+}
+
 const notFound = () =>
   new Response(JSON.stringify({ error: "Task not found" }), {
     status: 404,
@@ -347,6 +415,38 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
             attachmentTextMatch[1],
             range,
           ),
+        );
+      }
+
+      // Who is in the workspace: ids to assign tasks to and to @mention in comments.
+      if (path === "people" || path === "people/") {
+        const { data: members, error } = await admin
+          .from("workspace_members")
+          .select("user_id, role")
+          .eq("workspace_id", workspaceId);
+        if (error) throw error;
+        const ids = (members ?? []).map((member) => member.user_id);
+        const { data: profiles } = ids.length
+          ? await admin.from("profiles").select("id, full_name, email").in("id", ids)
+          : { data: [] };
+        const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+        return Response.json(
+          (members ?? [])
+            .map((member) => {
+              const profile = byId.get(member.user_id);
+              const person = {
+                id: member.user_id,
+                full_name: profile?.full_name ?? null,
+                email: profile?.email ?? null,
+              };
+              return {
+                user_id: member.user_id,
+                name: mentionLabel(person),
+                role: member.role,
+                mention: mentionToken(person),
+              };
+            })
+            .sort((a, b) => a.name.localeCompare(b.name)),
         );
       }
 
@@ -564,8 +664,16 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         if (error) throw error;
         const [enriched] = await enrichTasks(admin, workspaceId, [task]);
         const attachments = await sharedAttachments(admin, { taskId: task.id });
+        const { data: assignee } = task.assigned_user_id
+          ? await admin
+              .from("profiles")
+              .select("id, full_name")
+              .eq("id", task.assigned_user_id)
+              .maybeSingle()
+          : { data: null };
         return Response.json({
           ...enriched,
+          assigned_user: assignee,
           work_target: workTargetOf(task.plan ?? {}),
           attachments,
         });
@@ -851,6 +959,10 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
           }
         }
 
+        if (input.fields.assigned_user_id) {
+          await assertWorkspaceMember(workspaceId, input.fields.assigned_user_id);
+        }
+
         const { data: last } = await admin
           .from("plan_tasks")
           .select("position")
@@ -889,6 +1001,17 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
           features = byPosition(rows ?? []);
         }
         await logAgentEvent(admin, task, "task_created", { detail: task.title });
+        if (task.assigned_user_id) {
+          await notifyAssignment({
+            actorId: auth.userId,
+            assigneeId: task.assigned_user_id,
+            workspaceId,
+            what: `“${task.title}”`,
+            link: planTaskLink(task.plan_id, task.id),
+            relatedType: "plan_task",
+            relatedId: task.id,
+          });
+        }
         return Response.json({ ...task, features }, { status: 201 });
       }
 
@@ -1145,16 +1268,14 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
         let comment: Database["public"]["Tables"]["plan_task_comments"]["Row"] | null = null;
         if (input.note) {
-          const { data, error } = await admin
-            .from("plan_task_comments")
-            .insert({ task_id: task.id, body: input.note, agent_id: agentId })
-            .select()
-            .single();
-          if (error) throw error;
-          comment = data;
+          comment = await postAgentComment(admin, workspaceId, task, {
+            body: input.note,
+            agentId,
+            ownerId: auth.userId,
+          });
           await logAgentEvent(admin, task, "comment_added", {
             agentId,
-            detail: input.note.slice(0, 200),
+            detail: mentionsToPlainText(input.note).slice(0, 200),
           });
         }
 
@@ -1290,28 +1411,20 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
 
       const commentMatch = path.match(/^tasks\/([^/]+)\/comment$/);
       if (commentMatch) {
-        const body = await request.json();
         const task = await taskInWorkspace(admin, commentMatch[1], workspaceId);
         if (!task) return new Response("Task not found", { status: 404 });
-        const agentId = await agentInWorkspace(
-          admin,
-          workspaceId,
-          optionalUuid(body.agent_id, "`agent_id`"),
-        );
+        const input = parseCommentInput(await readJson(request));
+        const agentId = await agentInWorkspace(admin, workspaceId, input.agentId);
 
-        const { data: comment, error } = await admin
-          .from("plan_task_comments")
-          .insert({
-            task_id: task.id,
-            body: body.body,
-            agent_id: agentId ?? task.assigned_agent_id ?? null,
-          })
-          .select()
-          .single();
-        if (error) throw error;
+        const comment = await postAgentComment(admin, workspaceId, task, {
+          body: input.body,
+          agentId: agentId ?? task.assigned_agent_id ?? null,
+          extraMentions: input.mentions,
+          ownerId: auth.userId,
+        });
         await logAgentEvent(admin, task, "comment_added", {
           agentId: comment.agent_id,
-          detail: typeof body.body === "string" ? body.body.slice(0, 200) : null,
+          detail: mentionsToPlainText(input.body).slice(0, 200),
         });
         return Response.json(comment);
       }
@@ -1519,6 +1632,16 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         const task = await taskInWorkspace(admin, taskUpdateMatch[1], workspaceId);
         if (!task) return notFound();
         const fields = parseTaskUpdate(await readJson(request));
+        let previousAssignee: string | null = null;
+        if (fields.assigned_user_id) {
+          await assertWorkspaceMember(workspaceId, fields.assigned_user_id);
+          const { data: before } = await admin
+            .from("plan_tasks")
+            .select("assigned_user_id")
+            .eq("id", task.id)
+            .single();
+          previousAssignee = before?.assigned_user_id ?? null;
+        }
         const { data: updated, error } = await admin
           .from("plan_tasks")
           .update(fields)
@@ -1529,6 +1652,18 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         await logAgentEvent(admin, task, "task_updated", {
           detail: fields.title ?? Object.keys(fields).join(", "),
         });
+        if (fields.assigned_user_id) {
+          await notifyAssignment({
+            actorId: auth.userId,
+            assigneeId: fields.assigned_user_id,
+            previousAssigneeId: previousAssignee,
+            workspaceId,
+            what: `“${updated.title}”`,
+            link: planTaskLink(updated.plan_id, updated.id),
+            relatedType: "plan_task",
+            relatedId: updated.id,
+          });
+        }
         return Response.json(updated);
       }
 

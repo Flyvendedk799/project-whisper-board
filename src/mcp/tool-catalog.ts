@@ -217,6 +217,15 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     params: [TASK_ID],
   },
   {
+    name: "list_people",
+    group: "Orient",
+    summary: "Who is in the workspace: ids to assign tasks to and to @mention.",
+    description:
+      "List the workspace's people: user_id, name, role, and mention, the exact token to put in a comment to @mention them (it notifies them). Use a user_id as assigned_user_id on create_task or update_task.",
+    rest: { method: "GET", path: "people" },
+    params: [],
+  },
+  {
     name: "list_task_attachments",
     group: "Orient",
     summary: "Files the team shared with agents on a task.",
@@ -365,7 +374,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         name: "note",
         type: "string",
         description:
-          "A comment for the discussion. Only posted when not empty. Max 5000 characters.",
+          "A comment for the discussion. Only posted when not empty. Max 5000 characters. @mention someone with their token from list_people.",
       },
       AGENT_ID,
     ],
@@ -387,6 +396,11 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         description: "Pull request URL; its number is read from it so the board shows PR #n",
       },
       { name: "branch_name", type: "string", description: "The branch the work is on" },
+      {
+        name: "assigned_user_id",
+        type: "string",
+        description: "Assign it to a teammate (a user_id from list_people); they are notified",
+      },
     ],
   },
   {
@@ -423,7 +437,13 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     rest: { method: "POST", path: "tasks/:task_id/comment" },
     params: [
       TASK_ID,
-      { name: "body", type: "string", required: true, description: "The comment" },
+      {
+        name: "body",
+        type: "string",
+        required: true,
+        description:
+          "The comment. To @mention someone (they are notified), include their mention token from list_people, e.g. @[Ada Lovelace](user:<user_id>).",
+      },
       AGENT_ID,
     ],
   },
@@ -821,13 +841,18 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         enum: ["backlog", "available"],
         description: "Defaults to available",
       },
+      {
+        name: "assigned_user_id",
+        type: "string",
+        description: "Assign it to a teammate (a user_id from list_people); they are notified",
+      },
     ],
   },
   {
     name: "update_task",
     group: "Authoring",
     summary:
-      "Change a task's title, description, priority, size, tags, colour, criteria or branch.",
+      "Change a task's title, description, priority, size, tags, colour, criteria, branch or assignee.",
     rest: { method: "POST", path: "tasks/:task_id" },
     params: [
       TASK_ID,

@@ -6,7 +6,18 @@ import { guard } from "@/lib/server-errors";
 import { getEmailProvider } from "@/lib/providers/server";
 import { channelEnabled } from "@/data/notifications";
 import type { Database } from "@/integrations/supabase/types";
-import type { Enums } from "@/integrations/supabase/types";
+import { extractMentionIds } from "@/lib/mentions";
+import {
+  AGENCY_ROLES,
+  assignmentTarget,
+  excerptOf,
+  inAppRow,
+  mentionTargets,
+  ticketCommentTargets,
+  type NotifyTarget,
+} from "@/lib/notify-targets";
+
+export type { NotifyTarget } from "@/lib/notify-targets";
 
 /**
  * Notifying people, in app and by email.
@@ -21,8 +32,6 @@ import type { Enums } from "@/integrations/supabase/types";
  * configured that table is the Outbox screen: you can read exactly what your
  * clients would have received before you buy a domain.
  */
-
-type NotificationKind = Enums<"notification_kind">;
 
 /** Service role: notifying somebody means writing a row they own. */
 function admin() {
@@ -60,18 +69,28 @@ function isQuietHour(
   return start < end ? hour >= start && hour < end : hour >= start || hour < end;
 }
 
-export interface NotifyTarget {
-  userId: string;
-  kind: NotificationKind;
-  title: string;
-  body?: string | null;
-  link?: string | null;
-  /** Subject line. Omit to skip email for this notification entirely. */
-  emailSubject?: string;
-  emailBody?: string;
-  template?: string;
-  relatedType?: string;
-  relatedId?: string;
+type InAppRow = ReturnType<typeof inAppRow>;
+
+/**
+ * Insert the in-app rows, tolerating a database a migration behind.
+ *
+ * The app and its migrations deploy separately, so for a few minutes after a
+ * release the `actor_id` column or the `assigned` kind may not exist yet. Losing
+ * the notification over that would be silly: retry without the new parts.
+ */
+async function insertNotifications(db: ReturnType<typeof admin>, rows: InAppRow[]) {
+  const { error } = await db.from("notifications").insert(rows);
+  if (!error) return null;
+  const message = `${error.code ?? ""} ${error.message ?? ""}`;
+  const missingActor = /actor_id/.test(message);
+  const missingKind = /notification_kind|assigned/.test(message);
+  if (!missingActor && !missingKind) return error;
+  const fallback = rows.map(({ actor_id: _actor, ...row }: InAppRow & { actor_id?: string }) => ({
+    ...row,
+    kind: missingKind && row.kind === "assigned" ? ("ticket_update" as const) : row.kind,
+  }));
+  const retry = await db.from("notifications").insert(fallback);
+  return retry.error;
 }
 
 /**
@@ -95,16 +114,10 @@ export async function deliver(targets: NotifyTarget[]): Promise<{ inApp: number;
 
   const inAppRows = targets
     .filter((t) => channelEnabled(prefsById.get(t.userId) ?? null, t.kind, "in_app"))
-    .map((t) => ({
-      user_id: t.userId,
-      kind: t.kind,
-      title: t.title,
-      body: t.body ?? null,
-      link: t.link ?? null,
-    }));
+    .map(inAppRow);
 
   if (inAppRows.length > 0) {
-    const { error } = await db.from("notifications").insert(inAppRows);
+    const error = await insertNotifications(db, inAppRows);
     if (error) console.error("[notifications] in-app insert failed:", error.message);
   }
 
@@ -155,6 +168,7 @@ export async function deliver(targets: NotifyTarget[]): Promise<{ inApp: number;
       error: result.error ?? result.skippedReason ?? null,
       related_type: target.relatedType ?? null,
       related_id: target.relatedId ?? null,
+      ...(target.workspaceId ? { workspace_id: target.workspaceId } : {}),
       sent_at: result.delivered ? new Date().toISOString() : null,
     });
     if (error) console.error("[notifications] outbox insert failed:", error.message);
@@ -170,7 +184,9 @@ async function ticketAudience(ticketId: string, actorId: string) {
 
   const { data: ticket } = await db
     .from("tickets")
-    .select("id, ticket_number, title, project_id, reporter_id, assignee_id, projects(title)")
+    .select(
+      "id, ticket_number, title, project_id, workspace_id, reporter_id, assignee_id, projects(title)",
+    )
     .eq("id", ticketId)
     .maybeSingle();
   if (!ticket) return null;
@@ -189,7 +205,8 @@ async function ticketAudience(ticketId: string, actorId: string) {
   return { ticket, recipients: [...recipients] };
 }
 
-async function actorName(userId: string): Promise<string> {
+export async function actorName(userId: string | null | undefined): Promise<string> {
+  if (!userId) return "Someone";
   const { data } = await admin()
     .from("profiles")
     .select("full_name, email")
@@ -198,12 +215,128 @@ async function actorName(userId: string): Promise<string> {
   return data?.full_name || data?.email || "Someone";
 }
 
+/**
+ * The members of a workspace among `ids`, with their roles.
+ *
+ * Every mention and every assignment is checked against this before anyone is
+ * notified: a user id typed into a comment by hand, or sent by an agent, must
+ * not become a way to email a stranger.
+ */
+export async function workspaceMemberRoles(
+  workspaceId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)].filter(Boolean);
+  if (unique.length === 0) return new Map();
+  const { data, error } = await admin()
+    .from("workspace_members")
+    .select("user_id, role")
+    .eq("workspace_id", workspaceId)
+    .in("user_id", unique);
+  if (error) {
+    console.error("[notifications] membership lookup failed:", error.message);
+    return new Map();
+  }
+  return new Map((data ?? []).map((row) => [row.user_id, row.role as string]));
+}
+
+/**
+ * Tell someone they were assigned a ticket or a task. Never throws: an
+ * assignment that saved must not fail because an email could not be sent.
+ */
+export async function notifyAssignment(input: {
+  actorId: string | null;
+  /** Shown instead of the actor's profile name, e.g. an agent's name. */
+  actorLabel?: string;
+  assigneeId: string | null | undefined;
+  previousAssigneeId?: string | null;
+  workspaceId: string | null | undefined;
+  what: string;
+  link: string;
+  relatedType: string;
+  relatedId: string;
+}): Promise<void> {
+  try {
+    if (!input.assigneeId || !input.workspaceId) return;
+    if (input.assigneeId === input.actorId) return;
+    if (input.assigneeId === input.previousAssigneeId) return;
+    const members = await workspaceMemberRoles(input.workspaceId, [input.assigneeId]);
+    if (!members.has(input.assigneeId)) return;
+    const target = assignmentTarget({
+      ...input,
+      workspaceId: input.workspaceId,
+      actorName: input.actorLabel ?? (await actorName(input.actorId)),
+    });
+    if (target) await deliver([target]);
+  } catch (error) {
+    console.error("[notifications] assignment notice failed:", error);
+  }
+}
+
+/**
+ * The people @mentioned in `text` (plus any picked ids) who are members of the
+ * workspace. Anything else, a typo'd id or a stranger, is dropped silently.
+ */
+export async function resolveMentions(
+  workspaceId: string | null | undefined,
+  text: string,
+  extraIds: readonly string[] = [],
+): Promise<string[]> {
+  if (!workspaceId) return [];
+  const ids = [...new Set([...extractMentionIds(text), ...extraIds.map((id) => id.toLowerCase())])];
+  if (ids.length === 0) return [];
+  const members = await workspaceMemberRoles(workspaceId, ids);
+  return ids.filter((id) => members.has(id));
+}
+
+/**
+ * Tell the people @mentioned in a planner note or an agent's comment. Takes ids
+ * already narrowed by `resolveMentions`. Never throws.
+ */
+export async function notifyMentions(input: {
+  actorId: string | null;
+  /** Shown instead of the actor's profile name, e.g. an agent's name. */
+  actorLabel?: string;
+  mentioned: readonly string[];
+  text: string;
+  workspaceId: string | null | undefined;
+  where: string;
+  link: string;
+  relatedType: string;
+  relatedId: string;
+}): Promise<void> {
+  try {
+    if (!input.workspaceId || input.mentioned.length === 0) return;
+    await deliver(
+      mentionTargets({
+        actorId: input.actorId,
+        actorName: input.actorLabel ?? (await actorName(input.actorId)),
+        mentioned: input.mentioned,
+        workspaceId: input.workspaceId,
+        where: input.where,
+        link: input.link,
+        excerpt: excerptOf(input.text),
+        relatedType: input.relatedType,
+        relatedId: input.relatedId,
+      }),
+    );
+  } catch (error) {
+    console.error("[notifications] mention notice failed:", error);
+  }
+}
+
 export const notifyTicketComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z
       .object({
         ticketId: z.string().uuid(),
+        /**
+         * The comment just posted. When given, its text is read back (as the
+         * caller, so RLS applies) and the mentions and excerpt come from it
+         * rather than from what the browser claims.
+         */
+        commentId: z.string().uuid().optional(),
         excerpt: z.string().max(500).optional(),
         mentions: z.array(z.string().uuid()).max(20).default([]),
       })
@@ -213,47 +346,50 @@ export const notifyTicketComment = createServerFn({ method: "POST" })
     guard("notify.comment", async () => {
       const audience = await ticketAudience(data.ticketId, context.userId);
       if (!audience) return { ok: false };
-
       const { ticket, recipients } = audience;
-      const who = await actorName(context.userId);
-      const link = `/app/tickets/${ticket.id}`;
-      const label = `#${ticket.ticket_number} ${ticket.title}`;
-      const mentioned = new Set(data.mentions.filter((id) => id !== context.userId));
 
-      const targets: NotifyTarget[] = recipients.map((userId) => {
-        const isMention = mentioned.has(userId);
-        return {
-          userId,
-          kind: isMention ? "mention" : "comment",
-          title: isMention ? `${who} mentioned you` : `${who} replied`,
-          body: data.excerpt ? `${data.excerpt}` : `On ${label}`,
-          link,
-          emailSubject: isMention
-            ? `${who} mentioned you on ${label}`
-            : `${who} replied on ${label}`,
-          emailBody: data.excerpt,
-          relatedType: "ticket",
-          relatedId: ticket.id,
-        };
-      });
-
-      // Someone mentioned who is not on the project still gets told.
-      for (const userId of mentioned) {
-        if (!recipients.includes(userId)) {
-          targets.push({
-            userId,
-            kind: "mention",
-            title: `${who} mentioned you`,
-            body: `On ${label}`,
-            link,
-            emailSubject: `${who} mentioned you on ${label}`,
-            relatedType: "ticket",
-            relatedId: ticket.id,
-          });
+      let body: string | null = null;
+      let internal = false;
+      if (data.commentId) {
+        const { data: comment } = await context.supabase
+          .from("ticket_comments")
+          .select("body, is_internal, author_id, ticket_id")
+          .eq("id", data.commentId)
+          .maybeSingle();
+        // Only your own comment on this ticket can be announced.
+        if (!comment || comment.author_id !== context.userId || comment.ticket_id !== ticket.id) {
+          return { inApp: 0, emails: 0 };
         }
+        body = comment.body;
+        internal = Boolean(comment.is_internal);
       }
 
-      return deliver(targets);
+      const claimed = [...data.mentions, ...(body ? extractMentionIds(body) : [])];
+      const members = await workspaceMemberRoles(ticket.workspace_id, [
+        ...claimed,
+        ...recipients,
+        context.userId,
+      ]);
+      const agencyIds = new Set(
+        [...members].filter(([, role]) => AGENCY_ROLES.has(role)).map(([id]) => id),
+      );
+
+      return deliver(
+        ticketCommentTargets({
+          actorId: context.userId,
+          actorName: await actorName(context.userId),
+          workspaceId: ticket.workspace_id,
+          ticketId: ticket.id,
+          label: `#${ticket.ticket_number} ${ticket.title}`,
+          link: `/app/tickets/${ticket.id}`,
+          excerpt: excerptOf(body ?? data.excerpt),
+          internal,
+          audience: recipients,
+          mentioned: claimed.filter((id) => members.has(id)),
+          agencyIds,
+          actorIsAgency: AGENCY_ROLES.has(members.get(context.userId) ?? ""),
+        }),
+      );
     }),
   );
 
@@ -279,6 +415,8 @@ export const notifyTicketChanged = createServerFn({ method: "POST" })
       return deliver(
         recipients.map((userId) => ({
           userId,
+          workspaceId: ticket.workspace_id,
+          actorId: context.userId,
           kind: "ticket_update" as const,
           title: `${who} ${data.summary}`,
           body: label,
@@ -326,9 +464,27 @@ export const saveNotificationPreferences = createServerFn({ method: "POST" })
   )
   .handler(({ data, context }) =>
     guard("notify.savePreferences", async () => {
+      // A new row would otherwise land in the default workspace, which the
+      // workspace boundary refuses for anyone who is not a member of it.
+      const [{ data: existing }, { data: membership }] = await Promise.all([
+        context.supabase
+          .from("notification_preferences")
+          .select("workspace_id")
+          .eq("user_id", context.userId)
+          .maybeSingle(),
+        context.supabase
+          .from("workspace_members")
+          .select("workspace_id")
+          .eq("user_id", context.userId)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      const workspaceId = existing?.workspace_id ?? membership?.workspace_id;
       const { error } = await context.supabase.from("notification_preferences").upsert(
         {
           user_id: context.userId,
+          ...(workspaceId ? { workspace_id: workspaceId } : {}),
           channels: data.channels as never,
           digest_frequency: data.digestFrequency,
           quiet_hours_start: data.quietHoursStart,
@@ -342,4 +498,4 @@ export const saveNotificationPreferences = createServerFn({ method: "POST" })
     }),
   );
 
-export const __testing = { isQuietHour };
+export const __testing = { isQuietHour, insertNotifications };

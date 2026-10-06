@@ -41,6 +41,7 @@ import { ImportMarkdownDialog } from "./plan-markdown-controls";
 import { PlanMediaProvider, usePlanMedia } from "./plan-media";
 import {
   boardOrder,
+  collectAssignees,
   countByStatus,
   hasActiveFilters,
   NO_FILTERS,
@@ -159,6 +160,7 @@ function PlanScreenBody({
 
   const tasks = useMemo(() => tasksOf(plan), [plan]);
   const tags = useMemo(() => collectTags(plan), [plan]);
+  const assignees = useMemo(() => collectAssignees(tasks), [tasks]);
   const tagNames = useMemo(() => tags.map((entry) => entry.tag), [tags]);
   const questions = useMemo(() => {
     const open = planQuestionCounts(tasks).open;
@@ -258,6 +260,7 @@ function PlanScreenBody({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto max-md:overscroll-contain max-md:[--plan-toolbar-h:3.875rem]">
       <PlanHeader
         plan={plan}
+        layout={layout}
         aiMenu={<PlanAiMenu plan={plan} selectedTaskIds={hasActiveFilters(filters) ? order : []} />}
         actions={{
           onNewTask: openNewTask,
@@ -306,6 +309,7 @@ function PlanScreenBody({
         prCount={pullRequestCount}
         questions={questions}
         tags={tags}
+        assignees={assignees}
         filters={filters}
         onFilters={setFilters}
         statusCounts={countByStatus(tasks)}

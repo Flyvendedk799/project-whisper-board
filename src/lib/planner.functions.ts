@@ -36,6 +36,14 @@ import {
 } from "@/lib/plan-fields";
 import { createClient } from "@supabase/supabase-js";
 import { Constants, type Database } from "@/integrations/supabase/types";
+import {
+  notifyAssignment,
+  notifyMentions,
+  resolveMentions,
+  workspaceMemberRoles,
+} from "@/lib/notifications.functions";
+import { planTaskLink } from "@/lib/notify-targets";
+import { mentionsToPlainText } from "@/lib/mentions";
 
 const workspaceIdField = z.string().uuid().optional();
 const colorField = z.string().refine(isValidColor, "Pick a colour from the palette.");
@@ -200,6 +208,39 @@ async function logPlanEvent(
 }
 
 const SIGNED_URL_SECONDS = 60 * 60;
+
+/** The workspace a plan lives in, read as the caller so RLS applies. */
+async function planWorkspace(supabase: SupabaseClient<Database>, planId: string) {
+  const { data } = await supabase
+    .from("plans")
+    .select("workspace_id, title")
+    .eq("id", planId)
+    .maybeSingle();
+  return data;
+}
+
+/** Tasks are only handed to people in the plan's workspace; they get emailed. */
+async function assertPlanAssignable(workspaceId: string | undefined, userId: string) {
+  if (!workspaceId) return;
+  const members = await workspaceMemberRoles(workspaceId, [userId]);
+  if (!members.has(userId)) {
+    throw new AppError("invalid_assignee", "That person isn't a member of this workspace.");
+  }
+}
+
+/** "Assigned to Maja" for the activity feed. */
+async function assignmentLine(
+  supabase: SupabaseClient<Database>,
+  assigneeId: string | null,
+): Promise<string> {
+  if (!assigneeId) return "Unassigned";
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", assigneeId)
+    .maybeSingle();
+  return `Assigned to ${data?.full_name || data?.email || "a teammate"}`;
+}
 
 export const createPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -821,6 +862,9 @@ export const createTask = createServerFn({ method: "POST" })
     guard("tasks.create", async () => {
       const { supabase, userId } = context;
 
+      const plan = data.assignedUserId ? await planWorkspace(supabase, data.planId) : null;
+      if (data.assignedUserId) await assertPlanAssignable(plan?.workspace_id, data.assignedUserId);
+
       const { data: maxPosTask } = await supabase
         .from("plan_tasks")
         .select("position")
@@ -881,6 +925,18 @@ export const createTask = createServerFn({ method: "POST" })
         await noteTicketPlannerEvent(supabase, userId, data.ticketId, "planner_linked", data.title);
       }
 
+      if (data.assignedUserId) {
+        await notifyAssignment({
+          actorId: userId,
+          assigneeId: data.assignedUserId,
+          workspaceId: plan?.workspace_id,
+          what: `“${data.title}”`,
+          link: planTaskLink(data.planId, task.id),
+          relatedType: "plan_task",
+          relatedId: task.id,
+        });
+      }
+
       return { id: task.id };
     }),
   );
@@ -918,10 +974,17 @@ export const updateTask = createServerFn({ method: "POST" })
 
       const { data: beforeRow } = await supabase
         .from("plan_tasks")
-        .select("plan_id, status, ticket_id, title")
+        .select("plan_id, status, ticket_id, title, assigned_user_id")
         .eq("id", taskId)
         .single();
       const before = requireFound(beforeRow, "task");
+
+      const reassigned =
+        fields.assignedUserId !== undefined && fields.assignedUserId !== before.assigned_user_id;
+      const plan = reassigned ? await planWorkspace(supabase, before.plan_id) : null;
+      if (reassigned && fields.assignedUserId) {
+        await assertPlanAssignable(plan?.workspace_id, fields.assignedUserId);
+      }
 
       const patch: PlanTaskUpdate = {};
       if (fields.title !== undefined) patch.title = fields.title;
@@ -967,6 +1030,8 @@ export const updateTask = createServerFn({ method: "POST" })
 
       if (Object.keys(patch).length > 0) {
         const statusChanged = fields.status !== undefined && fields.status !== before.status;
+        // An assignment on its own reads as one in the feed, not as "updated".
+        const onlyAssignment = reassigned && Object.keys(patch).length === 1;
         await logPlanEvent(supabase, userId, {
           planId: before.plan_id,
           taskId,
@@ -974,7 +1039,22 @@ export const updateTask = createServerFn({ method: "POST" })
           oldValue: statusChanged ? before.status : null,
           newValue: statusChanged
             ? `Status: ${STATUS_STYLE[fields.status!].label}`
-            : (fields.title ?? null),
+            : onlyAssignment
+              ? await assignmentLine(supabase, fields.assignedUserId ?? null)
+              : (fields.title ?? null),
+        });
+      }
+
+      if (reassigned && fields.assignedUserId) {
+        await notifyAssignment({
+          actorId: userId,
+          assigneeId: fields.assignedUserId,
+          previousAssigneeId: before.assigned_user_id,
+          workspaceId: plan?.workspace_id,
+          what: `“${fields.title ?? before.title}”`,
+          link: planTaskLink(before.plan_id, taskId),
+          relatedType: "plan_task",
+          relatedId: taskId,
         });
       }
 
@@ -1298,10 +1378,15 @@ export const addTaskComment = createServerFn({ method: "POST" })
 
       const { data: taskRow } = await supabase
         .from("plan_tasks")
-        .select("plan_id")
+        .select("plan_id, title")
         .eq("id", data.taskId)
         .single();
       const task = requireFound(taskRow, "task");
+
+      // Mentions live in the body as `@[Name](user:<id>)`. The ones that are
+      // real teammates are recorded on the note (for the API) and notified.
+      const plan = await planWorkspace(supabase, task.plan_id);
+      const mentions = await resolveMentions(plan?.workspace_id, data.body);
 
       const { data: comment, error } = await supabase
         .from("plan_task_comments")
@@ -1309,10 +1394,22 @@ export const addTaskComment = createServerFn({ method: "POST" })
           task_id: data.taskId,
           author_id: userId,
           body: data.body.trim(),
+          ...(mentions.length > 0 ? { metadata: { mentions } } : {}),
         })
         .select("id")
         .single();
       if (error) throw error;
+
+      await notifyMentions({
+        actorId: userId,
+        mentioned: mentions,
+        text: data.body,
+        workspaceId: plan?.workspace_id,
+        where: `“${task.title}”`,
+        link: planTaskLink(task.plan_id, data.taskId),
+        relatedType: "plan_task",
+        relatedId: data.taskId,
+      });
 
       if (data.attachmentIds?.length) {
         const { error: linkError } = await supabase
@@ -1327,10 +1424,10 @@ export const addTaskComment = createServerFn({ method: "POST" })
         planId: task.plan_id,
         taskId: data.taskId,
         kind: "comment_added",
-        newValue: data.body.trim().slice(0, 200) || null,
+        newValue: mentionsToPlainText(data.body.trim()).slice(0, 200) || null,
       });
 
-      return { id: comment.id };
+      return { id: comment.id, mentions };
     }),
   );
 

@@ -232,6 +232,21 @@
   }
 }
 
+/* An @mention, in the editor and wherever rich text is shown. */
+@layer components {
+  [data-type="mention"] {
+    display: inline-block;
+    border-radius: 0.375rem;
+    background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+    color: var(--primary);
+    font-weight: 500;
+    padding: 0 0.3em;
+    line-height: 1.45;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+}
+
 /* Horizontal rows that scroll (tabs, chips, filters) without a visible bar. */
 @utility no-scrollbar {
   scrollbar-width: none;

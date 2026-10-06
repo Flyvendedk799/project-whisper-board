@@ -7,6 +7,7 @@ import { allowsAccount } from "@/lib/api-scopes";
 import { matchAccountRoute } from "@/lib/account-route";
 import { parseRepoSlug } from "@/lib/github-url";
 import { decoratePlanForAgents } from "@/features/planner/agent-media";
+import { notifyAssignment, workspaceMemberRoles } from "@/lib/notifications.functions";
 import {
   linkedTaskRow,
   taskDescriptionFromTicket,
@@ -63,7 +64,7 @@ const TICKET_COLUMNS =
 
 export async function requireAccountAccess(
   request: Request,
-): Promise<{ workspaceId: string } | Response> {
+): Promise<{ workspaceId: string; userId: string | null } | Response> {
   const auth = await verifyApiKey(request.headers.get("authorization"));
   if (!auth) return json({ error: "Unauthorized" }, 401);
   if (!allowsAccount(auth.scopes)) {
@@ -74,7 +75,7 @@ export async function requireAccountAccess(
       403,
     );
   }
-  return { workspaceId: auth.workspaceId };
+  return { workspaceId: auth.workspaceId, userId: auth.userId };
 }
 
 export function getAccountAdmin(): Admin {
@@ -148,6 +149,8 @@ export async function handleAccountRequest(
   request: Request,
   workspaceId: string,
   path: string,
+  /** The key's owner: calls made with a key act as them. */
+  actorId: string | null = null,
 ): Promise<Response> {
   const admin = getAccountAdmin();
   const match = matchAccountRoute(path);
@@ -282,6 +285,21 @@ export async function handleAccountRequest(
 
     if (match.name === "ticket" && request.method === "PATCH") {
       const patch = ticketPatch.parse(await readJson(request));
+      let previousAssignee: string | null = null;
+      if (patch.assignee_id) {
+        // Only a member of the workspace can be given a ticket: they get emailed.
+        const members = await workspaceMemberRoles(workspaceId, [patch.assignee_id]);
+        if (!members.has(patch.assignee_id)) {
+          throw new Error("assignee_id must be a member of this workspace");
+        }
+        const { data: before } = await admin
+          .from("tickets")
+          .select("assignee_id")
+          .eq("workspace_id", workspaceId)
+          .eq("id", match.id)
+          .maybeSingle();
+        previousAssignee = before?.assignee_id ?? null;
+      }
       const { data, error } = await admin
         .from("tickets")
         .update(patch)
@@ -290,6 +308,18 @@ export async function handleAccountRequest(
         .select(TICKET_COLUMNS)
         .single();
       if (error) throw new Error("Not found: ticket");
+      if (patch.assignee_id) {
+        await notifyAssignment({
+          actorId,
+          assigneeId: patch.assignee_id,
+          previousAssigneeId: previousAssignee,
+          workspaceId,
+          what: `#${data.ticket_number} ${data.title}`,
+          link: `/app/tickets/${data.id}`,
+          relatedType: "ticket",
+          relatedId: data.id,
+        });
+      }
       return json(data);
     }
 

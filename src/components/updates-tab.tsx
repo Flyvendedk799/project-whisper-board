@@ -16,7 +16,8 @@ import { postUpdate } from "@/lib/meetings.functions";
 import { projectUpdatesQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
 import { UPDATE_KIND_LABEL } from "@/data/enums";
-import { formatRelative, initials } from "@/lib/utils-format";
+import { formatRelative } from "@/lib/utils-format";
+import { PersonAvatar } from "@/components/person-avatar";
 
 function updateDeepLink(
   data: Record<string, unknown> | null,
@@ -131,14 +132,16 @@ export function UpdatesTab({ projectId }: { projectId: string }) {
                 <li key={update.id}>
                   <Card className="p-4">
                     <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span
-                        className="grid h-6 w-6 place-items-center rounded-full bg-accent text-[10px]"
-                        aria-hidden="true"
-                      >
-                        {update.author
-                          ? initials(update.author.full_name ?? update.author.email)
-                          : "•"}
-                      </span>
+                      {update.author ? (
+                        <PersonAvatar person={update.author} size="sm" />
+                      ) : (
+                        <span
+                          className="grid h-6 w-6 place-items-center rounded-full bg-accent text-[10px]"
+                          aria-hidden="true"
+                        >
+                          •
+                        </span>
+                      )}
                       <span className="font-medium text-foreground">
                         {update.author?.full_name ?? update.author?.email ?? "Boared"}
                       </span>

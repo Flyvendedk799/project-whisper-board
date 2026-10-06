@@ -267,7 +267,7 @@ function renderScreen(
 }
 
 describe("PlanScreen", () => {
-  it("shows the roadmap: progress, what needs you, and each section's own progress", async () => {
+  it("shows progress and what needs you, without a roadmap strip in the columns view", async () => {
     renderScreen();
 
     expect(
@@ -277,8 +277,9 @@ describe("PlanScreen", () => {
     expect(screen.getByText("1 of 3 tasks done")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1 to review" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1 blocked" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Discovery: 1 of 1 done" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Build: 0 of 2 done" })).toBeInTheDocument();
+    // The columns already show each section; the header keeps one compact line.
+    expect(screen.queryByRole("list", { name: "Roadmap" })).not.toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Plan progress" })).toBeInTheDocument();
     expect(screen.getByText(/1 agent working/)).toBeInTheDocument();
   });
 

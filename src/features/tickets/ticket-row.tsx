@@ -4,7 +4,8 @@ import { Paperclip } from "lucide-react";
 import { StatusPill } from "@/components/status-pill";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SlaBadge } from "./sla-badge";
-import { formatRelative, initials } from "@/lib/utils-format";
+import { formatRelative } from "@/lib/utils-format";
+import { PersonAvatar, personName } from "@/components/person-avatar";
 import {
   TICKET_PRIORITY_LABEL,
   TICKET_PRIORITY_TONE,
@@ -12,7 +13,7 @@ import {
   TICKET_STATUS_TONE,
 } from "@/data/enums";
 import type { TicketOrigin } from "@/data/ticket-origin";
-import type { TicketListRow } from "@/data/types";
+import type { PersonRef, TicketListRow } from "@/data/types";
 
 /**
  * Column header for a list of `TicketRow`s. The widths mirror the row so the
@@ -76,7 +77,6 @@ export const TicketRow = memo(function TicketRow({
   showProject?: boolean;
   origin?: TicketOrigin;
 }) {
-  const who = ticket.assignee ?? ticket.reporter;
   const search: TicketOrigin = origin ?? {};
 
   return (
@@ -128,12 +128,7 @@ export const TicketRow = memo(function TicketRow({
             </span>
           ) : null}
           <span className="text-xs text-muted-foreground">{formatRelative(ticket.updated_at)}</span>
-          <span
-            className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold"
-            title={ticket.assignee ? (who?.full_name ?? who?.email ?? "Assigned") : "Unassigned"}
-          >
-            {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
-          </span>
+          <AssigneeFace assignee={ticket.assignee} className="ml-auto" />
         </span>
       </Link>
 
@@ -162,12 +157,7 @@ export const TicketRow = memo(function TicketRow({
         </StatusPill>
       </span>
 
-      <span
-        className="hidden h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold md:grid"
-        title={ticket.assignee ? (who?.full_name ?? who?.email ?? "Assigned") : "Unassigned"}
-      >
-        {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
-      </span>
+      <AssigneeFace assignee={ticket.assignee} className="max-md:hidden" />
     </div>
   );
 });
@@ -201,19 +191,30 @@ export const TicketCard = memo(function TicketCard({
           {ticket.project?.title ?? formatRelative(ticket.updated_at)}
         </span>
         <SlaBadge dueAt={ticket.sla_due_at} status={ticket.status} />
-        <span
-          className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold text-foreground"
-          title={
-            ticket.assignee
-              ? (ticket.assignee.full_name ?? ticket.assignee.email ?? "Assigned")
-              : "Unassigned"
-          }
-        >
-          {ticket.assignee ? initials(ticket.assignee.full_name ?? ticket.assignee.email) : "—"}
-        </span>
+        <AssigneeFace assignee={ticket.assignee} />
       </div>
     </Link>
   );
 });
+
+/** The assignee's face, or a dash. Named for screen readers and on hover. */
+function AssigneeFace({ assignee, className }: { assignee: PersonRef | null; className?: string }) {
+  if (!assignee) {
+    return (
+      <span
+        role="img"
+        aria-label="Unassigned"
+        title="Unassigned"
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border border-dashed text-[10px] text-muted-foreground ${className ?? ""}`}
+      >
+        —
+      </span>
+    );
+  }
+  const name = personName(assignee);
+  return (
+    <PersonAvatar person={assignee} size="sm" label={`Assigned to ${name}`} className={className} />
+  );
+}
 
 export { Paperclip };

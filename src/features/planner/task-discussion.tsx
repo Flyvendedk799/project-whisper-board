@@ -6,14 +6,21 @@ import { taskCommentsQuery } from "@/data/planner";
 import { qk } from "@/data/keys";
 import type { PlanAttachmentWithUrl } from "@/data";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea, type MentionTextareaHandle } from "@/components/mention-input";
+import { MentionText } from "@/components/mention-text";
+import { PersonAvatar } from "@/components/person-avatar";
+import { useAuth } from "@/components/auth-provider";
+import { workspacePeopleQuery } from "@/data/projects";
 import { addTaskComment } from "@/lib/planner.functions";
 import { useServerAction } from "@/lib/use-server-action";
 import { attachmentKindOf, fileExtensionLabel } from "@/lib/upload";
-import { initials, timeAgo } from "./plan-model";
+import { timeAgo } from "./plan-model";
 import { usePlanMedia } from "./plan-media";
 
-type Author = { full_name?: string | null; email?: string | null } | null | undefined;
+type Author =
+  | { id?: string; full_name?: string | null; email?: string | null; avatar_url?: string | null }
+  | null
+  | undefined;
 type AgentRef = { name?: string | null } | null | undefined;
 
 function FileChip({
@@ -53,10 +60,20 @@ export function TaskDiscussion({
   planId: string;
   onOpenFile: (attachmentId: string) => void;
   /** The drawer pastes screenshots into this field. */
-  composerRef: React.RefObject<HTMLTextAreaElement | null>;
+  composerRef: React.MutableRefObject<HTMLTextAreaElement | null>;
 }) {
   const media = usePlanMedia();
   const comments = useQuery(taskCommentsQuery(taskId));
+  const { user, workspaceId } = useAuth();
+  const people = useQuery(workspacePeopleQuery(workspaceId));
+  const names = useMemo(
+    () =>
+      new Map(
+        (people.data ?? []).map((person) => [person.id, person.full_name || person.email || ""]),
+      ),
+    [people.data],
+  );
+  const composer = useRef<MentionTextareaHandle>(null);
   const [body, setBody] = useState("");
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const inputId = useRef(`note-files-${taskId}`).current;
@@ -67,6 +84,7 @@ export function TaskDiscussion({
     onSuccess: () => {
       setBody("");
       setPendingIds([]);
+      composer.current?.reset();
     },
   });
 
@@ -94,9 +112,11 @@ export function TaskDiscussion({
   const submit = () => {
     if (post.busy) return;
     if (!body.trim() && pendingIds.length === 0) return;
+    // "@Ada" for each picked teammate becomes "@[Ada](user:<id>)" in the note.
+    const text = (composer.current?.encoded() ?? body).trim();
     post.fire({
       taskId,
-      body: body.trim() || (pendingIds.length ? "Attached files" : ""),
+      body: text || (pendingIds.length ? "Attached files" : ""),
       attachmentIds: pendingIds,
     });
   };
@@ -124,14 +144,16 @@ export function TaskDiscussion({
               !(files.length > 0 && entry.body === "Attached files");
             return (
               <li key={entry.id} className="flex gap-2.5">
-                <div
-                  aria-hidden="true"
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                    agent ? "bg-chart-5/20" : "bg-accent"
-                  }`}
-                >
-                  {agent ? "AI" : initials(name)}
-                </div>
+                {agent ? (
+                  <div
+                    aria-hidden="true"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-chart-5/20 text-[10px] font-semibold"
+                  >
+                    AI
+                  </div>
+                ) : (
+                  <PersonAvatar person={author} size="md" className="h-7 w-7 text-[10px]" />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="text-xs text-muted-foreground">
                     <b className="font-medium text-foreground">{name}</b> ·{" "}
@@ -139,7 +161,7 @@ export function TaskDiscussion({
                   </div>
                   {showBody ? (
                     <div className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed max-md:break-words">
-                      {entry.body}
+                      <MentionText text={entry.body} names={names} />
                     </div>
                   ) : null}
                   {files.length > 0 ? (
@@ -205,10 +227,14 @@ export function TaskDiscussion({
         ) : null}
 
         <div className="flex gap-2 max-md:items-end">
-          <Textarea
-            ref={composerRef}
+          <MentionTextarea
+            ref={composer}
+            textareaRef={composerRef}
             value={body}
-            onChange={(event) => setBody(event.target.value)}
+            onValueChange={setBody}
+            people={people.data ?? []}
+            excludeId={user?.id}
+            wrapperClassName="min-w-0 flex-1"
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -218,8 +244,8 @@ export function TaskDiscussion({
             rows={1}
             aria-label="Leave a note"
             enterKeyHint="send"
-            placeholder="Leave a note. Paste a screenshot to attach it."
-            className="min-h-[38px] flex-1 resize-y text-sm max-md:max-h-40 max-md:min-h-11 max-md:resize-none max-md:[field-sizing:content]"
+            placeholder="Leave a note. Type @ to mention a teammate; paste a screenshot to attach it."
+            className="min-h-[38px] w-full resize-y text-sm max-md:max-h-40 max-md:min-h-11 max-md:resize-none max-md:[field-sizing:content]"
           />
           <label
             htmlFor={inputId}

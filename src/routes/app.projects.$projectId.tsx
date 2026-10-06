@@ -71,7 +71,8 @@ import {
   ROLE_LABEL,
   type ProjectStatus,
 } from "@/data/enums";
-import { formatDate, initials } from "@/lib/utils-format";
+import { formatDate } from "@/lib/utils-format";
+import { PersonAvatar } from "@/components/person-avatar";
 
 /**
  * The project page. Tabs are lazy: previously all six mounted their queries at
@@ -568,12 +569,7 @@ function PeoplePanel({
 
                   return (
                     <div key={member.id} className="flex items-center gap-3 p-4 max-md:flex-wrap">
-                      <span
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-sm"
-                        aria-hidden="true"
-                      >
-                        {initials(member.profile?.full_name ?? member.profile?.email)}
-                      </span>
+                      <PersonAvatar person={member.profile ?? { id: member.user_id }} />
                       <div className="min-w-0 flex-1 max-md:basis-32">
                         <div className="truncate text-sm font-medium">
                           {member.profile?.full_name ?? member.profile?.email}

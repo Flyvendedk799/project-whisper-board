@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/app-shell";
+import { PersonChip } from "@/components/person-avatar";
 import { useAuth } from "@/components/auth-provider";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { useServerAction } from "@/lib/use-server-action";
@@ -226,10 +227,12 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Nobody yet</SelectItem>
+              <SelectItem value="none">
+                <PersonChip person={null} size="xs" fallback="Nobody yet" />
+              </SelectItem>
               {(people.data ?? []).map((person) => (
                 <SelectItem key={person.id} value={person.id}>
-                  {person.full_name ?? person.email}
+                  <PersonChip person={person} size="xs" pending={person.pending} />
                 </SelectItem>
               ))}
             </SelectContent>
@@ -244,8 +247,8 @@ export function TicketSidebar({ ticket, userId }: { ticket: TicketDetail; userId
           </div>
           <div className="flex gap-3">
             <dt className="w-20 shrink-0 text-muted-foreground">Reporter</dt>
-            <dd className="min-w-0 truncate">
-              {ticket.reporter?.full_name ?? ticket.reporter?.email ?? "—"}
+            <dd className="min-w-0">
+              {ticket.reporter ? <PersonChip person={ticket.reporter} size="xs" /> : "—"}
             </dd>
           </div>
           <div className="flex gap-3">

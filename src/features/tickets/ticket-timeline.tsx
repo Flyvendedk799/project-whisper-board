@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/app-shell";
 import { RichTextView } from "@/components/rich-text-view";
-import { formatRelative, initials } from "@/lib/utils-format";
+import { PersonAvatar, personName } from "@/components/person-avatar";
+import { formatRelative } from "@/lib/utils-format";
 import {
   TICKET_PRIORITY_LABEL,
   TICKET_STATUS_LABEL,
@@ -37,12 +38,15 @@ export function TicketTimeline({
   events,
   showInternal,
   reporterId,
+  people,
 }: {
   comments: CommentWithAuthor[];
   events: EventWithActor[];
   showInternal: boolean;
   /** Whoever opened the ticket is shown as the client side of the conversation. */
   reporterId?: string | null;
+  /** Workspace people by id, to name who a ticket was assigned to. */
+  people?: ReadonlyMap<string, PersonRef>;
 }) {
   const entries: Entry[] = [
     ...comments
@@ -68,7 +72,7 @@ export function TicketTimeline({
             fromClient={Boolean(reporterId) && entry.comment.author_id === reporterId}
           />
         ) : (
-          <EventEntry key={`e-${entry.event.id}`} event={entry.event} />
+          <EventEntry key={`e-${entry.event.id}`} event={entry.event} people={people} />
         ),
       )}
     </ol>
@@ -85,16 +89,18 @@ function CommentEntry({
   const author = comment.author;
   return (
     <li className="flex gap-3 max-md:gap-2">
-      <Avatar person={author} muted={fromClient} />
+      <PersonAvatar
+        person={author}
+        size="md"
+        className={`max-md:h-7 max-md:w-7 ${fromClient ? "ring-1 ring-border" : ""}`}
+      />
       <div
         className={`min-w-0 flex-1 rounded-xl border px-4 py-3 max-md:px-3 max-md:py-2.5 ${
           comment.is_internal ? "border-warning/40 bg-warning/10" : "bg-card"
         }`}
       >
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {author?.full_name ?? author?.email ?? "Someone"}
-          </span>
+          <span className="font-medium text-foreground">{personName(author)}</span>
           <span aria-hidden="true">·</span>
           <time dateTime={comment.created_at}>{formatRelative(comment.created_at)}</time>
           {comment.is_internal && <StatusPill tone="warning">Internal note</StatusPill>}
@@ -120,9 +126,15 @@ const EVENT_ICON: Record<string, typeof CircleDot> = {
   attached: Paperclip,
 };
 
-function EventEntry({ event }: { event: EventWithActor }) {
+function EventEntry({
+  event,
+  people,
+}: {
+  event: EventWithActor;
+  people?: ReadonlyMap<string, PersonRef>;
+}) {
   const Icon = EVENT_ICON[event.kind] ?? MessageSquare;
-  const who = event.actor?.full_name ?? event.actor?.email ?? "Someone";
+  const who = personName(event.actor);
 
   return (
     <li className="flex items-start gap-3 text-xs text-muted-foreground max-md:gap-2 md:items-center">
@@ -130,7 +142,7 @@ function EventEntry({ event }: { event: EventWithActor }) {
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1 max-md:pt-1.5 max-md:leading-snug">
-        <span className="font-medium text-foreground">{who}</span> {describeEvent(event)}
+        <span className="font-medium text-foreground">{who}</span> {describeEvent(event, people)}
       </span>
       <time dateTime={event.created_at} className="shrink-0 max-md:pt-1.5">
         {formatRelative(event.created_at)}
@@ -139,7 +151,10 @@ function EventEntry({ event }: { event: EventWithActor }) {
   );
 }
 
-function describeEvent(event: EventWithActor): React.ReactNode {
+function describeEvent(
+  event: EventWithActor,
+  people?: ReadonlyMap<string, PersonRef>,
+): React.ReactNode {
   const from = event.old_value;
   const to = event.new_value;
 
@@ -166,8 +181,17 @@ function describeEvent(event: EventWithActor): React.ReactNode {
           re-typed it from {label(TICKET_TYPE_LABEL, from)} <Arrow /> {label(TICKET_TYPE_LABEL, to)}
         </>
       );
-    case "assigned":
-      return "took this on";
+    case "assigned": {
+      if (!to || to === event.actor_id) return "took this on";
+      const assignee = people?.get(to);
+      return assignee ? (
+        <>
+          assigned it to <span className="font-medium text-foreground">{personName(assignee)}</span>
+        </>
+      ) : (
+        "assigned it to a teammate"
+      );
+    }
     case "unassigned":
       return "unassigned it";
     case "due_date_changed":
@@ -201,19 +225,6 @@ function Arrow() {
 function label(map: Record<string, string>, value: string | null): string {
   if (!value) return "nothing";
   return map[value] ?? value.replace(/_/g, " ");
-}
-
-function Avatar({ person, muted = false }: { person: PersonRef | null; muted?: boolean }) {
-  return (
-    <span
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold max-md:h-7 max-md:w-7 max-md:text-[10px] ${
-        muted ? "bg-muted" : "bg-accent"
-      }`}
-      aria-hidden="true"
-    >
-      {initials(person?.full_name ?? person?.email)}
-    </span>
-  );
 }
 
 export type { TicketStatus, TicketPriority, TicketType };
