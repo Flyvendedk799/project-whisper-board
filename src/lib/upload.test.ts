@@ -4,6 +4,7 @@ import {
   attachmentPath,
   canMarkUpMime,
   describeOutcome,
+  effectiveMimeType,
   fileExtensionLabel,
   formatBytes,
   isPlanAttachmentPath,
@@ -213,5 +214,26 @@ describe("plan attachments", () => {
     expect(canMarkUpMime("image/png")).toBe(true);
     expect(canMarkUpMime("image/svg+xml")).toBe(false);
     expect(canMarkUpMime("video/mp4")).toBe(false);
+  });
+});
+
+describe("Markdown files", () => {
+  it("are allowed, by type or by a .md name the browser gave no type", () => {
+    expect(validateFileMeta({ name: "review.md", size: 10, type: "text/markdown" })).toBeNull();
+    expect(validateFileMeta({ name: "review.md", size: 10, type: "" })).toBeNull();
+    expect(validateFileMeta({ name: "review.md", size: 10, type: "text/x-markdown" })).toBeNull();
+  });
+
+  it("are stored as text/markdown whatever the browser reported", () => {
+    expect(effectiveMimeType("review.md", "")).toBe("text/markdown");
+    expect(effectiveMimeType("NOTES.MARKDOWN", "text/x-markdown")).toBe("text/markdown");
+    expect(effectiveMimeType("shot.png", "image/png")).toBe("image/png");
+    expect(effectiveMimeType("data.bin", "")).toBe("");
+  });
+
+  it("do not make an unknown type acceptable", () => {
+    expect(validateFileMeta({ name: "page.md", size: 10, type: "text/html" })).toMatch(
+      /text\/html/,
+    );
   });
 });

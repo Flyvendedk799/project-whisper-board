@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "node:path";
+import { readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -193,6 +194,19 @@ server.tool(
   ({ plan_id, attachment_id }) => viewAttachment(`plans/${plan_id}/attachments/${attachment_id}`),
 );
 
+server.tool(
+  "read_attachment_text",
+  toolDescription("read_attachment_text"),
+  toolShape("read_attachment_text"),
+  ({ attachment_id, offset, limit }) => {
+    const query = new URLSearchParams();
+    if (offset !== undefined) query.set("offset", String(offset));
+    if (limit !== undefined) query.set("limit", String(limit));
+    const suffix = query.size > 0 ? `?${query}` : "";
+    return run(() => fetchApi(`attachments/${encodeURIComponent(attachment_id)}/text${suffix}`));
+  },
+);
+
 // ---------------------------------------------------------------------------
 // Work a task
 // ---------------------------------------------------------------------------
@@ -365,6 +379,91 @@ server.tool(
   toolDescription("import_plan_markdown"),
   toolShape("import_plan_markdown"),
   ({ plan_id, markdown, mode }) => run(() => post(`plans/${plan_id}/import`, { markdown, mode })),
+);
+
+/** The upload fields every attachment tool sends the same way. */
+type UploadOptions = {
+  plan_id?: string;
+  task_id?: string;
+  shared_with_agents?: boolean;
+  purpose?: string;
+  idempotency_key?: string;
+};
+const uploadFields = (input: UploadOptions) => ({
+  plan_id: input.plan_id,
+  task_id: input.task_id,
+  shared_with_agents: input.shared_with_agents,
+  purpose: input.purpose,
+  idempotency_key: input.idempotency_key,
+});
+
+server.tool(
+  "upload_attachment_text",
+  toolDescription("upload_attachment_text"),
+  toolShape("upload_attachment_text"),
+  (input) =>
+    run(() =>
+      post("attachments/text", {
+        ...uploadFields(input),
+        file_name: input.file_name,
+        mime_type:
+          input.mime_type ??
+          (/\.(md|markdown)$/i.test(input.file_name) ? "text/markdown" : "text/plain"),
+        text: input.text,
+      }),
+    ),
+);
+
+/** Types the API accepts, by extension, for a file_path without a mime_type. */
+const MIME_BY_EXTENSION: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".pdf": "application/pdf",
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".txt": "text/plain",
+};
+/** The API's own limit; checked here so a large file is not read into memory for nothing. */
+const MAX_UPLOAD_FILE_BYTES = 8 * 1024 * 1024;
+
+server.tool(
+  "upload_attachment_base64",
+  toolDescription("upload_attachment_base64"),
+  toolShape("upload_attachment_base64"),
+  (input) =>
+    run(async () => {
+      if (Boolean(input.data_base64) === Boolean(input.file_path)) {
+        throw new Error("Give the content as data_base64 or as file_path, not both.");
+      }
+      let data = input.data_base64;
+      let fileName = input.file_name;
+      if (input.file_path) {
+        const resolved = path.resolve(input.file_path);
+        const info = await stat(resolved);
+        if (!info.isFile()) throw new Error(`${resolved} is not a file.`);
+        if (info.size > MAX_UPLOAD_FILE_BYTES) {
+          throw new Error(`${resolved} is over the 8 MiB upload limit.`);
+        }
+        data = (await readFile(resolved)).toString("base64");
+        fileName = fileName ?? path.basename(resolved);
+      }
+      if (!fileName) throw new Error("file_name is required with data_base64.");
+      const mimeType = input.mime_type ?? MIME_BY_EXTENSION[path.extname(fileName).toLowerCase()];
+      if (!mimeType) {
+        throw new Error(
+          "Pass mime_type: the file name's extension does not say which allowed type it is.",
+        );
+      }
+      return post("attachments/base64", {
+        ...uploadFields(input),
+        file_name: fileName,
+        mime_type: mimeType,
+        data_base64: data,
+      });
+    }),
 );
 
 server.tool(

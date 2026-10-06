@@ -41,6 +41,20 @@ import { parseRepoSlug } from "@/lib/github-url";
 import { describeGitHubError, NOT_CONNECTED_MESSAGE } from "@/lib/github-port";
 import { loadPlanPulls, mergePlanPulls } from "@/lib/plan-pulls";
 import { AppError } from "@/lib/errors";
+import {
+  MAX_BASE64_BODY_BYTES,
+  MAX_TEXT_BODY_BYTES,
+  parseBase64Upload,
+  parseTextRange,
+  parseTextUpload,
+  readJsonCapped,
+} from "@/lib/attachment-policy";
+import {
+  readAttachmentText,
+  signAttachmentDownload,
+  supabaseAttachmentPorts,
+  uploadAgentAttachment,
+} from "@/lib/agent-attachments";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
 type Admin = SupabaseClient<Database>;
@@ -322,6 +336,20 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
     const githubAccess = async () => (await import("@/lib/github-token")).githubFor(auth.userId);
 
     if (method === "GET") {
+      // The text of a Markdown or plain-text file shared with agents, a page at a time.
+      const attachmentTextMatch = path.match(/^attachments\/([^/]+)\/text$/);
+      if (attachmentTextMatch) {
+        const range = parseTextRange(new URL(request.url).searchParams);
+        return Response.json(
+          await readAttachmentText(
+            supabaseAttachmentPorts(admin),
+            auth,
+            attachmentTextMatch[1],
+            range,
+          ),
+        );
+      }
+
       if (path === "plans" || path === "plans/") {
         const statuses = statusesFromQuery(new URL(request.url).searchParams.get("status"));
         let query = admin.from("plans").select("*").eq("workspace_id", workspaceId);
@@ -607,6 +635,33 @@ async function handleRequest(method: "GET" | "POST", request: Request, splat?: s
         return Response.json(attachment);
       }
     } else if (method === "POST") {
+      // Upload a file to a plan or a task. The server picks the bucket and the path.
+      if (path === "attachments/text" || path === "attachments/base64") {
+        const isText = path === "attachments/text";
+        const body = await readJsonCapped(
+          request,
+          isText ? MAX_TEXT_BODY_BYTES : MAX_BASE64_BODY_BYTES,
+        );
+        const intent = isText ? parseTextUpload(body) : parseBase64Upload(body);
+        const { attachment, created } = await uploadAgentAttachment(
+          supabaseAttachmentPorts(admin),
+          auth,
+          intent,
+        );
+        return Response.json(attachment, { status: created ? 201 : 200 });
+      }
+
+      const attachmentDownloadMatch = path.match(/^attachments\/([^/]+)\/download$/);
+      if (attachmentDownloadMatch) {
+        return Response.json(
+          await signAttachmentDownload(
+            supabaseAttachmentPorts(admin),
+            auth,
+            attachmentDownloadMatch[1],
+          ),
+        );
+      }
+
       if (path === "plans" || path === "plans/") {
         const body = await readJson(request);
         const title = typeof body.title === "string" ? body.title.trim() : "";

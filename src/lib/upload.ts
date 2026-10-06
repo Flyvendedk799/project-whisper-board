@@ -53,6 +53,7 @@ const ALLOWED_MIME = [
   "audio/mpeg",
   "application/pdf",
   "text/plain",
+  "text/markdown",
   "text/csv",
   "application/json",
   "application/zip",
@@ -68,6 +69,21 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const MARKDOWN_EXTENSION = /\.(md|markdown)$/i;
+
+/**
+ * The type to check and store for a file. Browsers report `.md` files as an empty
+ * type or `text/x-markdown` depending on the OS, so a Markdown name is read as
+ * `text/markdown` in those cases. Anything else is passed through unchanged.
+ */
+export function effectiveMimeType(name: string, type: string | null | undefined): string {
+  const reported = (type ?? "").trim().toLowerCase();
+  if (MARKDOWN_EXTENSION.test(name) && (reported === "" || reported === "text/x-markdown")) {
+    return "text/markdown";
+  }
+  return type ?? "";
+}
+
 /** Returns a sentence explaining the refusal, or null when the file is fine. */
 export function validateFile(file: File, bucket: AttachmentBucket): string | null {
   const limit = bucket === "recordings" ? MAX_RECORDING_BYTES : MAX_FILE_BYTES;
@@ -77,8 +93,9 @@ export function validateFile(file: File, bucket: AttachmentBucket): string | nul
   }
   // An empty type is what browsers report for some drag-and-drop sources;
   // rejecting those would block legitimate uploads for no real gain.
-  if (file.type && !ALLOWED_MIME.includes(file.type)) {
-    return `${file.name} is a ${file.type} file, which can't be attached.`;
+  const type = effectiveMimeType(file.name, file.type);
+  if (type && !ALLOWED_MIME.includes(type)) {
+    return `${file.name} is a ${type} file, which can't be attached.`;
   }
   return null;
 }
@@ -152,7 +169,7 @@ export async function uploadDrafts(
       storage_bucket: draft.bucket,
       storage_path: path,
       file_name: draft.file.name,
-      mime_type: draft.file.type || null,
+      mime_type: effectiveMimeType(draft.file.name, draft.file.type) || null,
       size_bytes: draft.file.size,
       is_recording: draft.bucket === "recordings",
       kind: draft.kind,
@@ -267,8 +284,9 @@ export function validateFileMeta(meta: FileMeta): string | null {
   if (meta.size > MAX_FILE_BYTES) {
     return `${meta.name} is ${formatBytes(meta.size)}. The limit is ${formatBytes(MAX_FILE_BYTES)}.`;
   }
-  if (meta.type && !ALLOWED_MIME.includes(meta.type)) {
-    return `${meta.name} is a ${meta.type} file, which can't be attached.`;
+  const type = effectiveMimeType(meta.name, meta.type);
+  if (type && !ALLOWED_MIME.includes(type)) {
+    return `${meta.name} is a ${type} file, which can't be attached.`;
   }
   return null;
 }

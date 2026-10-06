@@ -117,6 +117,37 @@ const AGENT_ID: ToolParam = {
   description:
     "The agent acting. Defaults to the agent that claimed a task in this session, so you rarely pass it.",
 };
+/** Where an uploaded file goes: exactly one of the two. */
+const ATTACHMENT_TARGET: readonly ToolParam[] = [
+  {
+    name: "plan_id",
+    type: "string",
+    description: "Attach to the plan as a whole. Give this or task_id, not both.",
+  },
+  {
+    name: "task_id",
+    type: "string",
+    description: "Attach to this task. Give this or plan_id, not both.",
+  },
+];
+const ATTACHMENT_OPTIONS: readonly ToolParam[] = [
+  {
+    name: "shared_with_agents",
+    type: "boolean",
+    description: "Whether agents can see the file (default true)",
+  },
+  {
+    name: "purpose",
+    type: "string",
+    description: "A short note on why the file is attached, recorded in the plan's activity",
+  },
+  {
+    name: "idempotency_key",
+    type: "string",
+    description:
+      "Any string unique to this upload. Retrying with the same key and file returns the first attachment.",
+  },
+];
 const COLOR: ToolParam = {
   name: "color",
   type: "string",
@@ -237,6 +268,33 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         type: "string",
         required: true,
         description: "The ID of the attachment, from list_plan_attachments",
+      },
+    ],
+  },
+  {
+    name: "read_attachment_text",
+    group: "Orient",
+    summary: "Read a shared Markdown or plain-text file as text, a page at a time.",
+    description:
+      "Read the text of a Markdown or plain-text file shared with agents (on a plan or a task), without downloading it. Pages are measured in bytes of UTF-8 and never split a character: pass next_offset as offset until eof is true. sha256 is of the whole file. Other file types answer 415; use view_task_attachment or view_plan_attachment for those.",
+    rest: { method: "GET", path: "attachments/:attachment_id/text?offset=&limit=" },
+    params: [
+      {
+        name: "attachment_id",
+        type: "string",
+        required: true,
+        description:
+          "The ID of the attachment, from list_plan_attachments, list_task_attachments or get_plan",
+      },
+      {
+        name: "offset",
+        type: "integer",
+        description: "Byte offset to start at (default 0). Use next_offset from the previous page.",
+      },
+      {
+        name: "limit",
+        type: "integer",
+        description: "Bytes to read, 1 to 262144 (default 65536)",
       },
     ],
   },
@@ -595,6 +653,79 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         enum: ["sync", "merge", "replace"],
         description: "Defaults to merge",
       },
+    ],
+  },
+  {
+    name: "upload_attachment_text",
+    group: "Authoring",
+    summary: "Attach a Markdown or plain-text file to a plan or a task.",
+    description:
+      "Attach a Markdown or plain-text file (a review, a spec, notes) to a plan as a whole (plan_id) or to one task (task_id): name exactly one. It shows up in the plan's Files and the task drawer like any upload. Up to 256 KiB of UTF-8. Pass an idempotency_key to make retries safe: the same key, target and content returns the first attachment, a different file with the same key is refused (409).",
+    rest: { method: "POST", path: "attachments/text" },
+    params: [
+      ...ATTACHMENT_TARGET,
+      {
+        name: "file_name",
+        type: "string",
+        required: true,
+        description: "The name people see, e.g. review.md",
+      },
+      {
+        name: "text",
+        type: "string",
+        required: true,
+        description: "The file's content",
+      },
+      {
+        name: "mime_type",
+        type: "string",
+        enum: ["text/markdown", "text/plain"],
+        description: "Defaults to text/markdown for a .md name, otherwise text/plain",
+      },
+      ...ATTACHMENT_OPTIONS,
+    ],
+  },
+  {
+    name: "upload_attachment_base64",
+    group: "Authoring",
+    summary: "Attach a screenshot, PDF or text file to a plan or a task.",
+    description:
+      "Attach a PNG, JPEG, WebP or GIF image, a PDF, or a Markdown or plain-text file to a plan (plan_id) or a task (task_id): name exactly one. Up to 8 MiB. The bytes are checked against the type (SVG and HTML are refused). Give the content as data_base64 (plain base64, no data: prefix), or as file_path to a file on the machine running this MCP server, which is read and encoded for you. Pass an idempotency_key to make retries safe.",
+    rest: { method: "POST", path: "attachments/base64" },
+    notes: "With file_path, the MCP server reads the local file and sends it as base64.",
+    params: [
+      ...ATTACHMENT_TARGET,
+      {
+        name: "file_name",
+        type: "string",
+        description: "The name people see, e.g. checkout.png. Defaults to the file_path's name.",
+      },
+      {
+        name: "mime_type",
+        type: "string",
+        enum: [
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/gif",
+          "application/pdf",
+          "text/markdown",
+          "text/plain",
+        ],
+        description: "The file's type. Defaults to the type of the file name's extension.",
+      },
+      {
+        name: "data_base64",
+        type: "string",
+        description: "The file as standard base64, without a data: prefix. Or use file_path.",
+      },
+      {
+        name: "file_path",
+        type: "string",
+        description:
+          "A file on the machine running this MCP server, read and encoded for you instead of data_base64",
+      },
+      ...ATTACHMENT_OPTIONS,
     ],
   },
   {
