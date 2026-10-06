@@ -36,6 +36,7 @@ import { draftReply } from "@/lib/ai.functions";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { notifyTicketComment } from "@/lib/notifications.functions";
+import { mentionCandidates } from "@/lib/notify-targets";
 import { describeOutcome, newDraftId, uploadDrafts, type DraftAttachment } from "@/lib/upload";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -545,22 +546,19 @@ function CommentBox({
     }
   }, [body, ticketId]);
 
-  // An internal note is for the agency: only admins are offered, since only
-  // they can read it (and only they are notified about it).
-  // A client is offered the agency and the people on this project, not every
-  // client of the agency.
   const projectMembers = useQuery({
     ...projectMembersQuery(projectId ?? ""),
     enabled: Boolean(projectId) && !isAdmin,
   });
-  const mentionPeople = useMemo(() => {
-    const onProject = new Set((projectMembers.data ?? []).map((member) => member.user_id));
-    return (people.data ?? []).filter((person) =>
-      internal
-        ? person.role === "admin"
-        : isAdmin || person.role === "admin" || onProject.has(person.id),
-    );
-  }, [people.data, internal, isAdmin, projectMembers.data]);
+  const mentionPeople = useMemo(
+    () =>
+      mentionCandidates(people.data ?? [], {
+        internal,
+        viewerIsAgency: isAdmin,
+        projectMemberIds: (projectMembers.data ?? []).map((member) => member.user_id),
+      }),
+    [people.data, internal, isAdmin, projectMembers.data],
+  );
 
   const notify = useServerFn(notifyTicketComment);
 

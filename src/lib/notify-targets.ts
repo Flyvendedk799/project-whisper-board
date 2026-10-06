@@ -45,6 +45,9 @@ export function inAppRow(target: NotifyTarget) {
   };
 }
 
+/** Roles that count as the agency: they see internal notes and every project. */
+export const AGENCY_ROLES: ReadonlySet<string> = new Set(["admin"]);
+
 const EXCERPT_MAX = 200;
 
 /** One line of a comment for a notification: no markup, no runaway length. */
@@ -92,9 +95,20 @@ export function ticketCommentTargets(input: {
   mentioned: readonly string[];
   /** Workspace admins: the only people an internal note may notify. */
   agencyIds: ReadonlySet<string>;
+  /**
+   * Whether the author is agency. A client's mentions only reach the agency and
+   * the people on this ticket, never another client of the workspace.
+   */
+  actorIsAgency: boolean;
 }): NotifyTarget[] {
   const { actorId, actorName: who, label } = input;
-  const mentioned = new Set(input.mentioned.filter((id) => id !== actorId));
+  const reachable = new Set(input.audience);
+  const mentioned = new Set(
+    input.mentioned.filter(
+      (id) =>
+        id !== actorId && (input.actorIsAgency || input.agencyIds.has(id) || reachable.has(id)),
+    ),
+  );
   const base = {
     workspaceId: input.workspaceId,
     actorId,
@@ -200,6 +214,27 @@ export function mentionTargets(input: {
       relatedType: input.relatedType,
       relatedId: input.relatedId,
     }));
+}
+
+/**
+ * Who a composer offers to @mention. An internal note is offered to admins
+ * only, since only they can read it. A client is offered the agency and the
+ * people on the project, not every client of the workspace.
+ */
+export function mentionCandidates<T extends { id: string; role: string }>(
+  people: readonly T[],
+  options: {
+    internal: boolean;
+    viewerIsAgency: boolean;
+    projectMemberIds: Iterable<string>;
+  },
+): T[] {
+  const onProject = new Set(options.projectMemberIds);
+  return people.filter((person) =>
+    options.internal
+      ? AGENCY_ROLES.has(person.role)
+      : options.viewerIsAgency || AGENCY_ROLES.has(person.role) || onProject.has(person.id),
+  );
 }
 
 /** The link that opens a planner task. */

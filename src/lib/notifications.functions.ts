@@ -8,6 +8,7 @@ import { channelEnabled } from "@/data/notifications";
 import type { Database } from "@/integrations/supabase/types";
 import { extractMentionIds } from "@/lib/mentions";
 import {
+  AGENCY_ROLES,
   assignmentTarget,
   excerptOf,
   inAppRow,
@@ -239,8 +240,6 @@ export async function workspaceMemberRoles(
   return new Map((data ?? []).map((row) => [row.user_id, row.role as string]));
 }
 
-const AGENCY_ROLES = new Set(["admin"]);
-
 /**
  * Tell someone they were assigned a ticket or a task. Never throws: an
  * assignment that saved must not fail because an email could not be sent.
@@ -366,7 +365,11 @@ export const notifyTicketComment = createServerFn({ method: "POST" })
       }
 
       const claimed = [...data.mentions, ...(body ? extractMentionIds(body) : [])];
-      const members = await workspaceMemberRoles(ticket.workspace_id, [...claimed, ...recipients]);
+      const members = await workspaceMemberRoles(ticket.workspace_id, [
+        ...claimed,
+        ...recipients,
+        context.userId,
+      ]);
       const agencyIds = new Set(
         [...members].filter(([, role]) => AGENCY_ROLES.has(role)).map(([id]) => id),
       );
@@ -384,6 +387,7 @@ export const notifyTicketComment = createServerFn({ method: "POST" })
           audience: recipients,
           mentioned: claimed.filter((id) => members.has(id)),
           agencyIds,
+          actorIsAgency: AGENCY_ROLES.has(members.get(context.userId) ?? ""),
         }),
       );
     }),
