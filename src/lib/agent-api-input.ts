@@ -21,6 +21,7 @@ import {
   type ParsedFeature,
   type WorkMode,
 } from "@/lib/plan-fields";
+import { parseRepoSlug } from "@/lib/github-url";
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import { Constants, type Database } from "@/integrations/supabase/types";
 
@@ -159,6 +160,175 @@ export function parseWorkTarget(
   const problem = workBranchProblem(mode, branch, base);
   if (problem) throw new AppError("validation", problem);
   return { github_work_mode: mode, github_work_branch: mode === "base" ? null : branch };
+}
+
+/**
+ * Fields an agent may change on an existing plan via `update_plan`.
+ * Description is always editable; github / work_target fields are only filled
+ * when the plan does not already have them (see `mergePlanUpdate`).
+ */
+export interface PlanUpdateFields {
+  description?: string | null;
+  github_repo?: string;
+  github_base?: string;
+  github_work_mode?: WorkMode;
+  github_work_branch?: string;
+}
+
+/** What `update_plan` accepts in the request body (before the "when missing" rule). */
+export function parsePlanUpdate(body: Body): PlanUpdateFields {
+  const fields: PlanUpdateFields = {};
+  const description = textField(body.description, "`description`", 10000);
+  if (description !== undefined) fields.description = description;
+
+  if (body.github_repo !== undefined) {
+    const repo = requireText(body.github_repo, "`github_repo`", 200);
+    if (!parseRepoSlug(repo)) {
+      throw new AppError("validation", "`github_repo` must look like owner/name.");
+    }
+    fields.github_repo = repo;
+  }
+  if (body.github_base !== undefined) {
+    fields.github_base = requireText(body.github_base, "`github_base`", 200);
+  }
+
+  if (body.github_work_mode !== undefined) {
+    const mode = body.github_work_mode;
+    if (!isWorkMode(mode)) {
+      throw new AppError(
+        "validation",
+        '`github_work_mode` is "new" (a branch of its own), "existing" or "base" (straight on the base branch).',
+      );
+    }
+    fields.github_work_mode = mode;
+  }
+  if (body.github_work_branch !== undefined) {
+    // Branch alone is allowed when the plan already has a mode (checked in mergePlanUpdate).
+    fields.github_work_branch = requireText(body.github_work_branch, "`github_work_branch`", 200);
+  }
+
+  if (Object.keys(fields).length === 0) {
+    throw new AppError(
+      "validation",
+      "Send at least one of description, github_repo, github_base, github_work_mode, github_work_branch.",
+    );
+  }
+  return fields;
+}
+
+export type PlanGithubState = {
+  github_repo: string | null;
+  github_base: string | null;
+  github_work_mode: string | null;
+  github_work_branch: string | null;
+};
+
+/** Columns `update_plan` may write on `plans`. */
+export type PlanUpdatePatch = {
+  description?: string | null;
+  github_repo?: string | null;
+  github_base?: string | null;
+  github_work_mode?: string | null;
+  github_work_branch?: string | null;
+};
+
+function missingOnly(
+  label: string,
+  current: string | null | undefined,
+  next: string | undefined,
+): string | undefined {
+  if (next === undefined) return undefined;
+  const existing = current?.trim() || null;
+  if (existing) {
+    if (existing === next) return undefined;
+    throw new AppError(
+      "validation",
+      `${label} is already set; update_plan can only fill it when missing.`,
+    );
+  }
+  return next;
+}
+
+/**
+ * Turn a parsed update into the columns to write. Description always applies;
+ * github / work_target fields only when the plan does not already have them.
+ */
+export function mergePlanUpdate(
+  current: PlanGithubState,
+  fields: PlanUpdateFields,
+): PlanUpdatePatch {
+  const patch: PlanUpdatePatch = {};
+
+  if (fields.description !== undefined) patch.description = fields.description;
+
+  const repo = missingOnly("`github_repo`", current.github_repo, fields.github_repo);
+  if (repo !== undefined) patch.github_repo = repo;
+
+  const base = missingOnly("`github_base`", current.github_base, fields.github_base);
+  if (base !== undefined) patch.github_base = base;
+
+  if (fields.github_work_mode !== undefined) {
+    const existingMode = isWorkMode(current.github_work_mode) ? current.github_work_mode : null;
+    if (existingMode) {
+      if (
+        existingMode === fields.github_work_mode &&
+        (fields.github_work_branch === undefined ||
+          (current.github_work_branch?.trim() || null) === (fields.github_work_branch ?? null))
+      ) {
+        // Same values already on the plan: nothing to write.
+      } else {
+        throw new AppError(
+          "validation",
+          "`github_work_mode` is already set; update_plan can only fill the work target when missing.",
+        );
+      }
+    } else {
+      const mergedBase = base !== undefined ? base : current.github_base?.trim() || null;
+      const work = parseWorkTarget(
+        {
+          github_work_mode: fields.github_work_mode,
+          github_work_branch: fields.github_work_branch,
+        },
+        mergedBase,
+      );
+      patch.github_work_mode = work.github_work_mode;
+      patch.github_work_branch = work.github_work_branch;
+    }
+  } else if (fields.github_work_branch !== undefined) {
+    // Branch alone: only when mode is already set and branch is missing.
+    const existingMode = isWorkMode(current.github_work_mode) ? current.github_work_mode : null;
+    if (!existingMode) {
+      throw new AppError("validation", "`github_work_branch` needs a `github_work_mode`.");
+    }
+    const branch = missingOnly(
+      "`github_work_branch`",
+      current.github_work_branch,
+      fields.github_work_branch,
+    );
+    if (branch !== undefined) {
+      const problem = workBranchProblem(
+        existingMode,
+        branch,
+        base !== undefined ? base : current.github_base,
+      );
+      if (problem) throw new AppError("validation", problem);
+      if (existingMode === "base") {
+        throw new AppError(
+          "validation",
+          "The plan works on the base branch; there is no work branch to set.",
+        );
+      }
+      patch.github_work_branch = branch;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new AppError(
+      "validation",
+      "Nothing to change: every field you sent is already set on the plan.",
+    );
+  }
+  return patch;
 }
 
 // ---------------------------------------------------------------------------

@@ -25,7 +25,6 @@ embedded in config. See `docs/hosted-mcp.md`.
 
 ### Local stdio / REST API keys
 
-
 Create an API key in Boared: **Settings -> API keys** (reaches the planner and
 the rest of the workspace) or, for a key that only reaches the planner,
 **Plan options -> Planner API keys**. Keys start with `cpk_`. Supply it as:
@@ -95,7 +94,7 @@ the session.
 | Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                                                                                     |
 | Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                                                                              |
 | Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                                                                                    |
-| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`, `upload_attachment_text`, `upload_attachment_base64`                                     |
+| Authoring          | `create_plan`, `update_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`, `upload_attachment_text`, `upload_attachment_base64`                      |
 | GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                                                                                     |
 | Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`                                                         |
 
@@ -111,6 +110,7 @@ Key parameters:
 - `list_people()`: who is in the workspace. `assigned_user_id` takes a `user_id` from it, and a comment mentions someone with
   their `mention` token, `@[Name](user:<user_id>)`; both notify the person.
 - `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
+- `update_plan(plan_id, description?, github_repo?, github_base?, github_work_mode?, github_work_branch?)`: description always; github / work_target fields only when the plan does not already have them.
 - `upload_attachment_text(plan_id | task_id, file_name, text, mime_type?, shared_with_agents?, purpose?, idempotency_key?)`:
   Markdown or plain text up to 256 KiB, on the plan itself (`plan_id`) or a task (`task_id`), never both.
 - `upload_attachment_base64(plan_id | task_id, data_base64 | file_path, file_name?, mime_type?, shared_with_agents?, purpose?, idempotency_key?)`:
@@ -164,6 +164,7 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | `POST tasks/:task_id/steps/:step_id`                 | `{ done?, text?, feature_id? }`                                                                                                                                |
 | `POST tasks/:task_id`                                | `{ title?, description?, priority?, complexity?, tags?[], color?, acceptance_criteria?[], branch_name?, assigned_user_id? }`                                   |
 | `POST plans`                                         | `{ title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status? }`                                              |
+| `POST plans/:plan_id`                                | `{ description?, github_repo?, github_base?, github_work_mode?, github_work_branch? }` (github / work_target only when missing)                                |
 | `POST plans/:plan_id/import`                         | `{ markdown, mode: sync \| merge \| replace }`                                                                                                                 |
 | `POST plans/:plan_id/status`                         | `{ status }`                                                                                                                                                   |
 | `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, color?, tags?[] }`                                                                                                |

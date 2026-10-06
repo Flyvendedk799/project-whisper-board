@@ -17,9 +17,11 @@ import {
   optionalUuid,
   parseAnswerInput,
   parseBlockInput,
+  mergePlanUpdate,
   parseCommentInput,
   parseFeaturesInput,
   parseFeatureUpdate,
+  parsePlanUpdate,
   parseProgressInput,
   parseQuestionFilter,
   parseQuestionInput,
@@ -872,6 +874,31 @@ export async function handlePlannerRequest(
           actorId: null,
         });
         return Response.json(result);
+      }
+
+      // Edit a plan's description, and fill github / work_target only when missing.
+      const planUpdateMatch = path.match(/^plans\/([^/]+)$/);
+      if (planUpdateMatch) {
+        const current = await planInWorkspace(admin, planUpdateMatch[1], workspaceId);
+        const fields = parsePlanUpdate(await readJson(request));
+        const patch = mergePlanUpdate(
+          {
+            github_repo: current.github_repo,
+            github_base: current.github_base,
+            github_work_mode: current.github_work_mode,
+            github_work_branch: current.github_work_branch,
+          },
+          fields,
+        );
+        const { data: updated, error } = await admin
+          .from("plans")
+          .update(patch)
+          .eq("id", current.id)
+          .eq("workspace_id", workspaceId)
+          .select("*")
+          .single();
+        if (error) throw error;
+        return Response.json({ ...updated, work_target: workTargetOf(updated) });
       }
 
       const planStatusMatch = path.match(/^plans\/([^/]+)\/status$/);

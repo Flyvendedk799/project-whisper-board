@@ -100,6 +100,7 @@ export const HOSTED_TOOL_POLICY: Record<string, ToolPolicy> = {
   add_task_steps: { scopes: [R, W], annotations: writeLocal },
   update_task_step: { scopes: [R, W], annotations: writeLocal },
   create_plan: { scopes: [R, W], annotations: writeLocal },
+  update_plan: { scopes: [R, W], annotations: writeLocal },
   import_plan_markdown: { scopes: [R, W], annotations: writeLocal },
   upload_attachment_text: { scopes: [R, W], annotations: writeLocal },
   upload_attachment_base64: { scopes: [R, W], annotations: writeLocal },

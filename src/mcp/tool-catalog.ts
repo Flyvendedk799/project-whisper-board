@@ -653,6 +653,39 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     ],
   },
   {
+    name: "update_plan",
+    group: "Authoring",
+    summary: "Change a plan's description, or fill missing github / work_target fields.",
+    description:
+      "Change an existing plan. description is always updatable (for example to fix casing). github_repo, github_base, github_work_mode and github_work_branch are only filled when the plan does not already have them — use this to set a missing work_target, not to override one. Status stays with set_plan_status.",
+    rest: { method: "POST", path: "plans/:plan_id" },
+    params: [
+      PLAN_ID,
+      { name: "description", type: "string", description: "What the plan is for" },
+      {
+        name: "github_repo",
+        type: "string",
+        description: "owner/repo; only when the plan has none yet",
+      },
+      {
+        name: "github_base",
+        type: "string",
+        description: "The base branch; only when the plan has none yet",
+      },
+      {
+        name: "github_work_mode",
+        type: "string",
+        enum: ["new", "existing", "base"],
+        description: "Where the work lands; only when the plan has no work mode yet",
+      },
+      {
+        name: "github_work_branch",
+        type: "string",
+        description: "The branch for new or existing mode; only when missing",
+      },
+    ],
+  },
+  {
     name: "import_plan_markdown",
     group: "Authoring",
     summary: "Import a markdown document into an existing plan.",
