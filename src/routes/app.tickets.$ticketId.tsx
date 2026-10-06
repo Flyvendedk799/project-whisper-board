@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -45,7 +45,7 @@ import {
   ticketEventsQuery,
   ticketQuery,
 } from "@/data/tickets";
-import { workspacePeopleQuery } from "@/data/projects";
+import { projectMembersQuery, workspacePeopleQuery } from "@/data/projects";
 import { qk } from "@/data/keys";
 import { ticketOriginSchema } from "@/data/ticket-origin";
 import {
@@ -57,7 +57,7 @@ import {
 } from "@/data/enums";
 import { formatDate } from "@/lib/utils-format";
 import { toast } from "sonner";
-import type { PersonRef, TicketDetail } from "@/data/types";
+import type { TicketDetail } from "@/data/types";
 
 export const Route = createFileRoute("/app/tickets/$ticketId")({
   validateSearch: ticketOriginSchema,
@@ -131,7 +131,12 @@ function TicketBackButton({ isAdmin, projectId }: { isAdmin: boolean; projectId?
 
 function TicketPage() {
   const { ticketId } = Route.useParams();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, workspaceId } = useAuth();
+  const workspacePeople = useQuery(workspacePeopleQuery(workspaceId));
+  const peopleById = useMemo(
+    () => new Map((workspacePeople.data ?? []).map((person) => [person.id, person])),
+    [workspacePeople.data],
+  );
   const queryClient = useQueryClient();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
@@ -334,9 +339,17 @@ function TicketPage() {
                     events={events.data ?? []}
                     showInternal={isAdmin}
                     reporterId={t.reporter_id}
+                    people={peopleById}
                   />
                 </SectionBoundary>
-                {user && <CommentBox ticketId={ticketId} userId={user.id} isAdmin={isAdmin} />}
+                {user && (
+                  <CommentBox
+                    ticketId={ticketId}
+                    projectId={t.project_id}
+                    userId={user.id}
+                    isAdmin={isAdmin}
+                  />
+                )}
               </section>
             </div>
 
@@ -494,10 +507,12 @@ function ClientProperties({ ticket: t }: { ticket: TicketDetail }) {
 
 function CommentBox({
   ticketId,
+  projectId,
   userId,
   isAdmin,
 }: {
   ticketId: string;
+  projectId: string | null;
   userId: string;
   isAdmin: boolean;
 }) {
@@ -514,9 +529,6 @@ function CommentBox({
   const [followUpKind, setFollowUpKind] = useState<"improvement" | "fix" | "">("");
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [mentions, setMentions] = useState<string[]>([]);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const mentionBoxRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   // On a phone the composer lives pinned above the tab bar, and starts as a
   // single line so the conversation keeps the screen until someone replies.
@@ -533,23 +545,22 @@ function CommentBox({
     }
   }, [body, ticketId]);
 
-  useEffect(() => {
-    const text = plainText(body);
-    const match = /(?:^|\s)@([^\s@]*)$/.exec(text.replace(/\u00a0/g, " "));
-    setMentionQuery(match ? match[1] : null);
-  }, [body]);
-
-  const mentionCandidates = useMemo(() => {
-    if (mentionQuery === null) return [];
-    const q = mentionQuery.toLowerCase();
-    return (people.data ?? [])
-      .filter((person) => person.id !== userId)
-      .filter((person) => {
-        const name = (person.full_name ?? person.email ?? "").toLowerCase();
-        return !q || name.includes(q) || (person.email ?? "").toLowerCase().includes(q);
-      })
-      .slice(0, 6);
-  }, [mentionQuery, people.data, userId]);
+  // An internal note is for the agency: only admins are offered, since only
+  // they can read it (and only they are notified about it).
+  // A client is offered the agency and the people on this project, not every
+  // client of the agency.
+  const projectMembers = useQuery({
+    ...projectMembersQuery(projectId ?? ""),
+    enabled: Boolean(projectId) && !isAdmin,
+  });
+  const mentionPeople = useMemo(() => {
+    const onProject = new Set((projectMembers.data ?? []).map((member) => member.user_id));
+    return (people.data ?? []).filter((person) =>
+      internal
+        ? person.role === "admin"
+        : isAdmin || person.role === "admin" || onProject.has(person.id),
+    );
+  }, [people.data, internal, isAdmin, projectMembers.data]);
 
   const notify = useServerFn(notifyTicketComment);
 
@@ -570,31 +581,20 @@ function CommentBox({
       setBody((current) => (current ? `${current}<p></p>` : "") + `<p>${result.reply}</p>`),
   });
 
-  const insertMention = (person: PersonRef) => {
-    const label = person.full_name ?? person.email ?? "someone";
-    const text = plainText(body);
-    const nextText = text.replace(
-      /(?:^|\s)@[^\s@]*$/,
-      (m) => `${m[0] === "@" ? "" : m[0]}@${label} `,
-    );
-    setBody(`<p>${nextText.replace(/\n/g, "<br>")}</p>`);
-    setMentions((prev) => (prev.includes(person.id) ? prev : [...prev, person.id]));
-    setMentionQuery(null);
-  };
-
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     const text = plainText(body);
     if (!text && drafts.length === 0) return;
 
+    let commentId: string | undefined;
     if (text) {
-      await post.run({
+      const result = await post.run({
         ticketId,
         body: body.trim(),
         isInternal: internal,
-        mentions,
         followUpKind: followUpKind || undefined,
       });
+      commentId = typeof result?.id === "string" ? result.id : undefined;
     }
 
     if (drafts.length > 0) {
@@ -605,17 +605,16 @@ function CommentBox({
       if (problem) toast.error(problem);
     }
 
-    if (!internal && text) {
-      void notify({
-        data: { ticketId, excerpt: text.slice(0, 200), mentions },
-      }).catch(() => {});
+    // The server reads the comment back for its mentions and excerpt; an
+    // internal note only reaches the agency people mentioned in it.
+    if (commentId) {
+      void notify({ data: { ticketId, commentId } }).catch(() => {});
     }
 
     setBody("");
     setDrafts([]);
     setInternal(false);
     setFollowUpKind("");
-    setMentions([]);
     setExpanded(false);
     try {
       sessionStorage.removeItem(replyDraftKey(ticketId));
@@ -633,7 +632,9 @@ function CommentBox({
   const busy = post.busy || uploading;
   const placeholder = useMemo(
     () =>
-      isAdmin ? "Reply to the client… Type @ to mention" : "Add anything else that might help…",
+      isAdmin
+        ? "Reply to the client… Type @ to mention a teammate"
+        : "Add anything else that might help… Type @ to mention someone",
     [isAdmin],
   );
 
@@ -675,36 +676,18 @@ function CommentBox({
               </Button>
             </div>
           )}
-          <div className="relative space-y-1.5" ref={mentionBoxRef}>
+          <div className="space-y-1.5">
             <Label htmlFor="reply" className="sr-only">
               Your reply
             </Label>
-            <RichTextEditor id="reply" value={body} onChange={setBody} placeholder={placeholder} />
-            {mentionCandidates.length > 0 && (
-              <ul
-                className="absolute bottom-full z-20 mb-1 max-h-48 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md max-md:static max-md:mb-0 max-md:mt-1.5"
-                role="listbox"
-              >
-                {mentionCandidates.map((person) => (
-                  <li key={person.id}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent max-md:min-h-11"
-                      onClick={() => insertMention(person)}
-                    >
-                      <span className="truncate font-medium">
-                        {person.full_name ?? person.email}
-                      </span>
-                      {person.full_name && person.email && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {person.email}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <RichTextEditor
+              id="reply"
+              value={body}
+              onChange={setBody}
+              placeholder={placeholder}
+              mentionPeople={mentionPeople}
+              mentionExcludeId={userId}
+            />
           </div>
 
           <CaptureDropzone

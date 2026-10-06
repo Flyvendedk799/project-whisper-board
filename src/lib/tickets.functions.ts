@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
 import { purgeFiles } from "@/lib/storage-purge";
+import { notifyAssignment, workspaceMemberRoles } from "@/lib/notifications.functions";
+import { extractMentionIds } from "@/lib/mentions";
 import { Constants } from "@/integrations/supabase/types";
 import type { Update } from "@/data/types";
 
@@ -100,6 +102,17 @@ export const createTicket = createServerFn({ method: "POST" })
     }),
   );
 
+/**
+ * Only people in the ticket's workspace can be given it. The database would
+ * accept any profile id, and the assignee is emailed, so this is checked here.
+ */
+async function assertAssignable(workspaceId: string, ids: readonly string[]) {
+  const members = await workspaceMemberRoles(workspaceId, ids);
+  if (ids.some((id) => !members.has(id))) {
+    throw new AppError("invalid_assignee", "That person isn't a member of this workspace.");
+  }
+}
+
 export const updateTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -143,12 +156,29 @@ export const updateTicket = createServerFn({ method: "POST" })
 
       const { data: before } = await context.supabase
         .from("tickets")
-        .select("status, priority, eta_date")
+        .select("status, priority, eta_date, assignee_id, workspace_id, ticket_number, title")
         .eq("id", ticketId)
         .maybeSingle();
 
+      if (fields.assigneeId && before) {
+        await assertAssignable(before.workspace_id, [fields.assigneeId]);
+      }
+
       const { error } = await context.supabase.from("tickets").update(patch).eq("id", ticketId);
       if (error) throw error;
+
+      if (fields.assigneeId && before) {
+        await notifyAssignment({
+          actorId: context.userId,
+          assigneeId: fields.assigneeId,
+          previousAssigneeId: before.assignee_id,
+          workspaceId: before.workspace_id,
+          what: `#${before.ticket_number} ${fields.title ?? before.title}`,
+          link: `/app/tickets/${ticketId}`,
+          relatedType: "ticket",
+          relatedId: ticketId,
+        });
+      }
 
       // Only the changes a client would care about hearing. A retitle or an
       // internal estimate is not one of them.
@@ -233,6 +263,21 @@ export const bulkUpdateTickets = createServerFn({ method: "POST" })
 
       const updated: string[] = [];
 
+      // Who held each ticket before, so only a real handover is announced.
+      const before = data.assigneeId
+        ? ((
+            await supabase
+              .from("tickets")
+              .select("id, assignee_id, workspace_id, ticket_number, title")
+              .in("id", data.ticketIds)
+          ).data ?? [])
+        : [];
+      if (data.assigneeId) {
+        for (const workspaceId of new Set(before.map((row) => row.workspace_id))) {
+          await assertAssignable(workspaceId, [data.assigneeId]);
+        }
+      }
+
       if (Object.keys(patch).length > 0) {
         const { data: rows, error } = await supabase
           .from("tickets")
@@ -241,6 +286,27 @@ export const bulkUpdateTickets = createServerFn({ method: "POST" })
           .select("id");
         if (error) throw error;
         updated.push(...(rows ?? []).map((r) => r.id));
+      }
+
+      if (data.assigneeId) {
+        const handedOver = before.filter(
+          (row) => updated.includes(row.id) && row.assignee_id !== data.assigneeId,
+        );
+        const first = handedOver[0];
+        if (first) {
+          await notifyAssignment({
+            actorId: context.userId,
+            assigneeId: data.assigneeId,
+            workspaceId: first.workspace_id,
+            what:
+              handedOver.length === 1
+                ? `#${first.ticket_number} ${first.title}`
+                : `${handedOver.length} tickets`,
+            link: handedOver.length === 1 ? `/app/tickets/${first.id}` : "/app/tickets",
+            relatedType: "ticket",
+            relatedId: first.id,
+          });
+        }
       }
 
       // Labels are an array column, so each ticket's own set has to be read
@@ -322,7 +388,11 @@ export const addComment = createServerFn({ method: "POST" })
         ticketId: z.string().uuid(),
         body: z.string().min(1).max(20_000),
         isInternal: z.boolean().default(false),
-        /** Profile ids named with @ in the body. */
+        /**
+         * Profile ids named with @. Kept for older clients: the body itself
+         * carries mentions now (`data-id` on a mention chip, or an
+         * `@[Name](user:<id>)` token), and that is what gets stored.
+         */
         mentions: z.array(z.string().uuid()).max(20).default([]),
         followUpKind: z.enum(["improvement", "fix"]).optional(),
       })
@@ -341,7 +411,7 @@ export const addComment = createServerFn({ method: "POST" })
           _kind: data.followUpKind,
         });
         if (error) throw error;
-        return { id };
+        return { id, mentions: extractMentionIds(data.body) };
       }
 
       const { data: comment, error } = await supabase
@@ -356,7 +426,7 @@ export const addComment = createServerFn({ method: "POST" })
         .single();
       if (error) throw error;
 
-      return { id: comment.id };
+      return { id: comment.id, mentions: extractMentionIds(data.body) };
     }),
   );
 

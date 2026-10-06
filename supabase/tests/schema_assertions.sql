@@ -771,6 +771,125 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+\echo 'team: profiles, photos, pending invites'
+-- ---------------------------------------------------------------------------
+-- Supabase grants this already; the plain-Postgres harness does not.
+grant insert on storage.objects to authenticated;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select assert(
+  (select count(*) from public.profiles where id = '22222222-2222-2222-2222-222222222222') = 1,
+  'a workspace member can read a teammate''s profile'
+);
+select assert(
+  (select count(*) from public.profiles where id = '33333333-3333-3333-3333-333333333333') = 0,
+  'a profile in another workspace is not readable'
+);
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select assert(
+  (select count(*) from public.profiles) = 1,
+  'someone alone in their workspace reads only their own profile'
+);
+
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.workspace_people('00000000-0000-0000-0000-000000000001')) = 2,
+  'workspace_people lists every member of a workspace you belong to'
+);
+select assert(
+  (select bool_and(pending) from public.workspace_people('00000000-0000-0000-0000-000000000001')),
+  'someone who has never signed in shows as pending'
+);
+select assert(
+  (select count(*) from public.workspace_people('00000000-0000-0000-0000-000000000001')
+   where invited_at is not null or last_sign_in_at is not null) = 0,
+  'a client does not see invite or sign-in times'
+);
+select assert(
+  (select count(*) from public.workspace_people('00000000-0000-0000-0000-000000000002')) = 0,
+  'workspace_people shows nothing for a workspace you are not in'
+);
+
+update public.profiles set full_name = 'Client Person'
+where id = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select full_name from public.profiles where id = '22222222-2222-2222-2222-222222222222')
+    = 'Client Person',
+  'you can rename yourself'
+);
+do $$
+begin
+  begin
+    update public.profiles set email = 'someone-else@acme.test'
+    where id = '22222222-2222-2222-2222-222222222222';
+    raise exception 'FAILED: a person could point their notification email elsewhere';
+  exception when insufficient_privilege then
+    raise notice '  ok  your profile email is not yours to change';
+  end;
+end $$;
+
+insert into storage.objects (bucket_id, name, owner) values
+  ('avatars', '22222222-2222-2222-2222-222222222222/me.png', '22222222-2222-2222-2222-222222222222');
+select assert(true, 'you can upload a photo under your own id');
+do $$
+begin
+  begin
+    insert into storage.objects (bucket_id, name, owner) values
+      ('avatars', '11111111-1111-1111-1111-111111111111/me.png', '22222222-2222-2222-2222-222222222222');
+    raise exception 'FAILED: a photo was written under someone else''s id';
+  exception when insufficient_privilege or check_violation then
+    raise notice '  ok  nor under anyone else''s';
+  end;
+end $$;
+reset role;
+
+select assert(
+  (select public from storage.buckets where id = 'avatars'),
+  'the avatars bucket exists and is public'
+);
+
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('55555555-5555-5555-5555-555555555555', 'google@acme.test',
+   '{"name": "Grace Hopper", "picture": "https://example.test/grace.png"}'::jsonb);
+select assert(
+  (select avatar_url from public.profiles where id = '55555555-5555-5555-5555-555555555555')
+    = 'https://example.test/grace.png'
+  and (select full_name from public.profiles where id = '55555555-5555-5555-5555-555555555555')
+    = 'Grace Hopper',
+  'a provider sign-up arrives with its name and photo'
+);
+
+update auth.users
+set raw_user_meta_data = '{"avatar_url": "https://example.test/client.png"}'::jsonb
+where id = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select avatar_url from public.profiles where id = '22222222-2222-2222-2222-222222222222')
+    = 'https://example.test/client.png',
+  'linking a provider later fills an empty photo'
+);
+update auth.users
+set raw_user_meta_data = '{"avatar_url": "https://example.test/other.png"}'::jsonb,
+    email = 'client-new@acme.test'
+where id = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select avatar_url from public.profiles where id = '22222222-2222-2222-2222-222222222222')
+    = 'https://example.test/client.png'
+  and (select email from public.profiles where id = '22222222-2222-2222-2222-222222222222')
+    = 'client-new@acme.test',
+  'but never replaces a photo already there, while the email follows the account'
+);
+
+insert into public.notifications (user_id, kind, title, actor_id)
+values ('22222222-2222-2222-2222-222222222222', 'assigned', 'You were assigned',
+        '11111111-1111-1111-1111-111111111111');
+select assert(
+  (select count(*) from public.notifications
+   where kind = 'assigned' and actor_id = '11111111-1111-1111-1111-111111111111') = 1,
+  'an assignment notification records who assigned it'
+);
+
+-- ---------------------------------------------------------------------------
 \echo 'realtime'
 -- ---------------------------------------------------------------------------
 select assert(

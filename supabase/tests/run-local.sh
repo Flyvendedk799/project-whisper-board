@@ -18,13 +18,8 @@ for f in "$ROOT"/supabase/migrations/*.sql; do
   psql -d "$DB" -qf "$f"
 done
 
-# Supabase grants these by default; do the same so the assertions exercise RLS
-# rather than table privileges.
-psql -d "$DB" -qc "
-  grant usage on schema public to anon, authenticated, service_role;
-  grant all on all tables in schema public to anon, authenticated, service_role;
-  grant all on all sequences in schema public to anon, authenticated, service_role;
-"
+# Table privileges come from the default privileges set in local-bootstrap.sql,
+# as they do on Supabase, so a migration's `revoke` is still in force here.
 
 if [ "${SKIP_ASSERTIONS:-}" != "1" ]; then
   psql -d "$DB" -f "$ROOT/supabase/tests/schema_assertions.sql"

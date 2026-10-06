@@ -460,6 +460,7 @@ export type Database = {
       }
       notifications: {
         Row: {
+          actor_id: string | null
           body: string | null
           created_at: string
           id: string
@@ -471,6 +472,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_id?: string | null
           body?: string | null
           created_at?: string
           id?: string
@@ -482,6 +484,7 @@ export type Database = {
           workspace_id?: string
         }
         Update: {
+          actor_id?: string | null
           body?: string | null
           created_at?: string
           id?: string
@@ -493,6 +496,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -2742,6 +2752,24 @@ export type Database = {
         Returns: Database["public"]["Tables"]["workspaces"]["Row"]
       }
       user_workspace_ids: { Args: { _user_id: string }; Returns: string[] }
+      shares_workspace: {
+        Args: { _other: string; _viewer: string }
+        Returns: boolean
+      }
+      workspace_people: {
+        Args: { _workspace_id: string }
+        Returns: {
+          avatar_url: string | null
+          email: string | null
+          full_name: string | null
+          invited_at: string | null
+          joined_at: string
+          last_sign_in_at: string | null
+          pending: boolean
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       plan_event_kind:
@@ -2793,6 +2821,7 @@ export type Database = {
         | "milestone"
         | "invoice"
         | "meeting"
+        | "assigned"
       outbound_status: "queued" | "sent" | "skipped" | "failed"
       project_status:
         | "discovery"
@@ -2968,6 +2997,7 @@ export const Constants = {
         "milestone",
         "invoice",
         "meeting",
+        "assigned",
       ],
       outbound_status: ["queued", "sent", "skipped", "failed"],
       plan_event_kind: [

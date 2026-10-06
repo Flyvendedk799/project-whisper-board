@@ -28,8 +28,9 @@ async function notifyProjectMembers(opts: {
   const db = adminClient();
   const { data: members } = await db
     .from("project_members")
-    .select("user_id")
+    .select("user_id, workspace_id")
     .eq("project_id", opts.projectId);
+  const workspaceId = members?.[0]?.workspace_id ?? null;
 
   const recipients = [...new Set((members ?? []).map((m) => m.user_id))].filter(
     (id) => id !== opts.actorId,
@@ -40,6 +41,8 @@ async function notifyProjectMembers(opts: {
   await deliver(
     recipients.map((userId) => ({
       userId,
+      workspaceId,
+      actorId: opts.actorId,
       kind: opts.kind,
       title: opts.title,
       body: opts.body,

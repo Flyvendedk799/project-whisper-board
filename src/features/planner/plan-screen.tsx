@@ -258,6 +258,7 @@ function PlanScreenBody({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto max-md:overscroll-contain max-md:[--plan-toolbar-h:3.875rem]">
       <PlanHeader
         plan={plan}
+        layout={layout}
         aiMenu={<PlanAiMenu plan={plan} selectedTaskIds={hasActiveFilters(filters) ? order : []} />}
         actions={{
           onNewTask: openNewTask,

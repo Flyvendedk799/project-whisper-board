@@ -130,6 +130,10 @@ server.tool("get_task", toolDescription("get_task"), toolShape("get_task"), ({ t
   run(() => fetchApi(`tasks/${task_id}`)),
 );
 
+server.tool("list_people", toolDescription("list_people"), toolShape("list_people"), () =>
+  run(() => fetchApi("people")),
+);
+
 server.tool(
   "list_task_attachments",
   toolDescription("list_task_attachments"),

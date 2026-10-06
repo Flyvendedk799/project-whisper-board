@@ -127,6 +127,66 @@ export const inviteClient = createServerFn({ method: "POST" })
     return { ok: true, userId };
   });
 
+/**
+ * Send someone's invitation again, for a teammate who never signed in (the
+ * first email went to spam, or the link expired). Only for pending invites: a
+ * person who has signed in uses "Forgot password" like everyone else.
+ */
+export const resendInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    const { data: member } = await a
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (!member) throw new Error("Not found: that person is not in this workspace");
+    if (member.role !== "client" && inviterRole !== "admin") {
+      throw new Error("Forbidden: only admins can re-invite that role");
+    }
+
+    const { data: found, error: userErr } = await a.auth.admin.getUserById(data.userId);
+    if (userErr || !found?.user?.email) throw new Error("Not found: no email for that person");
+    const user = found.user;
+    if (user.last_sign_in_at) {
+      throw new Error(
+        "They have already joined. They can reset their password from the sign-in page.",
+      );
+    }
+
+    const origin = process.env.SITE_URL || "";
+    const redirectTo = origin ? `${origin}/invite/accept` : undefined;
+    const meta: Record<string, string> = {
+      workspace_id: data.workspaceId,
+      invite_role: member.role,
+    };
+
+    // An unconfirmed invitee gets the invitation again. Someone whose account
+    // exists but who never signed in (confirmed through another path) gets a
+    // set-password link instead, which lands on the same page.
+    const { error: inviteErr } = await a.auth.admin.inviteUserByEmail(user.email!, {
+      redirectTo,
+      data: meta,
+    });
+    if (!inviteErr) return { ok: true, via: "invite" as const };
+
+    const { error: resetErr } = await a.auth.resetPasswordForEmail(user.email!, { redirectTo });
+    if (resetErr) throw new Error(resetErr.message);
+    return { ok: true, via: "password_link" as const };
+  });
+
 export const setProjectMemberRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>

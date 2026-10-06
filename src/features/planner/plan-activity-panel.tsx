@@ -4,7 +4,9 @@ import { planEventsQuery } from "@/data/planner";
 import type { EventWithRefs, PlanWithSections } from "@/data";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { eventVerb, initials, taskHeadline, tasksOf, timeAgo } from "./plan-model";
+import { eventVerb, taskHeadline, tasksOf, timeAgo } from "./plan-model";
+import { PersonAvatar } from "@/components/person-avatar";
+import { mentionsToPlainText } from "@/lib/mentions";
 
 /** The "Activity" side panel: what agents and teammates did, newest first. */
 export function PlanActivityPanel({
@@ -75,14 +77,16 @@ export function PlanActivityPanel({
 
           return (
             <li key={event.id} className="flex gap-2.5">
-              <div
-                aria-hidden="true"
-                className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                  isAgent ? "bg-chart-5/20" : "bg-accent"
-                }`}
-              >
-                {isAgent ? "AI" : initials(name)}
-              </div>
+              {isAgent ? (
+                <div
+                  aria-hidden="true"
+                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-chart-5/20 text-[10px] font-semibold"
+                >
+                  AI
+                </div>
+              ) : (
+                <PersonAvatar person={event.actor} className="h-[26px] w-[26px] text-[10px]" />
+              )}
               <div className="min-w-0">
                 <p className="text-sm leading-snug">
                   <span className="font-medium">{name}</span>{" "}
@@ -101,7 +105,7 @@ export function PlanActivityPanel({
                 </p>
                 {detail ? (
                   <p className="mt-0.5 line-clamp-3 text-[13px] leading-snug text-foreground/80">
-                    {detail}
+                    {mentionsToPlainText(detail)}
                   </p>
                 ) : null}
                 <p className="mt-0.5 text-xs text-muted-foreground">{timeAgo(event.created_at)}</p>

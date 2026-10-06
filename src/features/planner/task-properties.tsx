@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/components/auth-provider";
+import { PersonChip } from "@/components/person-avatar";
 import type { PlanTaskComplexity, PlanTaskPriority, PlanTaskStatus, TaskWithAgent } from "@/data";
 import { qk } from "@/data/keys";
 import { workspacePeopleQuery } from "@/data/projects";
@@ -207,16 +208,18 @@ export function TaskProperties({
         <SelectValue placeholder="Unassigned" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="unassigned">Unassigned</SelectItem>
+        <SelectItem value="unassigned">
+          <PersonChip person={null} size="xs" />
+        </SelectItem>
         {task.assigned_user &&
         !(people.data ?? []).some((person) => person.id === task.assigned_user?.id) ? (
           <SelectItem value={task.assigned_user.id}>
-            {task.assigned_user.full_name || task.assigned_user.email}
+            <PersonChip person={task.assigned_user} size="xs" />
           </SelectItem>
         ) : null}
         {(people.data ?? []).map((person) => (
           <SelectItem key={person.id} value={person.id}>
-            {person.full_name || person.email}
+            <PersonChip person={person} size="xs" pending={person.pending} />
           </SelectItem>
         ))}
       </SelectContent>
