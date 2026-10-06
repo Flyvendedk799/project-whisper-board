@@ -6,6 +6,7 @@ import { ConnectTab } from "./connect-tab";
 import { SkillTab } from "./skill-tab";
 import { ToolsTab } from "./tools-tab";
 import { WorkflowTab } from "./workflow-tab";
+import { ConnectedAgents } from "./connected-agents";
 
 /** Everything an admin needs to put an AI agent on the board: connect it, see its tools, give it the skill. */
 export function AgentsPage({
@@ -46,8 +47,13 @@ export function AgentsPage({
           onSelect: () => onTabChange(key),
         }))}
       />
-      <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-7">
-        {tab === "connect" && <ConnectTab />}
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:px-8 md:py-7">
+        {tab === "connect" && (
+          <>
+            <ConnectTab />
+            <ConnectedAgents />
+          </>
+        )}
         {tab === "tools" && <ToolsTab />}
         {tab === "skill" && <SkillTab />}
         {tab === "workflow" && <WorkflowTab />}
