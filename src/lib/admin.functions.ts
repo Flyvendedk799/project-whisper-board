@@ -4,6 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { assertWorkspaceAdmin, assertWorkspaceInviter } from "@/lib/workspace.functions";
+import { appUrl } from "@/lib/app-origin";
+import { inviteAcceptPath, inviteEmail } from "@/lib/invite-email";
+import { sendAccountEmail } from "@/lib/notifications.functions";
 
 function admin() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -32,10 +35,9 @@ export const inviteClient = createServerFn({ method: "POST" })
       throw new Error("Forbidden: only admins can invite that role");
     }
 
-    const origin = process.env.SITE_URL || "";
-    const redirectTo = origin
-      ? `${origin}/invite/accept${data.projectId ? `?project=${data.projectId}` : ""}`
-      : undefined;
+    // Always explicit: without it Supabase Auth falls back to its own SITE_URL,
+    // which on a self-hosted stack defaults to localhost.
+    const redirectTo = appUrl(inviteAcceptPath(data.projectId));
 
     const meta: Record<string, string> = {
       workspace_id: data.workspaceId,
@@ -50,6 +52,8 @@ export const inviteClient = createServerFn({ method: "POST" })
     });
 
     let userId = invited?.user?.id;
+    // Set when Auth did not mail anyone (an existing account), so the app must.
+    let existingAccount = false;
     if (inviteErr && !userId) {
       const { data: link, error: linkErr } = await a.auth.admin.generateLink({
         type: "magiclink",
@@ -61,6 +65,8 @@ export const inviteClient = createServerFn({ method: "POST" })
       });
       if (linkErr) throw new Error(linkErr.message);
       userId = link.user?.id;
+      // generateLink never sends mail; it is used here to resolve the account.
+      existingAccount = Boolean(userId);
 
       // Existing users: ensure membership now (invite email may not re-run trigger).
       if (userId) {
@@ -124,8 +130,68 @@ export const inviteClient = createServerFn({ method: "POST" })
         }
       }
     }
-    return { ok: true, userId };
+
+    // Membership is in place, so the link works the moment it is opened.
+    const emailed = existingAccount
+      ? await emailExistingAccount(a, {
+          email: data.email,
+          userId,
+          inviterId: context.userId,
+          workspaceId: data.workspaceId,
+          projectId: data.projectId,
+          url: redirectTo,
+        })
+      : true;
+    return { ok: true, userId, emailed };
   });
+
+/**
+ * Supabase Auth mails only accounts it creates. Someone who already has a login
+ * gets the invitation from the app instead, through the notification provider
+ * and the Outbox. The link is the app's own accept page, not a one-time magic
+ * link: they can sign in as usual, it does not expire or get used up by a mail
+ * scanner, and its host is the app's, not the Auth service's public URL.
+ */
+async function emailExistingAccount(
+  a: ReturnType<typeof admin>,
+  input: {
+    email: string;
+    userId: string;
+    inviterId: string;
+    workspaceId: string;
+    projectId?: string;
+    url: string;
+  },
+): Promise<boolean> {
+  try {
+    const [{ data: inviter }, { data: workspace }, { data: project }] = await Promise.all([
+      a.from("profiles").select("full_name, email").eq("id", input.inviterId).maybeSingle(),
+      a.from("workspaces").select("name").eq("id", input.workspaceId).maybeSingle(),
+      input.projectId
+        ? a.from("projects").select("title").eq("id", input.projectId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const message = inviteEmail({
+      inviterName: inviter?.full_name || inviter?.email,
+      workspaceName: workspace?.name,
+      projectTitle: project?.title,
+      url: input.url,
+    });
+    return await sendAccountEmail({
+      to: input.email,
+      toUserId: input.userId,
+      ...message,
+      template: "invite_existing_user",
+      relatedType: input.projectId ? "project" : "workspace",
+      relatedId: input.projectId ?? input.workspaceId,
+      workspaceId: input.workspaceId,
+    });
+  } catch (e) {
+    // The invite itself succeeded; a mail failure must not undo it.
+    console.error("[invite] email to existing account failed:", e);
+    return false;
+  }
+}
 
 /**
  * Send someone's invitation again, for a teammate who never signed in (the
@@ -166,8 +232,7 @@ export const resendInvite = createServerFn({ method: "POST" })
       );
     }
 
-    const origin = process.env.SITE_URL || "";
-    const redirectTo = origin ? `${origin}/invite/accept` : undefined;
+    const redirectTo = appUrl("/invite/accept");
     const meta: Record<string, string> = {
       workspace_id: data.workspaceId,
       invite_role: member.role,

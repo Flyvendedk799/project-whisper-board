@@ -49,14 +49,19 @@ function InviteAcceptPage() {
       const t = setTimeout(() => {
         if (!supabase.auth.getSession) return;
         void supabase.auth.getSession().then(({ data }) => {
-          if (!data.session) navigate({ to: "/login", search: { redirect: "/invite/accept" } });
-          else setReady(true);
+          if (!data.session) {
+            // Keep the project, so signing in (even in another tab) lands on it.
+            const back = projectFromSearch
+              ? `/invite/accept?project=${projectFromSearch}`
+              : "/invite/accept";
+            navigate({ to: "/login", search: { redirect: back } });
+          } else setReady(true);
         });
       }, 800);
       return () => clearTimeout(t);
     }
     setReady(true);
-  }, [loading, user, navigate]);
+  }, [loading, user, navigate, projectFromSearch]);
 
   useEffect(() => {
     if (workspaces.length === 1) {

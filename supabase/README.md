@@ -53,3 +53,30 @@ Manual check from a checkout:
 
 The migration tracker is in sync with the repo (34 of 34 as of 2026-10-01), so the
 repair that used to be documented here is no longer needed.
+
+## Production auth URLs (invite and password emails)
+
+Invitation, magic-link and password emails are sent by the Auth service (GoTrue), not by the
+app. The link in them is GoTrue's own `…/auth/v1/verify` URL, built from **its**
+`API_EXTERNAL_URL`, and after verifying it redirects to the app's `redirectTo` only if that URL
+is on GoTrue's allow list; otherwise it falls back to GoTrue's `SITE_URL`. The Supabase CLI
+defaults are `http://127.0.0.1:54321`, `http://127.0.0.1:3000` and `https://127.0.0.1:3000`,
+so a stack started from a config without these settings mails links to 127.0.0.1.
+
+The production stack must have (in the `config.toml` the VPS stack is started from):
+
+```toml
+[api]
+external_url = "https://boared.online"
+
+[auth]
+site_url = "https://boared.online"
+additional_redirect_urls = ["https://boared.online/**"]
+```
+
+or the equivalent environment for `supabase start`: `SUPABASE_API_EXTERNAL_URL`,
+`SUPABASE_AUTH_SITE_URL`, `SUPABASE_AUTH_ADDITIONAL_REDIRECT_URLS` (comma-separated). A
+plain docker-compose stack uses `API_EXTERNAL_URL`, `SITE_URL` and `ADDITIONAL_REDIRECT_URLS`.
+Restart the stack (`supabase stop && supabase start`, data is kept) for them to apply. The
+app itself should also get `SITE_URL=https://boared.online`; without it the app derives its
+origin from the request (`x-forwarded-host` / `host`).

@@ -51,7 +51,7 @@ Required — the app will not boot without these:
 | `VITE_SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_PUBLISHABLE_KEY` | client / server    | Anon key                                                |
 | `VITE_SUPABASE_PROJECT_ID`                                   | `bun run db:types` | Project ref                                             |
 | `SUPABASE_SERVICE_ROLE_KEY`                                  | server only        | Privileged server functions. Never expose to the client |
-| `SITE_URL`                                                   | server             | Absolute origin used in invite and email links          |
+| `SITE_URL`                                                   | server             | Public origin for invite and email links (falls back to the request host) |
 
 Optional — **every one of these is optional by design.** Each is behind a provider adapter in
 `src/lib/providers/`. With none of them set the app is fully functional: emails land in the
@@ -166,4 +166,6 @@ node .output/server/index.mjs
 
 Point your process manager (systemd, PM2, Docker, etc.) at `node .output/server/index.mjs`,
 set the same env vars as local (at minimum `SUPABASE_*` and `SITE_URL`), and put a reverse
-proxy in front for TLS. There is no Cloudflare Workers deploy path any more.
+proxy in front for TLS. Invite and password emails come from Supabase Auth, whose own public
+URL and redirect allow list must point at the site too; see "Production auth URLs" in
+`supabase/README.md`. There is no Cloudflare Workers deploy path any more.

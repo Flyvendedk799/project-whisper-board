@@ -6,6 +6,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { guard, requireFound } from "@/lib/server-errors";
 import { AppError } from "@/lib/errors";
 import { getPaymentsProvider } from "@/lib/providers";
+import { appOrigin } from "@/lib/app-origin";
 import { deliver, type NotifyTarget } from "@/lib/notifications.functions";
 import { milestoneInvoiceDraft } from "@/data/billing";
 
@@ -486,7 +487,7 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
         return { mode: "manual" as const, url: null };
       }
 
-      const origin = process.env.SITE_URL ?? "";
+      const origin = appOrigin();
       const result = await payments.createCheckout({
         invoiceId: invoice.id,
         invoiceNumber: invoice.number,
