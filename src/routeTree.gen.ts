@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ApiMcpRouteImport } from './routes/api.mcp'
 import { Route as ApiV1RouteImport } from './routes/api.v1'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
@@ -73,6 +74,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1Route = ApiV1RouteImport.update({
@@ -228,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -300,6 +308,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -339,6 +348,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -448,6 +460,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiV1Route: typeof ApiV1RouteWithChildren
   InviteAcceptRoute: typeof InviteAcceptRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
@@ -500,6 +513,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1': {
@@ -792,6 +812,7 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiV1Route: ApiV1RouteWithChildren,
   InviteAcceptRoute: InviteAcceptRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
