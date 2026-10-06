@@ -169,3 +169,10 @@ set the same env vars as local (at minimum `SUPABASE_*` and `SITE_URL`), and put
 proxy in front for TLS. Invite and password emails come from Supabase Auth, whose own public
 URL and redirect allow list must point at the site too; see "Production auth URLs" in
 `supabase/README.md`. There is no Cloudflare Workers deploy path any more.
+
+## Hosted MCP
+
+Remote agents can connect with OAuth Streamable HTTP at `/api/mcp` (no API key in
+client config). See [`docs/hosted-mcp.md`](docs/hosted-mcp.md) and the **Hosted MCP**
+section on Agents & MCP. Feature flag: `MCP_ENABLED` (server-only env in `.env.example`).
+

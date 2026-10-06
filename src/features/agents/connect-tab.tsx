@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { CodeBlock, type CodeDownload } from "./code-block";
-import { mcpSnippets, REPO_ZIP_URL, type McpSnippets } from "./connect-snippets";
+import { hostedMcpSnippets, mcpSnippets, REPO_ZIP_URL, type McpSnippets } from "./connect-snippets";
 
 type Client = "claude" | "codex" | "cursor" | "antigravity" | "rest";
 
@@ -115,9 +115,27 @@ export function ConnectTab({ keyAction = <SignedInKeyStep /> }: { keyAction?: Re
   const snippets = useMemo(() => mcpSnippets({ origin, repoPath }), [origin, repoPath]);
   const shown = clientSnippet(client, snippets);
 
+  const hosted = hostedMcpSnippets(origin);
+
   return (
     <div className="space-y-4">
-      <Step number={1} title="Create an API key">
+      <section className="rounded-[14px] border bg-card p-4 md:p-5">
+        <h2 className="font-display text-xl">Hosted MCP</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Connect over Streamable HTTP at <code className="text-xs">{origin}/api/mcp</code>. Your
+          agent opens Boared login in a browser; approve as a workspace admin. No API key goes in
+          the config file.
+        </p>
+        <CodeBlock
+          code={hosted.cursor}
+          caption="Cursor / clients that support remote MCP URLs"
+          download={{ filename: "mcp-hosted.json", type: "application/json" }}
+        />
+        <p className="mt-2 text-xs text-muted-foreground">{hosted.note}</p>
+        <CodeBlock code={hosted.claudeCode} caption="Claude Code (HTTP transport)" />
+      </section>
+
+      <Step number={1} title="Local stdio: create an API key">
         <p className="text-sm text-muted-foreground">
           The key decides which workspace an agent can see. Make one per agent or machine so you can
           revoke it on its own. It starts with <code className="text-xs">cpk_</code> and is shown

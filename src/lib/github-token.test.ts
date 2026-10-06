@@ -57,6 +57,14 @@ describe("pickToken", () => {
     expect(pickToken(null, undefined)).toBeNull();
     expect(pickToken("", "")).toBeNull();
   });
+
+  it("skips the shared fallback when allowSharedFallback is false", () => {
+    expect(pickToken(null, "shared", { allowSharedFallback: false })).toBeNull();
+    expect(pickToken("mine", "shared", { allowSharedFallback: false })).toEqual({
+      token: "mine",
+      source: "user",
+    });
+  });
 });
 
 describe("identifyToken", () => {
@@ -290,6 +298,15 @@ describe("githubFor", () => {
   it("gives no port when there is no token at all", async () => {
     const { tokens } = world();
     expect(await githubFor("user-1", tokens)).toEqual({ port: null, source: "none", token: null });
+  });
+
+  it("refuses the shared PAT when allowSharedFallback is false", async () => {
+    const { tokens } = world({ env: { GITHUB_PAT: OTHER } });
+    expect(await githubFor("user-2", tokens, { allowSharedFallback: false })).toEqual({
+      port: null,
+      source: "none",
+      token: null,
+    });
   });
 });
 

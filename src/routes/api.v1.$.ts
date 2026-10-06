@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { handleAccountRequest, requireAccountAccess } from "@/lib/account-api";
 
-/** Workspace API. Requires the `account` scope on the key. */
+/** Workspace API. Requires the `account` scope on an API key — not MCP OAuth. */
 export const Route = createFileRoute("/api/v1/$")({
   server: {
     handlers: {
@@ -15,5 +15,5 @@ export const Route = createFileRoute("/api/v1/$")({
 async function handle(request: Request, splat?: string) {
   const auth = await requireAccountAccess(request);
   if (auth instanceof Response) return auth;
-  return handleAccountRequest(request, auth.workspaceId, splat || "", auth.userId);
+  return handleAccountRequest(request, auth, splat || "");
 }

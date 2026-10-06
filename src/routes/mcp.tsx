@@ -5,7 +5,7 @@ import { PublicAgentsPage } from "@/features/agents/public-agents-page";
 
 const TITLE = "Boared for AI agents: MCP server and skill";
 const DESCRIPTION =
-  "Connect Claude Code, Codex, Cursor or Antigravity to Boared. Download the skill, set up the MCP server and read what every tool does.";
+  "Connect Claude Code, Codex, Cursor or Antigravity to Boared (local stdio or Hosted MCP). Download the skill, set up the MCP server and read what every tool does.";
 
 /** Open to everyone. The dashboard's Agents & MCP page (`/app/agents`) is the one for signed-in admins. */
 export const Route = createFileRoute("/mcp")({

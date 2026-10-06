@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ApiMcpRouteImport } from './routes/api.mcp'
 import { Route as ApiV1RouteImport } from './routes/api.v1'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
@@ -29,6 +30,10 @@ import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppTimeRouteImport } from './routes/app.time'
 import { Route as AppTriageRouteImport } from './routes/app.triage'
 import { Route as InviteAcceptRouteImport } from './routes/invite.accept'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
+import { Route as OauthRevokeRouteImport } from './routes/oauth.revoke'
+import { Route as OauthTokenRouteImport } from './routes/oauth.token'
 import { Route as ApiPlannerSplatRouteImport } from './routes/api.planner.$'
 import { Route as ApiV1SplatRouteImport } from './routes/api.v1.$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
@@ -69,6 +74,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1Route = ApiV1RouteImport.update({
@@ -141,6 +151,26 @@ const InviteAcceptRoute = InviteAcceptRouteImport.update({
   path: '/invite/accept',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthRevokeRoute = OauthRevokeRouteImport.update({
+  id: '/oauth/revoke',
+  path: '/oauth/revoke',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthTokenRoute = OauthTokenRouteImport.update({
+  id: '/oauth/token',
+  path: '/oauth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPlannerSplatRoute = ApiPlannerSplatRouteImport.update({
   id: '/api/planner/$',
   path: '/api/planner/$',
@@ -204,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -217,6 +248,10 @@ export interface FileRoutesByFullPath {
   '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -236,6 +271,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -247,6 +283,10 @@ export interface FileRoutesByTo {
   '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/app': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -268,6 +308,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/v1': typeof ApiV1RouteWithChildren
   '/app/agents': typeof AppAgentsRoute
   '/app/create-workspace': typeof AppCreateWorkspaceRoute
@@ -281,6 +322,10 @@ export interface FileRoutesById {
   '/app/time': typeof AppTimeRoute
   '/app/triage': typeof AppTriageRoute
   '/invite/accept': typeof InviteAcceptRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/app/': typeof AppIndexRoute
   '/api/planner/$': typeof ApiPlannerSplatRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -303,6 +348,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -316,6 +362,10 @@ export interface FileRouteTypes {
     | '/app/time'
     | '/app/triage'
     | '/invite/accept'
+    | '/oauth/authorize'
+    | '/oauth/consent'
+    | '/oauth/revoke'
+    | '/oauth/token'
     | '/app/'
     | '/api/planner/$'
     | '/api/v1/$'
@@ -335,6 +385,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -346,6 +397,10 @@ export interface FileRouteTypes {
     | '/app/time'
     | '/app/triage'
     | '/invite/accept'
+    | '/oauth/authorize'
+    | '/oauth/consent'
+    | '/oauth/revoke'
+    | '/oauth/token'
     | '/app'
     | '/api/planner/$'
     | '/api/v1/$'
@@ -366,6 +421,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/reset-password'
     | '/signup'
+    | '/api/mcp'
     | '/api/v1'
     | '/app/agents'
     | '/app/create-workspace'
@@ -379,6 +435,10 @@ export interface FileRouteTypes {
     | '/app/time'
     | '/app/triage'
     | '/invite/accept'
+    | '/oauth/authorize'
+    | '/oauth/consent'
+    | '/oauth/revoke'
+    | '/oauth/token'
     | '/app/'
     | '/api/planner/$'
     | '/api/v1/$'
@@ -400,8 +460,13 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiV1Route: typeof ApiV1RouteWithChildren
   InviteAcceptRoute: typeof InviteAcceptRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  OauthConsentRoute: typeof OauthConsentRoute
+  OauthRevokeRoute: typeof OauthRevokeRoute
+  OauthTokenRoute: typeof OauthTokenRoute
   ApiPlannerSplatRoute: typeof ApiPlannerSplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
@@ -448,6 +513,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1': {
@@ -546,6 +618,34 @@ declare module '@tanstack/react-router' {
       path: '/invite/accept'
       fullPath: '/invite/accept'
       preLoaderRoute: typeof InviteAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/revoke': {
+      id: '/oauth/revoke'
+      path: '/oauth/revoke'
+      fullPath: '/oauth/revoke'
+      preLoaderRoute: typeof OauthRevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/token': {
+      id: '/oauth/token'
+      path: '/oauth/token'
+      fullPath: '/oauth/token'
+      preLoaderRoute: typeof OauthTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/planner/$': {
@@ -712,21 +812,16 @@ const rootRouteChildren: RootRouteChildren = {
   McpRoute: McpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiV1Route: ApiV1RouteWithChildren,
   InviteAcceptRoute: InviteAcceptRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
+  OauthConsentRoute: OauthConsentRoute,
+  OauthRevokeRoute: OauthRevokeRoute,
+  OauthTokenRoute: OauthTokenRoute,
   ApiPlannerSplatRoute: ApiPlannerSplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

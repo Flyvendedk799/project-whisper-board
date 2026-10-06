@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentGuideText, MCP_INSTRUCTIONS, WORKFLOW_RULES } from "./agent-guide";
+import { createPlannerMcpServer } from "./create-server";
+import type { PlannerToolPorts } from "./ports";
 import {
   REST_API_BASE,
   restUrlPath,
@@ -17,17 +19,23 @@ import { toolDescription, toolShape } from "./tool-schema";
 const root = process.cwd();
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
-/** The names `server.ts` registers: `server.tool("name", ...` or with the name on the next line. */
+const noopPorts: PlannerToolPorts = {
+  mode: "stdio",
+  planner: { get: async () => ({}), post: async () => ({}) },
+  account: { get: async () => ({}), request: async () => ({}) },
+  resolveAgent: (id) => id,
+  rememberClaim: () => {},
+};
+
+/** Names registered via createPlannerMcpServer / registerPlannerTools (in-memory). */
 function registeredTools(): string[] {
-  return [...read("src/mcp/server.ts").matchAll(/server\.tool\(\s*"([a-z0-9_]+)"/g)].map(
-    (match) => match[1],
-  );
+  return createPlannerMcpServer(noopPorts).registeredTools;
 }
 
 const catalogNames = TOOL_CATALOG.map((tool) => tool.name);
 const skill = read(".agents/skills/ai-planner/SKILL.md").replace(/\r\n/g, "\n");
 
-describe("tool catalog and server.ts", () => {
+describe("tool catalog and register-tools", () => {
   it("registers every tool once", () => {
     const names = registeredTools();
     expect(names.length).toBeGreaterThan(0);
@@ -39,10 +47,10 @@ describe("tool catalog and server.ts", () => {
     expect(missing, `Add to src/mcp/tool-catalog.ts: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("has a server.tool registration for every catalog entry", () => {
+  it("has a registration for every catalog entry", () => {
     const registered = registeredTools();
     const orphans = catalogNames.filter((name) => !registered.includes(name));
-    expect(orphans, `In the catalog but not in server.ts: ${orphans.join(", ")}`).toEqual([]);
+    expect(orphans, `In the catalog but not registered: ${orphans.join(", ")}`).toEqual([]);
   });
 
   it("lists each tool once", () => {

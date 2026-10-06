@@ -17,6 +17,15 @@ people file); a ticket can be put on a plan as a task. This skill is how an agen
 
 ## Authentication
 
+### Hosted MCP (recommended for remote agents)
+
+Point your client at `https://boared.online/api/mcp` (Streamable HTTP). The client
+opens a browser login; a workspace **admin** approves scopes. No `cpk_` key is
+embedded in config. See `docs/hosted-mcp.md`.
+
+### Local stdio / REST API keys
+
+
 Create an API key in Boared: **Settings -> API keys** (reaches the planner and
 the rest of the workspace) or, for a key that only reaches the planner,
 **Plan options -> Planner API keys**. Keys start with `cpk_`. Supply it as:
