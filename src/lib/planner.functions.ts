@@ -411,6 +411,7 @@ export const updatePlan = createServerFn({ method: "POST" })
         githubBase: z.string().max(200).nullable().optional(),
         githubWorkMode: workModeField.nullable().optional(),
         githubWorkBranch: z.string().max(200).nullable().optional(),
+        clientsCanView: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -436,6 +437,7 @@ export const updatePlan = createServerFn({ method: "POST" })
         ...(fields.githubWorkBranch !== undefined && {
           github_work_branch: fields.githubWorkBranch?.trim() || null,
         }),
+        ...(fields.clientsCanView !== undefined && { clients_can_view: fields.clientsCanView }),
       };
 
       if (fields.githubWorkMode !== undefined || fields.githubWorkBranch !== undefined) {

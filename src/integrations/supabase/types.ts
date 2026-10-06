@@ -2614,6 +2614,7 @@ export type Database = {
       }
       plans: {
         Row: {
+          clients_can_view: boolean
           created_at: string
           created_by: string | null
           description: string | null
@@ -2629,6 +2630,7 @@ export type Database = {
           github_work_mode: string | null
         }
         Insert: {
+          clients_can_view?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2644,6 +2646,7 @@ export type Database = {
           github_work_mode?: string | null
         }
         Update: {
+          clients_can_view?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2727,6 +2730,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      can_view_plan: {
+        Args: { _plan_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
