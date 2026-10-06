@@ -14,7 +14,7 @@
   <h2>You've been invited!</h2>
   <p>{{ .Data.inviter_name }} has invited you to join {{ if .Data.project_name }}the project <strong>{{ .Data.project_name }}</strong>{{ else }}<strong>{{ .Data.workspace_name }}</strong>{{ end }} on Boared.</p>
   <p>Click the button below to accept the invitation and set up your account:</p>
-  <p><a href="{{ .ConfirmationURL }}" class="button">Accept Invitation</a></p>
+  <p><a href="{{ .SiteURL }}/auth/v1/verify?token={{ .TokenHash }}&type=invite&redirect_to={{ .RedirectTo }}" class="button">Accept Invitation</a></p>
   <div class="footer">
     <p>If you didn't expect this invitation, you can safely ignore this email.</p>
     <p>&copy; Boared. All rights reserved.</p>

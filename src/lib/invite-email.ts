@@ -20,7 +20,9 @@ export type InviteEmail = { subject: string; text: string; html: string };
 
 /** Where an invite lands: the accept page, carrying the project when there is one. */
 export function inviteAcceptPath(projectId?: string | null): string {
-  return projectId ? `/invite/accept?project=${encodeURIComponent(projectId)}` : "/invite/accept";
+  return projectId
+    ? `/app/projects/${encodeURIComponent(projectId)}?invite_prompt=true`
+    : "/app?invite_prompt=true";
 }
 
 function clean(value: string | null | undefined): string {

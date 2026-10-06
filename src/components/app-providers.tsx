@@ -12,6 +12,8 @@ import { reportErrors } from "@/lib/reporting.functions";
  * Everything the whole app needs mounted exactly once, in the order it needs
  * mounting: query cache, then theme (so the toggle can read it), then auth.
  */
+import { InvitePasswordPopup } from "@/features/auth/invite-password-popup";
+
 export function AppProviders({
   queryClient,
   children,
@@ -31,6 +33,7 @@ export function AppProviders({
             closeButton
             mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 8px)", left: 12, right: 12 }}
           />
+          <InvitePasswordPopup />
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
