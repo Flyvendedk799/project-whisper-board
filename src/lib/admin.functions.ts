@@ -46,6 +46,31 @@ export const inviteClient = createServerFn({ method: "POST" })
     if (data.fullName) meta.full_name = data.fullName;
     if (data.projectId) meta.project_id = data.projectId;
 
+    const { data: inviter } = await a
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", context.userId)
+      .maybeSingle();
+    meta.inviter_name = inviter?.full_name || inviter?.email || "Someone";
+
+    const { data: workspace } = await a
+      .from("workspaces")
+      .select("name")
+      .eq("id", data.workspaceId)
+      .maybeSingle();
+    meta.workspace_name = workspace?.name || "a workspace";
+
+    if (data.projectId) {
+      const { data: project } = await a
+        .from("projects")
+        .select("title")
+        .eq("id", data.projectId)
+        .maybeSingle();
+      if (project?.title) {
+        meta.project_name = project.title;
+      }
+    }
+
     const { data: invited, error: inviteErr } = await a.auth.admin.inviteUserByEmail(data.email, {
       redirectTo,
       data: meta,
