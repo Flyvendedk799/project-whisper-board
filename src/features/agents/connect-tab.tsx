@@ -8,10 +8,11 @@ import { cn } from "@/lib/utils";
 import { CodeBlock, type CodeDownload } from "./code-block";
 import { hostedMcpSnippets, mcpSnippets, REPO_ZIP_URL, type McpSnippets } from "./connect-snippets";
 
-type Client = "claude" | "cursor" | "antigravity" | "rest";
+type Client = "claude" | "codex" | "cursor" | "antigravity" | "rest";
 
 const CLIENTS: Array<{ id: Client; label: string }> = [
   { id: "claude", label: "Claude Code" },
+  { id: "codex", label: "Codex" },
   { id: "cursor", label: "Cursor" },
   { id: "antigravity", label: "Antigravity" },
   { id: "rest", label: "No MCP (REST)" },
@@ -53,6 +54,12 @@ function clientSnippet(
         caption: "Run in a terminal",
         code: snippets.claudeCode,
         hint: "Adds the server for every project. Use --scope project to share it through .mcp.json instead.",
+      };
+    case "codex":
+      return {
+        caption: "Run in a terminal",
+        code: snippets.codex,
+        hint: "Writes [mcp_servers.consflow-planner] to ~/.codex/config.toml. On Windows, use npx.cmd in place of npx.",
       };
     case "cursor":
       return {

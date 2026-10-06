@@ -1,1 +1,23 @@
-<h2>You've been invited!</h2><p>{{ .Data.inviter_name }} has invited you to join {{ if .Data.project_name }}the project <strong>{{ .Data.project_name }}</strong>{{ else }}<strong>{{ .Data.workspace_name }}</strong>{{ end }} on Boared.</p><p><a href="{{ .ConfirmationURL }}">Accept Invite</a></p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>You've been invited!</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h2 { color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .button { display: inline-block; padding: 10px 20px; background-color: #000; color: #fff !important; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
+    .footer { margin-top: 40px; font-size: 12px; color: #888; text-align: center; }
+  </style>
+</head>
+<body>
+  <h2>You've been invited!</h2>
+  <p>{{ .Data.inviter_name }} has invited you to join {{ if .Data.project_name }}the project <strong>{{ .Data.project_name }}</strong>{{ else }}<strong>{{ .Data.workspace_name }}</strong>{{ end }} on Boared.</p>
+  <p>Click the button below to accept the invitation and set up your account:</p>
+  <p><a href="{{ .ConfirmationURL }}" class="button">Accept Invitation</a></p>
+  <div class="footer">
+    <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+    <p>&copy; Boared. All rights reserved.</p>
+  </div>
+</body>
+</html>
