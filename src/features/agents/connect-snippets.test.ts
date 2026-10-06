@@ -27,12 +27,22 @@ describe("mcpSnippets", () => {
 
   it("points every client at this instance and the local checkout", () => {
     expect(snippets.apiUrl).toBe("https://boared.example/api/planner");
-    for (const text of [snippets.claudeCode, snippets.antigravity, snippets.cursor]) {
+    for (const text of [
+      snippets.claudeCode,
+      snippets.codex,
+      snippets.antigravity,
+      snippets.cursor,
+    ]) {
       expect(text).toContain("/srv/boared/src/mcp/server.ts");
     }
     expect(snippets.claudeCode).toContain("PLANNER_API_URL=https://boared.example/api/planner");
     expect(snippets.claudeCode.startsWith(`claude mcp add --scope user ${MCP_SERVER_NAME}`)).toBe(
       true,
+    );
+    expect(snippets.codex.startsWith(`codex mcp add ${MCP_SERVER_NAME}`)).toBe(true);
+    expect(snippets.codex).toContain("--env PLANNER_API_URL=https://boared.example/api/planner");
+    expect(snippets.codex).toContain(
+      "-- npx --prefix /srv/boared tsx /srv/boared/src/mcp/server.ts",
     );
     expect(snippets.antigravity).toBe(
       `agy mcp add ${MCP_SERVER_NAME} npx --prefix /srv/boared tsx /srv/boared/src/mcp/server.ts`,
