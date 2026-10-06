@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, StatusPill } from "@/components/app-shell";
 import { QueryState } from "@/components/query-state";
@@ -8,6 +10,9 @@ import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { markNotificationsRead } from "@/lib/notifications.functions";
 import { notificationListQuery } from "@/data/notifications";
+import { workspacePeopleQuery } from "@/data/projects";
+import { PersonAvatar, type AvatarPerson } from "@/components/person-avatar";
+import { notificationLinkTarget } from "@/lib/notification-links";
 import { qk } from "@/data/keys";
 import { NOTIFICATION_KIND_LABEL } from "@/data/enums";
 import { formatRelative } from "@/lib/utils-format";
@@ -20,41 +25,73 @@ const INBOX_BUTTON =
   "h-7 px-2.5 text-[13px] max-md:h-11 max-md:flex-1 max-md:border max-md:border-input max-md:text-sm";
 
 function InboxOpenLink({ link, onOpen }: { link: string; onOpen: () => void }) {
-  const ticket = /^\/app\/tickets\/([^/?#]+)/.exec(link);
-  if (ticket) {
-    return (
-      <Button variant="ghost" size="sm" className={INBOX_BUTTON} asChild>
-        <Link to="/app/tickets/$ticketId" params={{ ticketId: ticket[1] }} onClick={onOpen}>
-          Open
-        </Link>
-      </Button>
-    );
-  }
-  const project = /^\/app\/projects\/([^/?#]+)/.exec(link);
-  if (project) {
-    return (
-      <Button variant="ghost" size="sm" className={INBOX_BUTTON} asChild>
-        <Link to="/app/projects/$projectId" params={{ projectId: project[1] }} onClick={onOpen}>
-          Open
-        </Link>
-      </Button>
-    );
-  }
-  if (link.startsWith("/app")) {
-    return (
-      <Button variant="ghost" size="sm" className={INBOX_BUTTON} asChild>
-        <Link to={link as "/app"} onClick={onOpen}>
-          Open
-        </Link>
-      </Button>
-    );
-  }
-  return null;
+  const target = notificationLinkTarget(link);
+  if (!target) return null;
+  const open = (() => {
+    switch (target.kind) {
+      case "ticket":
+        return (
+          <Link to="/app/tickets/$ticketId" params={{ ticketId: target.ticketId }} onClick={onOpen}>
+            Open
+          </Link>
+        );
+      case "project":
+        return (
+          <Link
+            to="/app/projects/$projectId"
+            params={{ projectId: target.projectId }}
+            search={{ tab: target.tab }}
+            onClick={onOpen}
+          >
+            Open
+          </Link>
+        );
+      case "plan":
+        return (
+          <Link
+            to="/app/planner/$planId"
+            params={{ planId: target.planId }}
+            search={{ task: target.task }}
+            onClick={onOpen}
+          >
+            Open
+          </Link>
+        );
+      case "app":
+        return (
+          <Link to={target.path as "/app"} onClick={onOpen}>
+            Open
+          </Link>
+        );
+    }
+  })();
+  return (
+    <Button variant="ghost" size="sm" className={INBOX_BUTTON} asChild>
+      {open}
+    </Button>
+  );
+}
+
+function InboxActor({ person }: { person: AvatarPerson | undefined }) {
+  if (person) return <PersonAvatar person={person} className="max-md:mt-0.5" />;
+  return (
+    <span
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground max-md:mt-0.5"
+      aria-hidden="true"
+    >
+      <Bell className="h-3.5 w-3.5" />
+    </span>
+  );
 }
 
 function InboxPage() {
-  const { user } = useAuth();
+  const { user, workspaceId } = useAuth();
   const notifications = useQuery({ ...notificationListQuery(), enabled: Boolean(user) });
+  const people = useQuery(workspacePeopleQuery(workspaceId));
+  const peopleById = useMemo(
+    () => new Map((people.data ?? []).map((person) => [person.id, person])),
+    [people.data],
+  );
 
   const markRead = useServerAction(useServerFn(markNotificationsRead), {
     label: "notifications.markRead",
@@ -117,6 +154,11 @@ function InboxPage() {
                         role="img"
                       />
                     ) : null}
+                    <InboxActor
+                      person={
+                        notification.actor_id ? peopleById.get(notification.actor_id) : undefined
+                      }
+                    />
                     <div className="min-w-0 flex-1 max-md:basis-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="break-words text-sm font-medium leading-snug">
