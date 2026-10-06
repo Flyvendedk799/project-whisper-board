@@ -15,7 +15,12 @@ import { normalizeScopes } from "@/lib/api-scopes";
 import { isOrphanPullRequestRef, isOrphanTicketRef, scrubCommentIfUnlinked } from "@/lib/plan-refs";
 import { MAX_STEP_DEPTH, splitDescriptionSteps, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import { applyPlanMarkdown, attachmentPathsWhere, purgePlanFiles } from "@/lib/plan-import";
-import { isPlanAttachmentPath, PLAN_ATTACHMENT_BUCKET, validateFileMeta } from "@/lib/upload";
+import {
+  effectiveMimeType,
+  isPlanAttachmentPath,
+  PLAN_ATTACHMENT_BUCKET,
+  validateFileMeta,
+} from "@/lib/upload";
 import {
   eventKindForStatus,
   placeTask,
@@ -2034,15 +2039,9 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
         planId = requireFound(planRow, "plan").id;
       }
 
-      const problem = validateFileMeta({
-        name: data.fileName,
-        size: data.sizeBytes,
-        type: data.mimeType ?? "",
-      });
-      if (problem) {
-        await purgePlanFiles([data.storagePath]);
-        throw new AppError("upload_invalid", problem, { status: 400 });
-      }
+      // Ownership first: the cleanup below runs with the service role, so it must only ever
+      // touch a path this caller uploaded for this plan and task. A path that is not theirs is
+      // refused without touching storage at all.
       if (
         !isPlanAttachmentPath(data.storagePath, {
           userId,
@@ -2053,6 +2052,16 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
         throw new AppError("upload_invalid", "That file was uploaded to the wrong place.", {
           status: 400,
         });
+      }
+      const mimeType = effectiveMimeType(data.fileName, data.mimeType) || null;
+      const problem = validateFileMeta({
+        name: data.fileName,
+        size: data.sizeBytes,
+        type: mimeType ?? "",
+      });
+      if (problem) {
+        await purgePlanFiles([data.storagePath]);
+        throw new AppError("upload_invalid", problem, { status: 400 });
       }
 
       // A marked-up copy of a file on a note stays on that note.
@@ -2076,7 +2085,7 @@ export const registerPlanAttachment = createServerFn({ method: "POST" })
           uploader_id: userId,
           storage_path: data.storagePath,
           file_name: data.fileName,
-          mime_type: data.mimeType ?? null,
+          mime_type: mimeType,
           size_bytes: data.sizeBytes,
           source_attachment_id: data.sourceAttachmentId ?? null,
           width: data.width ?? null,

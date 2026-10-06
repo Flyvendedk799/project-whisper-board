@@ -19,7 +19,7 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
 /** The names `server.ts` registers: `server.tool("name", ...` or with the name on the next line. */
 function registeredTools(): string[] {
-  return [...read("src/mcp/server.ts").matchAll(/server\.tool\(\s*"([a-z_]+)"/g)].map(
+  return [...read("src/mcp/server.ts").matchAll(/server\.tool\(\s*"([a-z0-9_]+)"/g)].map(
     (match) => match[1],
   );
 }

@@ -7,7 +7,12 @@ import { useAuth } from "@/components/auth-provider";
 import { qk } from "@/data/keys";
 import { toUserMessage } from "@/lib/errors";
 import { registerPlanAttachment } from "@/lib/planner.functions";
-import { attachmentKindOf, partitionUploadable, planAttachmentPath } from "@/lib/upload";
+import {
+  attachmentKindOf,
+  effectiveMimeType,
+  partitionUploadable,
+  planAttachmentPath,
+} from "@/lib/upload";
 import { uploadPlanFile } from "./plan-upload";
 
 export interface UploadItem {
@@ -132,7 +137,7 @@ export function PlanUploadsProvider({
                 ...(taskId ? { taskId } : { planId }),
                 storagePath: path,
                 fileName: name,
-                mimeType: file.type || null,
+                mimeType: effectiveMimeType(name, file.type) || null,
                 sizeBytes: file.size,
                 sourceAttachmentId: options.sourceAttachmentId ?? null,
                 width: options.width ?? null,

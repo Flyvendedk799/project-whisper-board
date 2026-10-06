@@ -37,8 +37,8 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 1. **Read before you touch anything.** `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
    A task carries description, acceptance criteria, features, steps, open questions, shared files and tags.
    The plan carries `work_target` and its own shared files (a brief, a spec) that apply to every task: they are
-   `attachments` on the plan in `get_plan`, and `list_plan_attachments` / `view_plan_attachment` open them. Read
-   them before you start.
+   `attachments` on the plan in `get_plan`, and `list_plan_attachments` / `view_plan_attachment` open them
+   (`read_attachment_text` reads a Markdown or text file as text). Read them before you start.
 2. **Tickets are not tasks.** With an account key, `list_tickets` (`status: open`) and `get_ticket` show what
    people filed. `create_task_from_ticket` puts one on a plan (it does nothing twice), and then you claim and work
    the task like any other. Keep the ticket in step with `update_ticket`: `in_progress` when you start,
@@ -80,15 +80,15 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 Server name: `consflow-planner`. `agent_id` is optional everywhere: it defaults to the agent that claimed a task in
 the session.
 
-| Group              | Tools                                                                                                                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment`, `list_plan_attachments`, `view_plan_attachment` |
-| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                                              |
-| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                                       |
-| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                                             |
-| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`                                                    |
-| GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                                              |
-| Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`                  |
+| Group              | Tools                                                                                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orient             | `agent_guide`, `list_plans`, `get_plan`, `list_available_tasks`, `get_task`, `list_task_attachments`, `view_task_attachment`, `list_plan_attachments`, `view_plan_attachment`, `read_attachment_text` |
+| Work a task        | `claim_task`, `start_task`, `report_progress`, `complete_task`, `block_task`, `unclaim_task`, `add_task_comment`                                                                                      |
+| Questions          | `ask_question`, `list_questions`, `answer_question`, `dismiss_question`                                                                                                                               |
+| Features and steps | `add_task_features`, `update_task_feature`, `add_task_step`, `add_task_steps`, `update_task_step`                                                                                                     |
+| Authoring          | `create_plan`, `import_plan_markdown`, `set_plan_status`, `create_section`, `update_section`, `create_task`, `update_task`, `upload_attachment_text`, `upload_attachment_base64`                      |
+| GitHub             | `github_status`, `create_pull_request`, `check_pr_status`, `list_plan_pull_requests`, `merge_plan_pull_requests`                                                                                      |
+| Workspace          | `get_workspace`, `list_projects`, `get_project`, `update_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket`, `create_task_from_ticket`                                          |
 
 Key parameters:
 
@@ -100,6 +100,14 @@ Key parameters:
 - `create_task(plan_id, section_id, title, description?, priority?, complexity?, tags?, color?, features?[], acceptance_criteria?[], depends_on?[], status?)`,
   `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?)`.
 - `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
+- `upload_attachment_text(plan_id | task_id, file_name, text, mime_type?, shared_with_agents?, purpose?, idempotency_key?)`:
+  Markdown or plain text up to 256 KiB, on the plan itself (`plan_id`) or a task (`task_id`), never both.
+- `upload_attachment_base64(plan_id | task_id, data_base64 | file_path, file_name?, mime_type?, shared_with_agents?, purpose?, idempotency_key?)`:
+  PNG, JPEG, WebP, GIF, PDF, Markdown or plain text up to 8 MiB. `file_path` is read on the machine running the MCP
+  server. The bytes must match the type; SVG and HTML are refused. The same `idempotency_key` with the same file
+  returns the first attachment; with a different file it is a 409.
+- `read_attachment_text(attachment_id, offset?, limit?)`: a page of a shared text file (default 64 KiB, at most
+  256 KiB, in bytes); keep passing `next_offset` until `eof`. `sha256` is of the whole file.
 - `create_pull_request(task_id, title, head_branch?, body?, repo?, base_branch?)`: errors with a clear message when the plan works on `base`.
 - `get_workspace()`, `list_projects()`, `get_project(project_id)`,
   `update_project(project_id, title?, description?, status?, github_repo?, github_default_branch?)` (status: discovery,
@@ -123,6 +131,10 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | `GET tasks/:task_id/questions`                       | `?status=` (all by default)                                                                                                                 |
 | `GET plans/:plan_id/attachments`                     | files shared with agents on the plan itself; `GET plans/:plan_id/attachments/:attachment_id` for one                                        |
 | `GET tasks/:task_id/attachments`                     | files shared with agents on a task; `GET tasks/:task_id/attachments/:attachment_id` for one                                                 |
+| `POST attachments/text`                              | `{ plan_id \| task_id, file_name, mime_type: text/markdown \| text/plain, text, shared_with_agents?, purpose?, idempotency_key? }`; 201     |
+| `POST attachments/base64`                            | same, with `data_base64` instead of `text`; png, jpeg, webp, gif, pdf, markdown, plain text; 8 MiB decoded                                  |
+| `GET attachments/:attachment_id/text`                | `?offset=&limit=` in bytes: `{ text, offset, next_offset, total_bytes, eof, sha256 }` for a shared text file                                |
+| `POST attachments/:attachment_id/download`           | a download link for a shared file that expires in five minutes                                                                              |
 | `POST agents/register`                               | `{ name, provider, model? }` -> agent `id` (same agent comes back as the same row)                                                          |
 | `POST tasks/:task_id/claim`                          | `{ agent_id }`; 409 if not available                                                                                                        |
 | `POST tasks/:task_id/start`                          |                                                                                                                                             |
