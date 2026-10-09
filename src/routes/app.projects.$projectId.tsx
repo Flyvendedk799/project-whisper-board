@@ -52,7 +52,12 @@ import { ProjectPlanProgress } from "@/features/projects/project-plan-progress";
 import { TimeSheet } from "@/features/time/time-sheet";
 import { TicketRow } from "@/features/tickets/ticket-row";
 import { useServerAction } from "@/lib/use-server-action";
-import { addProjectMember, inviteClient, setProjectMemberRole } from "@/lib/admin.functions";
+import {
+  addProjectMember,
+  inviteClient,
+  sendInviteFollowUp,
+  setProjectMemberRole,
+} from "@/lib/admin.functions";
 import { setProjectStatus } from "@/lib/tickets.functions";
 import {
   projectMembersQuery,
@@ -602,6 +607,14 @@ function PeoplePanel({
                       <StatusPill>
                         {ROLE_LABEL[member.role as keyof typeof ROLE_LABEL] ?? member.role}
                       </StatusPill>
+                      {canInvite && pending && workspaceId && (
+                        <FollowUpButton
+                          workspaceId={workspaceId}
+                          projectId={projectId}
+                          userId={member.user_id}
+                          name={member.profile?.full_name || member.profile?.email || "invitee"}
+                        />
+                      )}
                       {canToggle && (
                         <Button
                           variant="outline"
@@ -629,6 +642,38 @@ function PeoplePanel({
         }}
       </QueryState>
     </div>
+  );
+}
+
+/** A polite reminder email to someone invited to the project who hasn't signed in yet. */
+function FollowUpButton({
+  workspaceId,
+  projectId,
+  userId,
+  name,
+}: {
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  name: string;
+}) {
+  const followUp = useServerAction(useServerFn(sendInviteFollowUp), {
+    label: "admin.sendInviteFollowUp",
+    success: `Opfølgning sendt til ${name}`,
+  });
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="max-md:order-last max-md:w-full"
+      disabled={followUp.busy}
+      aria-label={`Send opfølgning til ${name}`}
+      onClick={() => followUp.fire({ workspaceId, projectId, userId })}
+    >
+      {followUp.busy ? "Sender…" : "Send opfølgning"}
+    </Button>
   );
 }
 

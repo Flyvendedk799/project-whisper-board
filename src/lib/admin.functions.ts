@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { assertWorkspaceAdmin, assertWorkspaceInviter } from "@/lib/workspace.functions";
 import { appUrl } from "@/lib/app-origin";
+import { followUpEmail } from "@/lib/followup-email";
 import { inviteAcceptPath, inviteEmail } from "@/lib/invite-email";
 import { sendAccountEmail } from "@/lib/notifications.functions";
 
@@ -275,6 +276,93 @@ export const resendInvite = createServerFn({ method: "POST" })
     const { error: resetErr } = await a.auth.resetPasswordForEmail(user.email!, { redirectTo });
     if (resetErr) throw new Error(resetErr.message);
     return { ok: true, via: "password_link" as const };
+  });
+
+/** One reminder per person per project in this window, so a double click or a nervous Monday can't nag. */
+const FOLLOW_UP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A polite reminder ("opfølgning") to someone on a project who has been invited
+ * but never signed in. Unlike `resendInvite` this does not touch their account:
+ * it is a plain email through the notification provider and the Outbox, linking
+ * to the project.
+ */
+export const sendInviteFollowUp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        projectId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    const { data: member } = await a
+      .from("project_members")
+      .select("role")
+      .eq("project_id", data.projectId)
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (!member) throw new Error("Not found: that person is not on this project");
+    if (member.role !== "client" && inviterRole !== "admin") {
+      throw new Error("Forbidden: only admins can follow up with that role");
+    }
+
+    const { data: found, error: userErr } = await a.auth.admin.getUserById(data.userId);
+    if (userErr || !found?.user?.email) throw new Error("Not found: no email for that person");
+    const user = found.user;
+    if (user.last_sign_in_at) {
+      throw new Error("They have already joined, so there is nothing to follow up on.");
+    }
+
+    const since = new Date(Date.now() - FOLLOW_UP_COOLDOWN_MS).toISOString();
+    const { data: recent } = await a
+      .from("outbound_messages")
+      .select("id")
+      .eq("template", "invite_followup")
+      .eq("to_user_id", data.userId)
+      .eq("related_id", data.projectId)
+      .eq("status", "sent")
+      .gte("created_at", since)
+      .limit(1);
+    if (recent?.length) {
+      throw new Error("A reminder was already sent in the last 24 hours. Give them a little time.");
+    }
+
+    const [{ data: sender }, { data: recipient }, { data: workspace }, { data: project }] =
+      await Promise.all([
+        a.from("profiles").select("full_name, email").eq("id", context.userId).maybeSingle(),
+        a.from("profiles").select("full_name").eq("id", data.userId).maybeSingle(),
+        a.from("workspaces").select("name").eq("id", data.workspaceId).maybeSingle(),
+        a.from("projects").select("title").eq("id", data.projectId).maybeSingle(),
+      ]);
+
+    const message = followUpEmail({
+      senderName: sender?.full_name || sender?.email,
+      recipientName: recipient?.full_name,
+      workspaceName: workspace?.name,
+      projectTitle: project?.title,
+      url: appUrl(inviteAcceptPath(data.projectId)),
+    });
+    const delivered = await sendAccountEmail({
+      to: user.email!,
+      toUserId: data.userId,
+      ...message,
+      template: "invite_followup",
+      relatedType: "project",
+      relatedId: data.projectId,
+      workspaceId: data.workspaceId,
+    });
+    if (!delivered) {
+      throw new Error("The email couldn't be sent. Check the Outbox for the reason.");
+    }
+    return { ok: true };
   });
 
 export const setProjectMemberRole = createServerFn({ method: "POST" })
