@@ -277,22 +277,22 @@ export const createPlan = createServerFn({ method: "POST" })
         if (!githubBase) githubBase = project?.github_default_branch ?? null;
       }
 
-      const { data: plan, error } = await supabase
-        .from("plans")
-        .insert({
-          workspace_id: membership.workspace_id,
-          title: data.title,
-          description: data.description ?? null,
-          project_id: data.projectId ?? null,
-          github_repo: githubRepo,
-          github_base: githubBase,
-          github_work_mode: data.githubWorkMode ?? null,
-          github_work_branch: data.githubWorkBranch?.trim() || null,
-          created_by: userId,
-          clients_can_view: clientsCanViewDefaultForRole(membership.role),
-        })
-        .select("id")
-        .single();
+      // No RETURNING: the select policy runs can_view_plan(), which can't see a row
+      // inserted by the same statement, so `.select()` here fails RLS.
+      const plan = { id: crypto.randomUUID() };
+      const { error } = await supabase.from("plans").insert({
+        id: plan.id,
+        workspace_id: membership.workspace_id,
+        title: data.title,
+        description: data.description ?? null,
+        project_id: data.projectId ?? null,
+        github_repo: githubRepo,
+        github_base: githubBase,
+        github_work_mode: data.githubWorkMode ?? null,
+        github_work_branch: data.githubWorkBranch?.trim() || null,
+        created_by: userId,
+        clients_can_view: clientsCanViewDefaultForRole(membership.role),
+      });
       if (error) throw error;
 
       await supabase.from("plan_events").insert({
@@ -340,20 +340,19 @@ export const createPlanFromTickets = createServerFn({ method: "POST" })
       if ((projects ?? []).length !== projectIds.length)
         throw new AppError("projects_missing", "A selected project is not available.");
       const oneProject = projectIds.length === 1 ? projects![0] : null;
-      const { data: plan, error: planError } = await supabase
-        .from("plans")
-        .insert({
-          workspace_id: membership.workspace_id,
-          title: data.title,
-          description: `Created from ${ids.length} selected ticket${ids.length === 1 ? "" : "s"}.`,
-          project_id: oneProject?.id ?? null,
-          github_repo: oneProject?.github_repo ?? null,
-          github_base: oneProject?.github_default_branch ?? null,
-          created_by: userId,
-          clients_can_view: clientsCanViewDefaultForRole(membership.role),
-        })
-        .select("id")
-        .single();
+      // No RETURNING, same reason as plans.create.
+      const plan = { id: crypto.randomUUID() };
+      const { error: planError } = await supabase.from("plans").insert({
+        id: plan.id,
+        workspace_id: membership.workspace_id,
+        title: data.title,
+        description: `Created from ${ids.length} selected ticket${ids.length === 1 ? "" : "s"}.`,
+        project_id: oneProject?.id ?? null,
+        github_repo: oneProject?.github_repo ?? null,
+        github_base: oneProject?.github_default_branch ?? null,
+        created_by: userId,
+        clients_can_view: clientsCanViewDefaultForRole(membership.role),
+      });
       if (planError) throw planError;
       try {
         for (const [index, project] of (projects ?? []).entries()) {
