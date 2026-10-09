@@ -139,6 +139,9 @@ const TASK_TITLE_MAX = 200;
 const SECTION_TITLE_MAX = 100;
 const LONG_TEXT_MAX = 4000;
 const NOTE_MAX = 4000;
+/** Longest plain-Danish text of a step, and sentence of a task, that a client reads. */
+const STEP_CLIENT_TEXT_MAX = 300;
+const CLIENT_TASK_SUMMARY_MAX = 1000;
 
 /** `claimed` belongs to whoever (or whatever) picked the task up, so it is not on offer. */
 const STATUSES = ["backlog", "available", "in_progress", "in_review", "done", "blocked"] as const;
@@ -197,23 +200,41 @@ const colorField = z.union([z.string(), z.null()]).transform((value, ctx) => {
 const stepItems = z
   .array(
     z.union([
-      z.string().transform((text) => ({ text, depth: 0 })),
-      z.object({ text: z.string(), depth: z.number().optional() }).transform((item) => ({
-        text: item.text,
-        depth: item.depth ?? 0,
-      })),
+      z.string().transform((text) => ({ text, depth: 0, client_text: undefined })),
+      z
+        .object({
+          text: z.string(),
+          depth: z.number().optional(),
+          client_text: z.string().optional(),
+        })
+        .transform((item) => ({
+          text: item.text,
+          depth: item.depth ?? 0,
+          client_text: item.client_text,
+        })),
     ]),
   )
   .transform((items) =>
     items
-      .map((item) => ({
-        text: item.text.replace(/\s+/g, " ").trim().slice(0, STEP_TEXT_MAX),
-        depth: Math.max(0, Math.min(MAX_STEP_DEPTH, Math.round(item.depth))),
-      }))
+      .map((item) => {
+        const clientText = item.client_text
+          ?.replace(/\s+/g, " ")
+          .trim()
+          .slice(0, STEP_CLIENT_TEXT_MAX);
+        return {
+          text: item.text.replace(/\s+/g, " ").trim().slice(0, STEP_TEXT_MAX),
+          depth: Math.max(0, Math.min(MAX_STEP_DEPTH, Math.round(item.depth))),
+          ...(clientText && { client_text: clientText }),
+        };
+      })
       .filter((item) => item.text)
       .slice(0, 30),
   )
-  .pipe(z.array(z.object({ text: z.string(), depth: z.number() })).min(1));
+  .pipe(
+    z
+      .array(z.object({ text: z.string(), depth: z.number(), client_text: z.string().optional() }))
+      .min(1),
+  );
 
 const ref = z.string().min(1).max(80);
 
@@ -229,6 +250,8 @@ const createTaskSchema = z.object({
   complexity: z.preprocess(slug, z.enum(COMPLEXITIES)).optional(),
   tags: tagsField.optional(),
   color: colorField.optional(),
+  client_title: clipped(TASK_TITLE_MAX).optional(),
+  client_summary: clipped(CLIENT_TASK_SUMMARY_MAX).optional(),
   features: list(FEATURE_TEXT_MAX, 10).optional(),
   steps: list(STEP_TEXT_MAX, 15).optional(),
 });
@@ -243,6 +266,8 @@ const updateTaskSchema = z.object({
   complexity: z.preprocess(slug, z.enum(COMPLEXITIES)).nullable().optional(),
   tags: tagsField.optional(),
   color: colorField.optional(),
+  client_title: clippedOrEmpty(TASK_TITLE_MAX).optional(),
+  client_summary: clippedOrEmpty(CLIENT_TASK_SUMMARY_MAX).optional(),
 });
 
 const createSectionSchema = z.object({
@@ -326,6 +351,8 @@ const TASK_FIELDS = [
   "complexity",
   "tags",
   "color",
+  "client_title",
+  "client_summary",
 ] as const;
 const SECTION_FIELDS = [
   "title",
@@ -514,6 +541,7 @@ export function describeAction(action: Action, names: NameLookup = {}): string {
       const extras = [
         action.features && count(action.features.length, "feature"),
         action.steps && count(action.steps.length, "sub-step"),
+        action.client_title && `client title ${quote(action.client_title, 40)}`,
       ].filter(Boolean);
       return `Create task ${quote(action.title)} in ${section(action.sectionId)}${
         extras.length > 0 ? ` with ${extras.join(" and ")}` : ""
@@ -532,6 +560,11 @@ export function describeAction(action: Action, names: NameLookup = {}): string {
           (action.tags.length > 0 ? `set tags to ${action.tags.join(", ")}` : "clear the tags"),
         action.color !== undefined &&
           (action.color ? `set colour to ${colorLabel(action.color)}` : "clear the colour"),
+        action.client_title !== undefined &&
+          (action.client_title
+            ? `set the client title to ${quote(action.client_title)}`
+            : "clear the client title (hides it from clients)"),
+        action.client_summary !== undefined && "set the client summary",
       ].filter(Boolean);
       return `Update ${task(action.taskId)}: ${changes.join(", ")}`;
     }
@@ -580,12 +613,13 @@ export function describeAction(action: Action, names: NameLookup = {}): string {
 
 export const ACTION_VOCABULARY = [
   'Each action is an object with a "type". Refs (P1, S2, T3, F4, Q5) are the short names from the context; use only refs that appear there and never invent ids. Fields ending in ? are optional.',
-  '- {"type":"create_task","sectionId":"S1","title":"…","description"?:"markdown","status"?:"backlog|available|in_progress|in_review|done|blocked","priority"?:"low|medium|high|critical","complexity"?:"trivial|small|medium|large|epic","tags"?:["…"],"color"?:"red|orange|amber|green|teal|blue|violet|pink|slate","features"?:["…"],"steps"?:["…"]}',
-  '- {"type":"update_task","taskId":"T3", plus any of: "title","description","status","priority","complexity","tags","color"}  (only the fields that change)',
+  '- {"type":"create_task","sectionId":"S1","title":"…","description"?:"markdown","status"?:"backlog|available|in_progress|in_review|done|blocked","priority"?:"low|medium|high|critical","complexity"?:"trivial|small|medium|large|epic","tags"?:["…"],"color"?:"red|orange|amber|green|teal|blue|violet|pink|slate","client_title"?:"short plain Danish name for the client","client_summary"?:"one plain Danish sentence","features"?:["…"],"steps"?:["…"]}',
+  '- {"type":"update_task","taskId":"T3", plus any of: "title","description","status","priority","complexity","tags","color","client_title","client_summary"}  (only the fields that change)',
+  '  client_title is the task as a client reads it: a SHORT plain DANISH name, no jargon, ids, branches or code. Clients see a task ONLY when it has a client_title, so set it for tasks on a plan clients can see. client_summary is one optional plain Danish sentence. Send "" to clear.',
   '- {"type":"create_section","planId"?:"P1","title":"…","description"?:"…","goals"?:"…","intentions"?:"…","client_summary"?:"short plain Danish summary for the client","tags"?:["…"],"color"?:"…"}',
   '- {"type":"update_section","sectionId":"S1", plus any of: "title","description","goals","intentions","client_summary","tags","color"}',
   '- {"type":"add_features","taskId":"T3","items":["what the task must satisfy, one requirement each"]}',
-  '- {"type":"add_steps","taskId":"T3","featureId"?:"F2","items":["how to do it, one concrete sub-step each"]}',
+  '- {"type":"add_steps","taskId":"T3","featureId"?:"F2","items":["how to do it, one concrete sub-step each"]}  (an item may be {"text":"…","client_text"?:"the step in plain Danish for the client"}; clients see a step only when it has client_text)',
   '- {"type":"ask_question","taskId":"T3","body":"…","blocking"?:true}  (blocking only when the work cannot go on without the answer)',
   '- {"type":"answer_question","questionId":"Q1","answer":"…"}  (only for open questions you can answer from the context)',
   '- {"type":"add_comment","taskId":"T3","body":"…"}',

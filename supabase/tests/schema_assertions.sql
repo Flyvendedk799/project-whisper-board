@@ -1238,6 +1238,31 @@ begin
   end;
 end $$;
 
+-- Tasks reach a client only with client wording, and only in plain form.
+reset role;
+select title as agency_title from public.plan_tasks
+where id = 'eeeeeeee-0000-0000-0000-000000000010' \gset
+select assert(
+  jsonb_array_length(jsonb_path_query_array(
+    public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+    '$.sections[*].tasks[*]')) = 0,
+  'a task with no client title is not part of what a client sees'
+);
+update public.plan_tasks
+set client_title = 'Første del er klar', status = 'in_progress'
+where id = 'eeeeeeee-0000-0000-0000-000000000010';
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*]')) t
+   where t->>'title' = 'Første del er klar' and t->>'status' = 'in_progress') = 1
+  and position(lower(:'agency_title') in lower(
+        public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')::text)) = 0,
+  'a task with a client title shows with it and a plain status, never the agency wording'
+);
+
 -- Another workspace's user sees none of the client layer.
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(

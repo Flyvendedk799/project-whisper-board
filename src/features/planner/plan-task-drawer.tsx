@@ -36,6 +36,7 @@ import { TaskFeatures } from "./task-features";
 import { TaskProperties } from "./task-properties";
 import { TaskQuestions } from "./task-questions";
 import { TaskSteps } from "./task-steps";
+import { TaskClientLayer } from "./task-client-layer";
 import { TaskTechnicalContext } from "./task-technical-context";
 import type { PlanActions } from "./use-plan-actions";
 import { useNarrowViewport } from "./use-narrow-viewport";
@@ -371,6 +372,7 @@ function DrawerBody({
 
           <TaskFeatures task={task} actions={actions} />
           <TaskSteps task={task} actions={actions} />
+          <TaskClientLayer task={task} actions={actions} />
           <TaskQuestions task={task} actions={actions} />
           <TaskTechnicalContext task={task} actions={actions} />
           <TaskAttachments task={task} onOpenFile={setLightboxId} />

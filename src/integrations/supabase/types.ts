@@ -2770,6 +2770,7 @@ export type Database = {
           updated_at: string
           feature_id: string | null
           source: string
+          client_text: string | null
         }
         Insert: {
           created_at?: string
@@ -2783,6 +2784,7 @@ export type Database = {
           updated_at?: string
           feature_id?: string | null
           source?: string
+          client_text?: string | null
         }
         Update: {
           created_at?: string
@@ -2796,6 +2798,7 @@ export type Database = {
           updated_at?: string
           feature_id?: string | null
           source?: string
+          client_text?: string | null
         }
         Relationships: [
           {
@@ -2857,6 +2860,8 @@ export type Database = {
           ai_context_at: string | null
           blocked_from: Database["public"]["Enums"]["plan_task_status"] | null
           color: string | null
+          client_title: string | null
+          client_summary: string | null
         }
         Insert: {
           acceptance_criteria?: string | null
@@ -2893,6 +2898,8 @@ export type Database = {
           ai_context_at?: string | null
           blocked_from?: Database["public"]["Enums"]["plan_task_status"] | null
           color?: string | null
+          client_title?: string | null
+          client_summary?: string | null
         }
         Update: {
           acceptance_criteria?: string | null
@@ -2929,6 +2936,8 @@ export type Database = {
           ai_context_at?: string | null
           blocked_from?: Database["public"]["Enums"]["plan_task_status"] | null
           color?: string | null
+          client_title?: string | null
+          client_summary?: string | null
         }
         Relationships: [
           {

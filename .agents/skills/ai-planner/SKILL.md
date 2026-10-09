@@ -70,24 +70,62 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 10. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
     `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
 11. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
-12. **Keep the client summary current.** On plans clients can see, keep each section's `client_summary` up to date, in Danish
-    (see Client summary below).
+12. **Keep the client layer current.** On plans clients can see, keep each section's `client_summary` up to date and
+    give every task you author or finish a `client_title`, all in Danish (see Client layer below). A task with no
+    `client_title` is invisible to clients.
 
 `agent_guide` returns this workflow as text. The MCP server also sends it as its `instructions`.
 
-## Client summary
+## Client layer
 
-Every section has two layers. The **agency layer** (`description`, `goals`, `intentions`, tags, tasks) is where you and
-the team work and can be as technical as you like. The **client layer** is `client_summary`: the only text a client of a
-client-view plan sees, next to the section title, colour and automatic progress.
+A plan has two layers. The **agency layer** (`description`, `goals`, `intentions`, tags, tasks, steps, technical
+wording) is where you and the team work, and clients never see it. The **client layer** is what a client of a
+client-view plan reads: a board with one column per section and one plain-language card per task. It has four fields:
 
-- Write it in **Danish**, in plain language, 1-3 short sentences. Example: "Vi har bygget loginsiden, og næste skridt
-  er at teste den."
-- Describe the outcome and progress, not the implementation. No jargon, task ids, branch names, PR numbers or code.
-- Set it with `create_section` / `update_section` (`client_summary`; `""` clears it). It comes back on every section in
-  `get_plan`, and survives Markdown export and import (a `**Client summary**` block).
-- Update it when a section's state meaningfully changes (work starts, a milestone lands, the section is done).
+| Field            | Where           | Limit | What a client sees                                                                    |
+| ---------------- | --------------- | ----- | ------------------------------------------------------------------------------------- |
+| `client_summary` | section         | 2000  | 1-3 sentences on what is done and what comes next (the column's text)                 |
+| `client_title`   | task            | 200   | the task's card. **A task is shown to clients only when it has a `client_title`.**    |
+| `client_summary` | task            | 1000  | one optional sentence under the card title, explaining the task                       |
+| `client_text`    | step (sub-task) | 300   | the step as a line on the card. **A step is shown only when it has a `client_text`.** |
+
+All of them are nullable; `""` or `null` clears one. They come back on every section, task and step in `get_plan` and
+`get_task`.
+
+**How to write them**
+
+- **Danish**, plain words, short. A client is not a developer.
+- Say the **outcome**, not the implementation: what the client can now do or will get, not what you changed.
+- No jargon, task ids, branch names, PR numbers, file names or code.
+- Keep the agency wording where it is (`title`, `description`, `text`); the client text is a second, separate wording.
+
+Before and after:
+
+| Agency wording (what you write for the team)                                         | Client wording (what the client reads)                                                                                    |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| task `title`: "Change volatility to x to obtain improvements in gpu shader teardown" | `client_title`: "Shader-forbedringer"                                                                                     |
+| task `title`: "Refactor auth middleware, add refresh-token rotation (PR #41)"        | `client_title`: "Tryggere login"; `client_summary`: "Man bliver nu logget ud på en sikker måde, og login holder længere." |
+| step `text`: "Add index on orders(customer_id), migrate prod"                        | `client_text`: "Ordrelisten indlæses hurtigere"                                                                           |
+| section `description`: "Wire Stripe webhooks, idempotency keys, retry queue"         | section `client_summary`: "Betalingen virker nu. Næste skridt er at teste med rigtige kort."                              |
+
+**When to set them**
+
+- A task or step is **invisible to clients until it has a client text.** So when you author or finish tasks on a plan
+  clients can see, ALWAYS set `client_title` (and `client_text` on the steps worth showing). A task you leave without
+  one simply does not appear on the client board.
+- Set them with `create_section` / `update_section` (`client_summary`), `create_task` / `update_task`
+  (`client_title`, `client_summary`) and `add_task_step` / `update_task_step` (`client_text`). `add_task_steps` takes
+  `items` as `{ text, client_text? }` objects when you want to set it while adding many steps.
+- **Keep them current.** When status or meaning changes (work starts, a milestone lands, a task is done, scope shifts),
+  update the section `client_summary` and the affected `client_title` / `client_summary` / `client_text`, so a client
+  never reads something that is no longer true.
 - It only matters for plans clients can see; on other plans it is harmless and can be left empty.
+
+**Markdown.** Export and import carry the section `**Client summary**` block and, on each task, a `**Client title**`
+and `**Client summary**` block (sync only fills them in when they are blank, it never overwrites). **Step client text is
+not carried by Markdown**: steps are plain checklist lines, so a `replace` import creates steps without `client_text`
+(and the old ones go with the replaced tasks), and `sync` leaves existing steps' client text alone. Set it afterwards with
+`update_task_step`.
 
 ## Ids, tags, colours
 
@@ -119,11 +157,15 @@ Key parameters:
 - `report_progress(task_id, status?, steps_done?[], features_met?[], note?)`: ids are checked before anything is written.
 - `ask_question(task_id, body, blocking?)`, `answer_question(task_id, question_id, answer)`, `list_questions(plan_id | task_id, status?)`.
 - `add_task_features(task_id, items[] | text)`, `update_task_feature(task_id, feature_id, met?, text?)`.
-- `add_task_steps(task_id, items[] | text, feature_id?)`: `text` is one step per line, indent two spaces to nest.
+- `add_task_step(task_id, text, client_text?, feature_id?, depth?)`, `add_task_steps(task_id, items[] | text, feature_id?)`:
+  `text` is one step per line, indent two spaces to nest. An `items` entry can be `{ text, client_text?, depth?, done? }`.
+- `update_task_step(task_id, step_id, done?, text?, client_text?, feature_id?)`.
+  `client_text` is the step in plain Danish for clients (see Client layer below); `""` or `null` clears it.
 - `create_section(plan_id, title, description?, goals?, intentions?, client_summary?, color?, tags?)`, `update_section(section_id, ...)`.
-  `client_summary` is a short plain Danish summary for clients (see Client summary below); `""` or `null` clears it.
-- `create_task(plan_id, section_id, title, description?, priority?, complexity?, tags?, color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id?)`,
-  `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?, assigned_user_id?)`.
+  `client_summary` is a short plain Danish summary for clients (see Client layer below); `""` or `null` clears it.
+- `create_task(plan_id, section_id, title, description?, client_title?, client_summary?, priority?, complexity?, tags?, color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id?)`,
+  `update_task(task_id, title?, description?, client_title?, client_summary?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?, assigned_user_id?)`.
+  `client_title` (short plain Danish) is what makes a task visible to clients; `client_summary` is one optional sentence.
 - `list_people()`: who is in the workspace. `assigned_user_id` takes a `user_id` from it, and a comment mentions someone with
   their `mention` token, `@[Name](user:<user_id>)`; both notify the person.
 - `create_plan(title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status?)`.
@@ -149,49 +191,49 @@ Key parameters:
 
 All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...", "code": "..." }` with a 4xx status.
 
-| Request                                              | Body / notes                                                                                                                                                   |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET plans`                                          | `?status=` one status, a comma list or `all` (active by default)                                                                                               |
-| `GET plans/:plan_id`                                 | sections, tasks, features, steps, questions, files (the plan's own as `attachments`), `work_target`                                                            |
-| `GET plans/:plan_id/available-tasks`                 | dependencies already done                                                                                                                                      |
-| `GET plans/:plan_id/questions`                       | `?status=open` (default), `answered`, `dismissed`, `all`                                                                                                       |
-| `GET tasks/:task_id`                                 | one task in full, plus `work_target`                                                                                                                           |
-| `GET people`                                         | the workspace's people: `user_id`, `name`, `role`, `mention` (the token to @mention them in a comment)                                                         |
-| `GET tasks/:task_id/questions`                       | `?status=` (all by default)                                                                                                                                    |
-| `GET plans/:plan_id/attachments`                     | files shared with agents on the plan itself; `GET plans/:plan_id/attachments/:attachment_id` for one                                                           |
-| `GET tasks/:task_id/attachments`                     | files shared with agents on a task; `GET tasks/:task_id/attachments/:attachment_id` for one                                                                    |
-| `POST attachments/text`                              | `{ plan_id \| task_id, file_name, mime_type: text/markdown \| text/plain, text, shared_with_agents?, purpose?, idempotency_key? }`; 201                        |
-| `POST attachments/base64`                            | same, with `data_base64` instead of `text`; png, jpeg, webp, gif, pdf, markdown, plain text; 8 MiB decoded                                                     |
-| `GET attachments/:attachment_id/text`                | `?offset=&limit=` in bytes: `{ text, offset, next_offset, total_bytes, eof, sha256 }` for a shared text file                                                   |
-| `POST attachments/:attachment_id/download`           | a download link for a shared file that expires in five minutes                                                                                                 |
-| `POST agents/register`                               | `{ name, provider, model? }` -> agent `id` (same agent comes back as the same row)                                                                             |
-| `POST tasks/:task_id/claim`                          | `{ agent_id }`; 409 if not available                                                                                                                           |
-| `POST tasks/:task_id/start`                          |                                                                                                                                                                |
-| `POST tasks/:task_id/progress`                       | `{ agent_id, status?, note?, steps_done?[], features_met?[] }`; comment only if `note` is non-empty                                                            |
-| `POST tasks/:task_id/complete`                       | `{ pr_url?, branch_name? }`                                                                                                                                    |
-| `POST tasks/:task_id/block`                          | `{ reason, agent_id }`: creates a blocking question                                                                                                            |
-| `POST tasks/:task_id/unclaim`                        |                                                                                                                                                                |
-| `POST tasks/:task_id/comment`                        | `{ body, agent_id, mentions?[] }`; `@[Name](user:<user_id>)` in `body` mentions and notifies that person                                                       |
-| `POST tasks/:task_id/questions`                      | `{ body, blocking?, agent_id }`                                                                                                                                |
-| `POST tasks/:task_id/questions/:question_id/answer`  | `{ answer, agent_id }`                                                                                                                                         |
-| `POST tasks/:task_id/questions/:question_id/dismiss` |                                                                                                                                                                |
-| `POST tasks/:task_id/features`                       | `{ text }` (one per line) or `{ items[] }`                                                                                                                     |
-| `POST tasks/:task_id/features/:feature_id`           | `{ met?, text? }`                                                                                                                                              |
-| `POST tasks/:task_id/steps`                          | `{ text }` (one per line) or `{ items[] }`, `feature_id?`, `depth?`, `done?`                                                                                   |
-| `POST tasks/:task_id/steps/:step_id`                 | `{ done?, text?, feature_id? }`                                                                                                                                |
-| `POST tasks/:task_id`                                | `{ title?, description?, priority?, complexity?, tags?[], color?, acceptance_criteria?[], branch_name?, assigned_user_id? }`                                   |
-| `POST plans`                                         | `{ title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status? }`                                              |
-| `POST plans/:plan_id`                                | `{ description?, github_repo?, github_base?, github_work_mode?, github_work_branch? }` (github / work_target only when missing)                                |
-| `POST plans/:plan_id/import`                         | `{ markdown, mode: sync \| merge \| replace }`                                                                                                                 |
-| `POST plans/:plan_id/status`                         | `{ status }`                                                                                                                                                   |
-| `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, client_summary?, color?, tags?[] }`                                                                               |
-| `POST sections/:section_id`                          | same fields, all optional                                                                                                                                      |
-| `POST plans/:plan_id/tasks`                          | `{ section_id, title, description?, priority?, complexity?, tags?[], color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id? }` |
-| `GET github`                                         | is GitHub connected for the key owner (never the token)                                                                                                        |
-| `GET tasks/:task_id/pull-request`                    | live PR state from GitHub                                                                                                                                      |
-| `POST tasks/:task_id/pull-request`                   | `{ title, head_branch?, body?, repo?, base? }`; head defaults to the plan's work branch                                                                        |
-| `GET plans/:plan_id/pull-requests`                   | the plan's PRs in merge order                                                                                                                                  |
-| `POST plans/:plan_id/pull-requests/merge`            | `{ dry_run?, method?, max?, only?, ignore_checks? }` (dry run by default)                                                                                      |
+| Request                                              | Body / notes                                                                                                                                                                                   |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET plans`                                          | `?status=` one status, a comma list or `all` (active by default)                                                                                                                               |
+| `GET plans/:plan_id`                                 | sections, tasks, features, steps, questions, files (the plan's own as `attachments`), `work_target`                                                                                            |
+| `GET plans/:plan_id/available-tasks`                 | dependencies already done                                                                                                                                                                      |
+| `GET plans/:plan_id/questions`                       | `?status=open` (default), `answered`, `dismissed`, `all`                                                                                                                                       |
+| `GET tasks/:task_id`                                 | one task in full, plus `work_target`                                                                                                                                                           |
+| `GET people`                                         | the workspace's people: `user_id`, `name`, `role`, `mention` (the token to @mention them in a comment)                                                                                         |
+| `GET tasks/:task_id/questions`                       | `?status=` (all by default)                                                                                                                                                                    |
+| `GET plans/:plan_id/attachments`                     | files shared with agents on the plan itself; `GET plans/:plan_id/attachments/:attachment_id` for one                                                                                           |
+| `GET tasks/:task_id/attachments`                     | files shared with agents on a task; `GET tasks/:task_id/attachments/:attachment_id` for one                                                                                                    |
+| `POST attachments/text`                              | `{ plan_id \| task_id, file_name, mime_type: text/markdown \| text/plain, text, shared_with_agents?, purpose?, idempotency_key? }`; 201                                                        |
+| `POST attachments/base64`                            | same, with `data_base64` instead of `text`; png, jpeg, webp, gif, pdf, markdown, plain text; 8 MiB decoded                                                                                     |
+| `GET attachments/:attachment_id/text`                | `?offset=&limit=` in bytes: `{ text, offset, next_offset, total_bytes, eof, sha256 }` for a shared text file                                                                                   |
+| `POST attachments/:attachment_id/download`           | a download link for a shared file that expires in five minutes                                                                                                                                 |
+| `POST agents/register`                               | `{ name, provider, model? }` -> agent `id` (same agent comes back as the same row)                                                                                                             |
+| `POST tasks/:task_id/claim`                          | `{ agent_id }`; 409 if not available                                                                                                                                                           |
+| `POST tasks/:task_id/start`                          |                                                                                                                                                                                                |
+| `POST tasks/:task_id/progress`                       | `{ agent_id, status?, note?, steps_done?[], features_met?[] }`; comment only if `note` is non-empty                                                                                            |
+| `POST tasks/:task_id/complete`                       | `{ pr_url?, branch_name? }`                                                                                                                                                                    |
+| `POST tasks/:task_id/block`                          | `{ reason, agent_id }`: creates a blocking question                                                                                                                                            |
+| `POST tasks/:task_id/unclaim`                        |                                                                                                                                                                                                |
+| `POST tasks/:task_id/comment`                        | `{ body, agent_id, mentions?[] }`; `@[Name](user:<user_id>)` in `body` mentions and notifies that person                                                                                       |
+| `POST tasks/:task_id/questions`                      | `{ body, blocking?, agent_id }`                                                                                                                                                                |
+| `POST tasks/:task_id/questions/:question_id/answer`  | `{ answer, agent_id }`                                                                                                                                                                         |
+| `POST tasks/:task_id/questions/:question_id/dismiss` |                                                                                                                                                                                                |
+| `POST tasks/:task_id/features`                       | `{ text }` (one per line) or `{ items[] }`                                                                                                                                                     |
+| `POST tasks/:task_id/features/:feature_id`           | `{ met?, text? }`                                                                                                                                                                              |
+| `POST tasks/:task_id/steps`                          | `{ text }` (one per line) or `{ items[] }` (entries `text` or `{ text, client_text?, depth?, done? }`), `client_text?` (one step), `feature_id?`, `depth?`, `done?`                            |
+| `POST tasks/:task_id/steps/:step_id`                 | `{ done?, text?, client_text?, feature_id? }`                                                                                                                                                  |
+| `POST tasks/:task_id`                                | `{ title?, description?, client_title?, client_summary?, priority?, complexity?, tags?[], color?, acceptance_criteria?[], branch_name?, assigned_user_id? }`                                   |
+| `POST plans`                                         | `{ title, description?, markdown?, github_repo?, github_base?, github_work_mode?, github_work_branch?, status? }`                                                                              |
+| `POST plans/:plan_id`                                | `{ description?, github_repo?, github_base?, github_work_mode?, github_work_branch? }` (github / work_target only when missing)                                                                |
+| `POST plans/:plan_id/import`                         | `{ markdown, mode: sync \| merge \| replace }`                                                                                                                                                 |
+| `POST plans/:plan_id/status`                         | `{ status }`                                                                                                                                                                                   |
+| `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, client_summary?, color?, tags?[] }`                                                                                                               |
+| `POST sections/:section_id`                          | same fields, all optional                                                                                                                                                                      |
+| `POST plans/:plan_id/tasks`                          | `{ section_id, title, description?, client_title?, client_summary?, priority?, complexity?, tags?[], color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id? }` |
+| `GET github`                                         | is GitHub connected for the key owner (never the token)                                                                                                                                        |
+| `GET tasks/:task_id/pull-request`                    | live PR state from GitHub                                                                                                                                                                      |
+| `POST tasks/:task_id/pull-request`                   | `{ title, head_branch?, body?, repo?, base? }`; head defaults to the plan's work branch                                                                                                        |
+| `GET plans/:plan_id/pull-requests`                   | the plan's PRs in merge order                                                                                                                                                                  |
+| `POST plans/:plan_id/pull-requests/merge`            | `{ dry_run?, method?, max?, only?, ignore_checks? }` (dry run by default)                                                                                                                      |
 
 ### Workspace API
 

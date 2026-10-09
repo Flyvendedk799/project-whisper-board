@@ -19,6 +19,8 @@ function task(id: string, title: string, extra: Partial<TaskWithAgent> = {}): Ta
     assigned_user_id: null,
     branch_name: null,
     claimed_at: null,
+    client_summary: null,
+    client_title: null,
     completed_at: null,
     complexity: null,
     context_files: [],
@@ -60,6 +62,8 @@ function richPlan(): PlanWithSections {
     complexity: "medium",
     labels: ["auth", "api"],
     color: "#3b82f6",
+    client_title: "Tryggere login",
+    client_summary: "Man bliver nu logget ind på en sikker måde.",
     acceptance_criteria: "Expired sessions redirect to sign-in.",
     ai_context: "Uses `requireSupabaseAuth`.\n\n```ts\nconst x = 1;\n```",
     assigned_user: { id: "u1", full_name: "Ana Ruiz", email: "ana@example.com", avatar_url: null },
@@ -167,6 +171,14 @@ describe("planToMarkdown", () => {
 
       See the \`auth/\` folder.
 
+      **Client title**
+
+      Tryggere login
+
+      **Client summary**
+
+      Man bliver nu logget ind på en sikker måde.
+
       **Features**
 
       1. [x] Sign in with email
@@ -227,6 +239,17 @@ describe("planToMarkdown", () => {
     expect(md).toContain("**Client summary**\n\nVi har bygget loginsiden.");
     const parsed = parsePlanMarkdown(md);
     expect(parsed.sections[0].clientSummary).toBe("Vi har bygget loginsiden.");
+  });
+
+  it("writes a task's client title and summary and leaves them out when empty", () => {
+    const doc = planToDocument(richPlan(), NOW);
+    expect(doc.sections[0].tasks.find((entry) => entry.id === AUTH)).toMatchObject({
+      clientTitle: "Tryggere login",
+      clientSummary: "Man bliver nu logget ind på en sikker måde.",
+    });
+    const reset = doc.sections[0].tasks.find((entry) => entry.id === RESET)!;
+    expect(reset).not.toHaveProperty("clientTitle");
+    expect(reset).not.toHaveProperty("clientSummary");
   });
 
   it("reads back into the same document", () => {

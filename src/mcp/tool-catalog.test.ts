@@ -130,6 +130,42 @@ describe("section client summary", () => {
   });
 });
 
+describe("task and step client text", () => {
+  const param = (tool: string, name: string) =>
+    TOOL_CATALOG.find((entry) => entry.name === tool)!.params.find((entry) => entry.name === name);
+
+  it("client_title and client_summary are optional Danish params on create_task and update_task", () => {
+    for (const tool of ["create_task", "update_task"]) {
+      for (const name of ["client_title", "client_summary"]) {
+        const found = param(tool, name);
+        expect(found, `${tool} has ${name}`).toBeDefined();
+        expect(found!.type).toBe("string");
+        expect(found!.required).toBeFalsy();
+        expect(found!.description).toMatch(/DANISH/);
+      }
+      expect(param(tool, "client_title")!.description).toMatch(/only when/i);
+    }
+  });
+
+  it("client_text is an optional Danish param on add_task_step and update_task_step", () => {
+    for (const tool of ["add_task_step", "update_task_step"]) {
+      const found = param(tool, "client_text");
+      expect(found, `${tool} has client_text`).toBeDefined();
+      expect(found!.required).toBeFalsy();
+      expect(found!.description).toMatch(/DANISH/);
+      expect(found!.description).toMatch(/only when/i);
+    }
+  });
+
+  it("is part of the agent guide and the skill", () => {
+    for (const name of ["client_title", "client_text"]) {
+      expect(MCP_INSTRUCTIONS).toContain(name);
+      expect(skill).toContain(name);
+    }
+    expect(skill).toMatch(/not carried by Markdown/);
+  });
+});
+
 describe("workspace tools", () => {
   const workspace = TOOL_CATALOG.filter((tool) => tool.group === "Workspace");
 

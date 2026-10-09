@@ -1647,6 +1647,7 @@ export async function handlePlannerRequest(
               task_id: task.id,
               text: line.text,
               done: line.done,
+              client_text: line.clientText ?? null,
               depth: line.depth,
               position: ++position,
               feature_id: input.featureId,

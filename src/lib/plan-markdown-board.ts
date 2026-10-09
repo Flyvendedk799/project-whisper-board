@@ -25,6 +25,7 @@
  *
  *   The brief.
  *
+ *   **Client title** / **Client summary**   plain Danish, what clients read
  *   **Features**         1. [x] numbered, ticked when met
  *   **Sub-steps**        - [ ] checklist, two spaces per level, `→ feature 2` links a step
  *   **Acceptance**       free text
@@ -81,6 +82,7 @@ const MARKER_LINE = /^[ \t]*<!--\s*boared:plan-export\b.*-->[ \t]*$/i;
 const SECTION_TITLE_MAX = 100;
 const TASK_TITLE_MAX = 200;
 const CONTEXT_MAX = 20000;
+const CLIENT_SUMMARY_MAX = 1000;
 
 // ---------------------------------------------------------------------------
 // Words
@@ -236,6 +238,15 @@ function writeTask(task: PlanMdTask): string[] {
   );
   const content: string[] = [];
   if (task.description.trim()) content.push(prose(task.description));
+  if (task.clientTitle?.trim())
+    content.push(`**Client title**
+
+${oneLine(task.clientTitle)}`);
+  if (task.clientSummary?.trim()) {
+    content.push(`**Client summary**
+
+${prose(task.clientSummary)}`);
+  }
   if (features.length > 0) content.push(`**Features**\n\n${featureLines(features)}`);
   if (task.steps?.some((step) => step.text.trim())) {
     content.push(`**Sub-steps**\n\n${stepLines(task.steps, features.length)}`);
@@ -405,6 +416,7 @@ type BlockName =
   | "goals"
   | "intentions"
   | "clientSummary"
+  | "clientTitle"
   | "features"
   | "steps"
   | "acceptance"
@@ -415,6 +427,8 @@ const BLOCK_LABELS: Record<Kind, Record<string, BlockName>> = {
   plan: {},
   section: { goals: "goals", intentions: "intentions", "client summary": "clientSummary" },
   task: {
+    "client title": "clientTitle",
+    "client summary": "clientSummary",
     features: "features",
     requirements: "features",
     "sub steps": "steps",
@@ -464,6 +478,7 @@ function readContainer(
       goals: [],
       intentions: [],
       clientSummary: [],
+      clientTitle: [],
       features: [],
       steps: [],
       acceptance: [],
@@ -852,6 +867,8 @@ export function parseBoardMarkdown(source: string): PlanMdDocument {
     );
     const acceptance = joinBody(blocks.acceptance);
     const context = joinBody(blocks.context).slice(0, CONTEXT_MAX);
+    const clientTitle = collapseSpaces(joinBody(blocks.clientTitle)).slice(0, TASK_TITLE_MAX);
+    const clientSummary = joinBody(blocks.clientSummary).slice(0, CLIENT_SUMMARY_MAX);
     const task: PlanMdTask = {
       title: fitted.title,
       description,
@@ -868,6 +885,8 @@ export function parseBoardMarkdown(source: string): PlanMdDocument {
       ...(parsedFeatures.features.length > 0 && { features: parsedFeatures.features }),
       ...(parsedQuestions.questions.length > 0 && { questions: parsedQuestions.questions }),
       ...(context && { context }),
+      ...(clientTitle && { clientTitle }),
+      ...(clientSummary && { clientSummary }),
     };
     section.tasks.push(task);
   }

@@ -96,6 +96,10 @@ export type PlanMdTask = {
   questions?: PlanMdQuestion[];
   /** Stored as `ai_context`. */
   context?: string;
+  /** The task's short plain-Danish name for clients. Stored as `client_title`. */
+  clientTitle?: string;
+  /** One plain-Danish sentence for clients. Stored as `client_summary`. */
+  clientSummary?: string;
 };
 
 export type PlanMdSection = {
@@ -1252,6 +1256,8 @@ export function planMarkdownCoverage(
           task.description,
           task.acceptance ? `Acceptance: ${task.acceptance}` : "",
           task.context,
+          task.clientTitle,
+          task.clientSummary,
           ...(task.steps ?? []).map((step) => step.text),
           ...(task.features ?? []).map((feature) => feature.text),
           ...(task.questions ?? []).flatMap((question) => [question.body, question.answer]),

@@ -883,6 +883,8 @@ export const createTask = createServerFn({ method: "POST" })
         ticketId: z.string().uuid().optional(),
         status: planTaskStatusEnum.optional(),
         assignedUserId: z.string().uuid().optional(),
+        clientTitle: z.string().max(200).optional(),
+        clientSummary: z.string().max(1000).optional(),
       })
       .parse(input),
   )
@@ -924,6 +926,8 @@ export const createTask = createServerFn({ method: "POST" })
           estimated_minutes: data.estimatedMinutes ?? null,
           status: data.status ?? "available",
           position,
+          client_title: data.clientTitle?.trim() || null,
+          client_summary: data.clientSummary?.trim() || null,
           ...(data.assignedUserId ? { assigned_user_id: data.assignedUserId } : {}),
           ...(data.ticketId ? { ticket_id: data.ticketId } : {}),
         })
@@ -992,6 +996,8 @@ export const updateTask = createServerFn({ method: "POST" })
         branchName: z.string().optional(),
         assignedUserId: z.string().uuid().nullable().optional(),
         ticketId: z.string().uuid().nullable().optional(),
+        clientTitle: z.string().max(200).nullable().optional(),
+        clientSummary: z.string().max(1000).nullable().optional(),
       })
       .parse(input),
   )
@@ -1037,6 +1043,10 @@ export const updateTask = createServerFn({ method: "POST" })
       if (fields.branchName !== undefined) patch.branch_name = fields.branchName;
       if (fields.assignedUserId !== undefined) patch.assigned_user_id = fields.assignedUserId;
       if (fields.ticketId !== undefined) patch.ticket_id = fields.ticketId;
+      if (fields.clientTitle !== undefined) patch.client_title = fields.clientTitle?.trim() || null;
+      if (fields.clientSummary !== undefined) {
+        patch.client_summary = fields.clientSummary?.trim() || null;
+      }
 
       if (fields.status && fields.status !== before.status) {
         if (fields.status === "done") {
@@ -1915,6 +1925,7 @@ export const createTaskStep = createServerFn({ method: "POST" })
         text: stepText,
         depth: z.number().int().min(0).max(MAX_STEP_DEPTH).optional(),
         featureId: z.string().uuid().nullable().optional(),
+        clientText: z.string().max(300).optional(),
       })
       .parse(input),
   )
@@ -1937,6 +1948,7 @@ export const createTaskStep = createServerFn({ method: "POST" })
           depth: Math.min(data.depth ?? 0, last ? last.depth + 1 : 0),
           position: (last?.position ?? 0) + 1,
           feature_id: data.featureId ?? null,
+          client_text: data.clientText?.trim() || null,
         })
         .select("id")
         .single();
@@ -1954,6 +1966,7 @@ export const updateTaskStep = createServerFn({ method: "POST" })
         text: stepText.optional(),
         done: z.boolean().optional(),
         depth: z.number().int().min(0).max(MAX_STEP_DEPTH).optional(),
+        clientText: z.string().max(300).nullable().optional(),
       })
       .parse(input),
   )
@@ -1965,6 +1978,7 @@ export const updateTaskStep = createServerFn({ method: "POST" })
         ...(fields.text !== undefined && { text: fields.text }),
         ...(fields.done !== undefined && { done: fields.done }),
         ...(fields.depth !== undefined && { depth: fields.depth }),
+        ...(fields.clientText !== undefined && { client_text: fields.clientText?.trim() || null }),
       };
       if (Object.keys(patch).length === 0) return { ok: true };
       const { error } = await supabase.from("plan_task_steps").update(patch).eq("id", stepId);

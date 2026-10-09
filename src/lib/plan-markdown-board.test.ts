@@ -48,6 +48,8 @@ function rich(): PlanMdDocument {
             tags: ["auth", "api"],
             color: "var(--chart-1)",
             assignee: "Ana Ruiz",
+            clientTitle: "Tryggere login",
+            clientSummary: "Man bliver nu logget ind på en sikker måde.",
             features: [
               { text: "Sign in with email", met: true },
               { text: "Sessions refresh silently", met: false },
@@ -120,6 +122,8 @@ describe("serializeBoardMarkdown", () => {
     expect(md).toContain(
       "**Client summary**\n\nVi har bygget loginsiden, og næste skridt er at teste den.",
     );
+    expect(md).toContain("**Client title**\n\nTryggere login");
+    expect(md).toContain("**Client summary**\n\nMan bliver nu logget ind på en sikker måde.");
     expect(md.endsWith("\n")).toBe(true);
   });
 
@@ -181,6 +185,17 @@ describe("parseBoardMarkdown — round trip", () => {
     const parsed = parsePlanMarkdown(md);
     expect(parsed.format).toBe("board");
     expect(withoutMarks(parsed)).toEqual(doc);
+  });
+
+  it("reads a task's client title and summary, apart from the section's summary", () => {
+    const parsed = parsePlanMarkdown(serializeBoardMarkdown(rich()));
+    const [section] = parsed.sections;
+    expect(section.clientSummary).toBe(
+      "Vi har bygget loginsiden, og næste skridt er at teste den.",
+    );
+    expect(section.tasks[0].clientTitle).toBe("Tryggere login");
+    expect(section.tasks[0].clientSummary).toBe("Man bliver nu logget ind på en sikker måde.");
+    expect(section.tasks[1].clientTitle).toBeUndefined();
   });
 
   it("is stable: writing the parsed document gives the same file", () => {

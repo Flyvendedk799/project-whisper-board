@@ -41,6 +41,8 @@ export type ProgressStatus = (typeof PROGRESS_STATUSES)[number];
 
 export const MAX_PROGRESS_NOTE = 5000;
 const MAX_STEPS_PER_CALL = 100;
+/** Longest plain-language text of a step a client reads. */
+const STEP_CLIENT_TEXT_MAX = 300;
 
 // ---------------------------------------------------------------------------
 // Scalars
@@ -389,6 +391,10 @@ export function parseSectionUpdate(body: Body): SectionFields {
 export interface TaskFields {
   title?: string;
   description?: string | null;
+  /** The task as a client reads it: short plain Danish. Clients see a task only when this is set. */
+  client_title?: string | null;
+  /** One plain Danish sentence explaining the task to the client. */
+  client_summary?: string | null;
   priority?: TaskPriority;
   complexity?: TaskComplexity | null;
   labels?: string[];
@@ -404,6 +410,10 @@ function taskFields(body: Body): TaskFields {
   if (body.title !== undefined) fields.title = requireText(body.title, "`title`", 200);
   const description = textField(body.description, "`description`", 50000);
   if (description !== undefined) fields.description = description;
+  const clientTitle = textField(body.client_title, "`client_title`", 200);
+  if (clientTitle !== undefined) fields.client_title = clientTitle;
+  const clientSummary = textField(body.client_summary, "`client_summary`", 1000);
+  if (clientSummary !== undefined) fields.client_summary = clientSummary;
   const priority = enumField(body.priority, TASK_PRIORITIES, "`priority`");
   if (priority !== undefined) fields.priority = priority as TaskPriority;
   if (body.complexity === null) fields.complexity = null;
@@ -468,7 +478,7 @@ export function parseTaskUpdate(body: Body): TaskFields {
   if (Object.keys(fields).length === 0) {
     throw new AppError(
       "validation",
-      "Send at least one of title, description, priority, complexity, tags, color, acceptance_criteria, branch_name, assigned_user_id.",
+      "Send at least one of title, description, client_title, client_summary, priority, complexity, tags, color, acceptance_criteria, branch_name, assigned_user_id.",
     );
   }
   return fields;
@@ -591,6 +601,8 @@ export interface StepLine {
   text: string;
   depth: number;
   done: boolean;
+  /** The step in plain Danish for clients; a step is shown to clients only when this is set. */
+  clientText?: string;
 }
 
 /**
@@ -629,8 +641,9 @@ export function clampStepDepths(lines: readonly StepLine[], previousDepth: numbe
 
 /**
  * Steps to add: `text` (one or many lines), `items` (a text, or `{ text, depth,
- * done }`), or both. `feature_id` points them all at one feature, `depth` is the
- * indent of a lone step.
+ * done, client_text }`), or both. `feature_id` points them all at one feature,
+ * `depth` is the indent of a lone step, and `client_text` (plain Danish, for
+ * clients) sets the client text of a lone step.
  */
 export function parseStepsInput(body: Body): {
   lines: StepLine[];
@@ -657,13 +670,29 @@ export function parseStepsInput(body: Body): {
         const [first] = parseStepLines(entry.text as string);
         if (!first) continue;
         const depth = Math.min(Math.max(Math.trunc(Number(entry.depth)) || 0, 0), MAX_STEP_DEPTH);
-        lines.push({ ...first, depth, done: entry.done === true || first.done });
+        const clientText = textField(entry.client_text, "`client_text`", STEP_CLIENT_TEXT_MAX);
+        lines.push({
+          ...first,
+          depth,
+          done: entry.done === true || first.done,
+          ...(clientText && { clientText }),
+        });
       } else {
         throw new AppError("validation", "Each item is a text or { text, depth?, done? }.");
       }
     }
   }
   if (body.done === true && lines.length === 1) lines[0].done = true;
+  const clientText = textField(body.client_text, "`client_text`", STEP_CLIENT_TEXT_MAX);
+  if (clientText) {
+    if (lines.length !== 1) {
+      throw new AppError(
+        "validation",
+        "`client_text` goes with a single step. Give each step in `items` its own { text, client_text }, or set it later with update_task_step.",
+      );
+    }
+    lines[0].clientText = clientText;
+  }
   if (lines.length === 0) throw new AppError("validation", "Send at least one step in `text`.");
   if (lines.length > MAX_STEPS_PER_CALL) {
     throw new AppError("validation", `At most ${MAX_STEPS_PER_CALL} steps per call.`);
@@ -678,9 +707,15 @@ export function parseStepsInput(body: Body): {
 export function parseStepPatch(body: Body): {
   done?: boolean;
   text?: string;
+  client_text?: string | null;
   feature_id?: string | null;
 } {
-  const patch: { done?: boolean; text?: string; feature_id?: string | null } = {};
+  const patch: {
+    done?: boolean;
+    text?: string;
+    client_text?: string | null;
+    feature_id?: string | null;
+  } = {};
   if (body.done !== undefined) {
     if (typeof body.done !== "boolean")
       throw new AppError("validation", "`done` is true or false.");
@@ -689,10 +724,12 @@ export function parseStepPatch(body: Body): {
   if (body.text !== undefined) {
     patch.text = requireText(body.text, "`text`", STEP_TEXT_MAX).replace(/\s+/g, " ");
   }
+  const clientText = textField(body.client_text, "`client_text`", STEP_CLIENT_TEXT_MAX);
+  if (clientText !== undefined) patch.client_text = clientText;
   if (body.feature_id !== undefined)
     patch.feature_id = optionalUuid(body.feature_id, "`feature_id`");
   if (Object.keys(patch).length === 0) {
-    throw new AppError("validation", "Send `done`, `text` and/or `feature_id`.");
+    throw new AppError("validation", "Send `done`, `text`, `client_text` and/or `feature_id`.");
   }
   return patch;
 }

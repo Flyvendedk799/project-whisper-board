@@ -6,6 +6,7 @@ import {
   addTaskComment,
   createSection,
   createTask,
+  createTaskStep,
   updateSection,
   updateTask,
 } from "@/lib/planner.functions";
@@ -42,6 +43,8 @@ async function run(action: Action): Promise<void> {
           complexity: action.complexity,
           labels: action.tags,
           color: action.color ?? undefined,
+          clientTitle: action.client_title,
+          clientSummary: action.client_summary,
         },
       });
       // The task exists now, so a failure after this one says so rather than hiding it.
@@ -73,6 +76,8 @@ async function run(action: Action): Promise<void> {
           complexity: action.complexity,
           labels: action.tags,
           color: action.color,
+          clientTitle: action.client_title,
+          clientSummary: action.client_summary,
         },
       });
       return;
@@ -110,10 +115,26 @@ async function run(action: Action): Promise<void> {
       await addTaskFeatures({ data: { taskId: action.taskId, items: action.items, source: "ai" } });
       return;
     case "add_steps":
+      // Steps that come with a plain-Danish client text go one by one, because only
+      // createTaskStep sets it; the rest go in a single call.
+      if (action.items.some((item) => item.client_text)) {
+        for (const item of action.items) {
+          await createTaskStep({
+            data: {
+              taskId: action.taskId,
+              text: item.text,
+              depth: item.depth,
+              featureId: action.featureId ?? null,
+              clientText: item.client_text,
+            },
+          });
+        }
+        return;
+      }
       await addTaskSteps({
         data: {
           taskId: action.taskId,
-          items: action.items,
+          items: action.items.map(({ text, depth }) => ({ text, depth })),
           featureId: action.featureId ?? null,
           source: "ai",
         },

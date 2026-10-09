@@ -244,6 +244,29 @@ describe("tasks", () => {
     expect(problem(() => parseTaskUpdate({}))).toMatch(/at least one/);
     expect(problem(() => parseTaskUpdate({ branch_name: "bad branch" }))).toMatch(/valid branch/);
   });
+
+  it("takes a client title and summary, trims them and clears them with an empty string", () => {
+    expect(
+      parseTaskCreate({
+        ...base,
+        client_title: "  Shader-forbedringer ",
+        client_summary: "  Spillet kører jævnere.  ",
+      }).fields,
+    ).toMatchObject({
+      client_title: "Shader-forbedringer",
+      client_summary: "Spillet kører jævnere.",
+    });
+    expect(parseTaskUpdate({ client_title: "Tryggere login" })).toEqual({
+      client_title: "Tryggere login",
+    });
+    expect(parseTaskUpdate({ client_title: "", client_summary: null })).toEqual({
+      client_title: null,
+      client_summary: null,
+    });
+    expect(problem(() => parseTaskUpdate({ client_title: 5 }))).toMatch(/must be text/);
+    expect(problem(() => parseTaskUpdate({ client_title: "x".repeat(201) }))).toMatch(/200/);
+    expect(problem(() => parseTaskUpdate({ client_summary: "x".repeat(1001) }))).toMatch(/1000/);
+  });
 });
 
 describe("questions", () => {
@@ -347,6 +370,26 @@ describe("steps", () => {
     expect(input.lines).toEqual([{ text: "only", depth: 2, done: true }]);
   });
 
+  it("sets the client text of a lone step, or per item", () => {
+    expect(parseStepsInput({ text: "only", client_text: " Ny forside " }).lines).toEqual([
+      { text: "only", depth: 0, done: false, clientText: "Ny forside" },
+    ]);
+    const input = parseStepsInput({
+      items: ["plain", { text: "shown", client_text: "Vist for kunden" }],
+    });
+    expect(input.lines[0]).not.toHaveProperty("clientText");
+    expect(input.lines[1]).toMatchObject({ text: "shown", clientText: "Vist for kunden" });
+  });
+
+  it("refuses one client text for several steps, and a client text that is too long", () => {
+    expect(problem(() => parseStepsInput({ items: ["a", "b"], client_text: "x" }))).toMatch(
+      /single step/,
+    );
+    expect(problem(() => parseStepsInput({ text: "a", client_text: "x".repeat(301) }))).toMatch(
+      /300/,
+    );
+  });
+
   it("refuses nothing to add, bad items and bad feature ids", () => {
     expect(problem(() => parseStepsInput({}))).toMatch(/at least one step/);
     expect(problem(() => parseStepsInput({ items: [3] }))).toMatch(/Each item/);
@@ -360,6 +403,10 @@ describe("steps", () => {
     expect(parseStepPatch({ done: true })).toEqual({ done: true });
     expect(parseStepPatch({ feature_id: null })).toEqual({ feature_id: null });
     expect(parseStepPatch({ text: " a   b " })).toEqual({ text: "a b" });
+    expect(parseStepPatch({ client_text: " Ny forside " })).toEqual({ client_text: "Ny forside" });
+    expect(parseStepPatch({ client_text: "" })).toEqual({ client_text: null });
+    expect(parseStepPatch({ client_text: null })).toEqual({ client_text: null });
+    expect(problem(() => parseStepPatch({ client_text: "x".repeat(301) }))).toMatch(/300/);
     expect(problem(() => parseStepPatch({}))).toMatch(/done/);
     expect(problem(() => parseStepPatch({ done: "yes" }))).toMatch(/true or false/);
   });

@@ -5,7 +5,7 @@
  * Sections and tasks are matched by id when the document carries one (the
  * board's own export does), else by title. What is missing is added; empty
  * fields (a task's description, its acceptance criteria, technical context,
- * colour) are filled in, tags are only ever added, and feature lists and
+ * colour, client title and summary) are filled in, tags are only ever added, and feature lists and
  * questions gain the entries the task does not have yet. A section's note is
  * refreshed only when this sync adds tasks to it, because that is when text
  * moved out of the note into those tasks (outlines only). Nothing is deleted,
@@ -40,6 +40,8 @@ export type ExistingTask = {
   labels?: string[] | null;
   color?: string | null;
   ai_context?: string | null;
+  client_title?: string | null;
+  client_summary?: string | null;
   features?: ExistingFeature[];
   questions?: ExistingQuestion[];
 };
@@ -67,6 +69,8 @@ export type NewTask = {
   labels?: string[];
   color?: string;
   ai_context?: string;
+  client_title?: string;
+  client_summary?: string;
   /** Where a blocked task goes back to once its blocking question is answered. */
   blocked_from?: PlanTaskStatus;
 };
@@ -116,6 +120,8 @@ export type SyncStore = {
       description?: string;
       acceptance_criteria?: string;
       ai_context?: string;
+      client_title?: string;
+      client_summary?: string;
       color?: string;
       labels?: string[];
     },
@@ -174,6 +180,8 @@ function newTaskRow(task: PlanMdTask, position: number): NewTask {
     ...(tags.length > 0 && { labels: tags }),
     ...(isValidColor(task.color) && { color: task.color.trim() }),
     ...(task.context && { ai_context: task.context }),
+    ...(task.clientTitle && { client_title: task.clientTitle }),
+    ...(task.clientSummary && { client_summary: task.clientSummary }),
     // Without this, answering the question would leave a task that was "blocked" on import blocked.
     ...(status === "blocked" && holdsTask && { blocked_from: "available" as const }),
   };
@@ -394,6 +402,10 @@ export async function syncSections(
     if (blank(found.acceptance_criteria) && task.acceptance)
       patch.acceptance_criteria = task.acceptance;
     if (blank(found.ai_context) && task.context) patch.ai_context = task.context;
+    if (blank(found.client_title) && task.clientTitle) patch.client_title = task.clientTitle;
+    if (blank(found.client_summary) && task.clientSummary) {
+      patch.client_summary = task.clientSummary;
+    }
     if (blank(found.color) && isValidColor(task.color)) patch.color = task.color.trim();
     const haveTags = found.labels ?? [];
     const labels = normalizeTags([...haveTags, ...normalizeTags(task.tags)]);

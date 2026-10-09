@@ -42,6 +42,8 @@ function taskToMd(task: TaskWithAgent): PlanMdTask {
       })),
     ...(task.acceptance_criteria?.trim() && { acceptance: task.acceptance_criteria.trim() }),
     ...(task.ai_context?.trim() && { context: task.ai_context.trim() }),
+    ...(task.client_title?.trim() && { clientTitle: task.client_title.trim() }),
+    ...(task.client_summary?.trim() && { clientSummary: task.client_summary.trim() }),
     ...(task.questions?.length && {
       questions: [...task.questions]
         .sort((a, b) => a.created_at.localeCompare(b.created_at))

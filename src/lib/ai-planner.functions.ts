@@ -89,7 +89,7 @@ async function loadPlan(supabase: Db, planId: string) {
         id, title, description, goals, intentions, client_summary, tags, position,
         tasks:plan_tasks(
           id, section_id, title, status, priority, complexity, labels, description,
-          acceptance_criteria, position, ai_context, depends_on,
+          acceptance_criteria, position, ai_context, depends_on, client_title, client_summary,
           features:plan_task_features(id, met),
           steps:plan_task_steps(id, done),
           questions:plan_task_questions(id, status, blocking)
@@ -147,6 +147,8 @@ async function loadPlan(supabase: Db, planId: string) {
         blockingQuestions: open.filter((question) => question.blocking).length,
         hasAiContext: Boolean(task.ai_context?.trim()),
         dependsOn: (task.depends_on ?? []).length,
+        clientTitle: task.client_title,
+        clientSummary: task.client_summary,
       };
     }),
   };
@@ -160,7 +162,7 @@ async function loadTaskDetail(supabase: Db, taskId: string): Promise<CtxTaskDeta
       `
       id, description, acceptance_criteria, ai_context,
       features:plan_task_features(id, text, met, position),
-      steps:plan_task_steps(id, text, done, depth, feature_id, position),
+      steps:plan_task_steps(id, text, done, depth, feature_id, client_text, position),
       questions:plan_task_questions(id, body, blocking, status, answer, created_at)
     `,
     )
@@ -190,6 +192,7 @@ async function loadTaskDetail(supabase: Db, taskId: string): Promise<CtxTaskDeta
       done: step.done,
       depth: step.depth,
       featureId: step.feature_id,
+      clientText: step.client_text,
     })),
     questions: [...(task.questions ?? [])]
       .sort((a, b) => a.created_at.localeCompare(b.created_at))

@@ -64,8 +64,8 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
   },
   {
     id: "client",
-    title: "Keep the client summary current",
-    body: "Every section has a client_summary: a short, plain DANISH summary (1-3 sentences, no jargon, task ids, branch names or code) of what is done and what comes next. On plans that clients can see it is the only text they read, so write it with create_section or update_section, and update it when the section's state meaningfully changes, for example after you finish a task in it.",
+    title: "Keep the client layer current",
+    body: "Clients of a shared plan only read plain DANISH, never the technical wording: no jargon, task ids, branch names, PR numbers or code, and the outcome rather than the implementation. Every section has a client_summary (1-3 sentences on what is done and what comes next), every task a client_title (a SHORT plain name) and an optional client_summary (one sentence), and every step an optional client_text. A task is shown to clients ONLY when it has a client_title and a step ONLY when it has a client_text, so when you author or finish tasks on a plan clients can see, ALWAYS set client_title (create_task or update_task; client_text with add_task_step or update_task_step; client_summary on sections with create_section or update_section). Keep them current: update them when status or meaning changes, for example after you finish a task. Markdown carries section and task client text but not step client_text.",
   },
   {
     id: "stuck",

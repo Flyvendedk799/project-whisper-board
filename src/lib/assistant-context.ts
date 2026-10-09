@@ -47,6 +47,9 @@ export type CtxTask = {
   blockingQuestions: number;
   hasAiContext: boolean;
   dependsOn: number;
+  /** The task's short plain-Danish name for clients; clients see a task only when it has one. */
+  clientTitle?: string | null;
+  clientSummary?: string | null;
 };
 
 export type CtxPlan = {
@@ -71,6 +74,8 @@ export type CtxTaskDetail = {
     done: boolean;
     depth: number;
     featureId?: string | null;
+    /** The step in plain Danish for clients; clients see a step only when it has one. */
+    clientText?: string | null;
   }>;
   questions: Array<{
     id: string;
@@ -141,6 +146,9 @@ function taskLine(task: CtxTask, refs: RefIndex, audit: boolean): string {
         task.blockingQuestions > 0 ? ` (${task.blockingQuestions} blocking)` : ""
       }`,
     task.hasAiContext && "has AI context",
+    task.clientTitle?.trim()
+      ? `client title: ${JSON.stringify(oneLine(task.clientTitle, 80))}`
+      : "no client title",
     task.dependsOn > 0 && `depends on ${task.dependsOn}`,
     !task.description?.trim() && "no description",
     audit && !task.hasAcceptance && "no acceptance criteria",
@@ -193,6 +201,9 @@ function taskDetailLines(task: CtxTaskDetail, summary: CtxTask | undefined, refs
   else lines.push(() => `${refs.add("task", task.id)} (the open task)`);
   if (task.description?.trim()) lines.push(() => `Description: ${oneLine(task.description, 1500)}`);
   if (task.acceptance?.trim()) lines.push(() => `Acceptance: ${oneLine(task.acceptance, 600)}`);
+  if (summary?.clientSummary?.trim()) {
+    lines.push(() => `Client summary: ${oneLine(summary.clientSummary, 300)}`);
+  }
 
   if (task.features.length > 0) {
     lines.push(() => "Features:");
@@ -208,9 +219,10 @@ function taskDetailLines(task: CtxTaskDetail, summary: CtxTask | undefined, refs
     for (const step of task.steps) {
       lines.push(() => {
         const link = step.featureId ? refs.aliasOf("feature", step.featureId) : undefined;
+        const client = step.clientText?.trim() ? ` [client: ${oneLine(step.clientText, 100)}]` : "";
         return `  ${"  ".repeat(step.depth)}- [${step.done ? "x" : " "}] ${oneLine(step.text, 160)}${
           link ? ` (${link})` : ""
-        }`;
+        }${client}`;
       });
     }
   }

@@ -7,6 +7,24 @@
  * plain-language summary (Danish), progress, and their own comments and approval.
  */
 
+export type ClientStep = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+/** A task as a client reads it: plain wording and a plain status, nothing technical. */
+export type ClientTaskStatus = "todo" | "in_progress" | "waiting" | "done";
+
+export type ClientTask = {
+  id: string;
+  title: string;
+  summary: string | null;
+  status: ClientTaskStatus;
+  position: number;
+  steps: ClientStep[];
+};
+
 export type ClientSection = {
   id: string;
   title: string;
@@ -15,6 +33,9 @@ export type ClientSection = {
   client_summary: string | null;
   task_count: number;
   done_task_count: number;
+  /** Tasks with no client wording yet; hidden from clients until someone writes it. */
+  unwritten_task_count: number;
+  tasks: ClientTask[];
 };
 
 export type ClientPlanOverview = {
@@ -114,3 +135,10 @@ export function formatRelativeDa(
   if (days < 7) return `${days} d. siden`;
   return date.toLocaleDateString("da-DK", { day: "numeric", month: "short", year: "numeric" });
 }
+
+export const CLIENT_TASK_STATUS_DA: Record<ClientTaskStatus, string> = {
+  todo: "Ikke startet",
+  in_progress: "I gang",
+  waiting: "Afventer",
+  done: "Færdig",
+};

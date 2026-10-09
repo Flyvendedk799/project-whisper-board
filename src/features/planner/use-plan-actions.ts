@@ -66,6 +66,9 @@ export type TaskFields = Partial<{
   labels: string[];
   color: string | null;
   aiContext: string | null;
+  /** The client layer: plain Danish wording a client sees. */
+  clientTitle: string | null;
+  clientSummary: string | null;
 }>;
 
 /** `ids` with the entry at `from` moved by `delta` places; the same array when it cannot move. */

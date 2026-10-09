@@ -140,6 +140,8 @@ const DOC: PlanMdDocument = {
           color: "#3b82f6",
           acceptance: "Works.",
           context: "Context.",
+          clientTitle: "Tryggere login",
+          clientSummary: "Man bliver nu logget ind på en sikker måde.",
           features: [
             { text: "Sign in", met: true },
             { text: "Refresh", met: false },
@@ -188,6 +190,8 @@ describe("appendSections — a board export", () => {
       color: "#3b82f6",
       acceptance_criteria: "Works.",
       ai_context: "Context.",
+      client_title: "Tryggere login",
+      client_summary: "Man bliver nu logget ind på en sikker måde.",
       // So answering the blocking question puts the task back somewhere.
       blocked_from: "available",
     });
@@ -248,6 +252,8 @@ describe("appendSections — a board export", () => {
               ...(task.color && { color: task.color }),
               ...(task.acceptance_criteria && { acceptance: task.acceptance_criteria }),
               ...(task.ai_context && { context: task.ai_context }),
+              ...(task.client_title && { clientTitle: task.client_title }),
+              ...(task.client_summary && { clientSummary: task.client_summary }),
               ...(taskFeatures.length > 0 && {
                 features: taskFeatures.map((f) => ({ text: f.text, met: f.met })),
               }),
@@ -342,6 +348,8 @@ describe("syncSections — a board export", () => {
       ai_context: "Context.",
       color: "#3b82f6",
       labels: ["auth", "api"],
+      client_title: "Tryggere login",
+      client_summary: "Man bliver nu logget ind på en sikker måde.",
     });
     expect(board.sections[0]).toMatchObject({
       goals: "Goal.",
@@ -356,6 +364,15 @@ describe("syncSections — a board export", () => {
     board.sections[0].client_summary = "Skrevet af et menneske.";
     await syncSections(board.store, doc(), limits, { refreshNotes: false });
     expect(board.sections[0].client_summary).toBe("Skrevet af et menneske.");
+  });
+
+  it("never overwrites a client title or summary the task already has", async () => {
+    const board = existingBoard();
+    board.tasks[0].client_title = "Skrevet af et menneske";
+    await syncSections(board.store, doc(), limits, { refreshNotes: false });
+    expect(board.tasks[0].client_title).toBe("Skrevet af et menneske");
+    // The summary was blank, so that one is still filled in.
+    expect(board.tasks[0].client_summary).toBe("Man bliver nu logget ind på en sikker måde.");
   });
 
   it("adds the features, steps and questions the task lacks, with the step links", async () => {

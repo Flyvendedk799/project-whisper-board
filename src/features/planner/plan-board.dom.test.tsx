@@ -49,6 +49,8 @@ function task(
     assigned_user_id: null,
     branch_name: null,
     claimed_at: null,
+    client_summary: null,
+    client_title: null,
     completed_at: null,
     complexity: null,
     context_files: [],

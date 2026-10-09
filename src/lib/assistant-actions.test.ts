@@ -127,6 +127,37 @@ describe("parseAction", () => {
       ],
     });
   });
+
+  it("reads a step's client text, and a task's client title and summary (empty clears)", () => {
+    const steps = parseAction({
+      type: "add_steps",
+      taskId: "T1",
+      items: ["plain", { text: "shown", client_text: "  Ny   forside " }],
+    });
+    expect(steps).toMatchObject({
+      items: [{ text: "plain" }, { text: "shown", client_text: "Ny forside" }],
+    });
+    expect(steps && "items" in steps && steps.items[0]).not.toHaveProperty("client_text");
+
+    expect(
+      parseAction({ type: "update_task", taskId: "T1", client_title: " Tryggere login " }),
+    ).toMatchObject({ client_title: "Tryggere login" });
+    expect(parseAction({ type: "update_task", taskId: "T1", client_title: "" })).toMatchObject({
+      client_title: "",
+    });
+    expect(
+      parseAction({
+        type: "create_task",
+        sectionId: "S1",
+        title: "Refactor auth",
+        client_title: "Tryggere login",
+        client_summary: "Man bliver logget ind på en sikker måde.",
+      }),
+    ).toMatchObject({
+      client_title: "Tryggere login",
+      client_summary: "Man bliver logget ind på en sikker måde.",
+    });
+  });
 });
 
 describe("sanitizeActions", () => {

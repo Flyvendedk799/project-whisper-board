@@ -159,6 +159,24 @@ const CLIENT_SUMMARY: ToolParam = {
   description:
     "Short plain DANISH summary a client can read: 1-3 sentences on what is done and what comes next, no jargon, task IDs, branch names or code. Clients of a client-view plan only see this, the title and progress. Send an empty string to clear it.",
 };
+const CLIENT_TITLE: ToolParam = {
+  name: "client_title",
+  type: "string",
+  description:
+    "The task as the client reads it: a SHORT plain DANISH name (up to 200 characters), no jargon, task IDs, branch names, PR numbers or code. A task is shown to clients ONLY when it has a client_title. Send an empty string to clear it.",
+};
+const CLIENT_TASK_SUMMARY: ToolParam = {
+  name: "client_summary",
+  type: "string",
+  description:
+    "Optional one plain DANISH sentence (up to 1000 characters) that explains the task to the client: the outcome, not how it was built. Only shown when the task has a client_title. Send an empty string to clear it.",
+};
+const CLIENT_TEXT: ToolParam = {
+  name: "client_text",
+  type: "string",
+  description:
+    "The step as the client reads it: plain DANISH, no jargon (up to 300 characters). A step is shown to clients ONLY when it has a client_text. Send an empty string to clear it.",
+};
 const TAGS: ToolParam = {
   name: "tags",
   type: "string[]",
@@ -200,7 +218,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     summary:
       "A plan with its sections, tasks, features, steps and questions, its own files and its work_target.",
     description:
-      "Get a plan with its sections (goals, intentions, client_summary, tags, colour) and tasks (tags as labels, colour, ai_context, features, steps with feature_id, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
+      "Get a plan with its sections (goals, intentions, client_summary, tags, colour) and tasks (tags as labels, colour, client_title, client_summary, ai_context, features, steps with feature_id and client_text, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
     rest: { method: "GET", path: "plans/:plan_id" },
     params: [PLAN_ID],
   },
@@ -218,7 +236,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Orient",
     summary: "One task in full, with features, steps, questions, files and work_target.",
     description:
-      "Get a task: description, acceptance criteria, tags (labels), colour, ai_context, features, steps (with feature_id), questions (with who asked and answered), the files shared with agents, and the plan's work_target.",
+      "Get a task: description, acceptance criteria, tags (labels), colour, client_title and client_summary (what clients read), ai_context, features, steps (with feature_id and client_text), questions (with who asked and answered), the files shared with agents, and the plan's work_target.",
     rest: { method: "GET", path: "tasks/:task_id" },
     params: [TASK_ID],
   },
@@ -576,11 +594,12 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Features and steps",
     summary: "Add a sub-step to the end of a task's checklist.",
     description:
-      "Add a sub-step to the end of a task's checklist. Point it at the feature it delivers with feature_id. Several lines in text become several steps (indent two spaces to nest).",
+      "Add a sub-step to the end of a task's checklist. Point it at the feature it delivers with feature_id. Several lines in text become several steps (indent two spaces to nest). client_text (plain Danish, for a single step) is what a client sees of the step; a step without it stays hidden from clients.",
     rest: { method: "POST", path: "tasks/:task_id/steps" },
     params: [
       TASK_ID,
       { name: "text", type: "string", required: true, description: "The step" },
+      CLIENT_TEXT,
       { name: "feature_id", type: "string", description: "The feature this step delivers" },
       { name: "depth", type: "integer", description: "Nesting level, 0 to 3" },
     ],
@@ -590,11 +609,16 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Features and steps",
     summary: "Add several sub-steps at once, optionally all for one feature.",
     description:
-      "Add several sub-steps to a task at once. Pass items (one per step) or text (one per line, indented two spaces per level). feature_id links every one to the same feature.",
+      "Add several sub-steps to a task at once. Pass items (one per step) or text (one per line, indented two spaces per level). feature_id links every one to the same feature. An item can also be { text, client_text } to give that step its plain-Danish client text; steps without client_text stay hidden from clients (set it later with update_task_step).",
     rest: { method: "POST", path: "tasks/:task_id/steps" },
     params: [
       TASK_ID,
-      { name: "items", type: "string[]", description: "One step per entry" },
+      {
+        name: "items",
+        type: "string[]",
+        description:
+          "One step per entry: a text, or { text, client_text?, depth?, done? } to also set the plain-Danish client text",
+      },
       { name: "text", type: "string", description: "Steps, one per line" },
       { name: "feature_id", type: "string", description: "The feature these steps deliver" },
       AGENT_ID,
@@ -603,7 +627,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
   {
     name: "update_task_step",
     group: "Features and steps",
-    summary: "Tick or untick a sub-step, reword it, or link it to a feature.",
+    summary: "Tick or untick a sub-step, reword it, set its client text, or link it to a feature.",
     rest: { method: "POST", path: "tasks/:task_id/steps/:step_id" },
     params: [
       TASK_ID,
@@ -615,6 +639,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       },
       { name: "done", type: "boolean", description: "Ticked or not" },
       { name: "text", type: "string", description: "New wording" },
+      { ...CLIENT_TEXT, description: `New client text. ${CLIENT_TEXT.description}` },
       { name: "feature_id", type: "string", description: "The feature this step delivers" },
     ],
   },
@@ -847,7 +872,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Authoring",
     summary: "Add a task to a section, with features, tags, a colour and dependencies.",
     description:
-      "Add a task to a section of a plan. features is the list of things it must deliver; depends_on lists task IDs in the same plan that must be done first. status is backlog or available (the default).",
+      "Add a task to a section of a plan. features is the list of things it must deliver; depends_on lists task IDs in the same plan that must be done first. status is backlog or available (the default). On a plan clients can see, always set client_title (short plain Danish): a task without one is hidden from clients.",
     rest: { method: "POST", path: "plans/:plan_id/tasks" },
     params: [
       PLAN_ID,
@@ -859,6 +884,8 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         description: "Task title (up to 200 characters)",
       },
       { name: "description", type: "string", description: "The brief" },
+      CLIENT_TITLE,
+      CLIENT_TASK_SUMMARY,
       { name: "priority", type: "string", enum: PRIORITIES, description: "Defaults to medium" },
       { name: "complexity", type: "string", enum: COMPLEXITIES, description: "How big it is" },
       TAGS,
@@ -895,12 +922,17 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     name: "update_task",
     group: "Authoring",
     summary:
-      "Change a task's title, description, priority, size, tags, colour, criteria, branch or assignee.",
+      "Change a task's title, description, client title/summary, priority, size, tags, colour, criteria, branch or assignee.",
     rest: { method: "POST", path: "tasks/:task_id" },
     params: [
       TASK_ID,
       { name: "title", type: "string", description: "New title" },
       { name: "description", type: "string", description: "New description" },
+      { ...CLIENT_TITLE, description: `New client title. ${CLIENT_TITLE.description}` },
+      {
+        ...CLIENT_TASK_SUMMARY,
+        description: `New client summary. ${CLIENT_TASK_SUMMARY.description}`,
+      },
       { name: "priority", type: "string", enum: PRIORITIES, description: "New priority" },
       { name: "complexity", type: "string", enum: COMPLEXITIES, description: "New size" },
       { ...TAGS, description: "Replaces the task's tags" },
