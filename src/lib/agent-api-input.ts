@@ -340,6 +340,8 @@ export interface SectionFields {
   description?: string | null;
   goals?: string | null;
   intentions?: string | null;
+  /** Short plain-language Danish summary that clients of a client-view plan see. */
+  client_summary?: string | null;
   color?: string | null;
   tags?: string[];
 }
@@ -353,6 +355,8 @@ function sectionFields(body: Body): SectionFields {
   if (goals !== undefined) fields.goals = goals;
   const intentions = textField(body.intentions, "`intentions`", 5000);
   if (intentions !== undefined) fields.intentions = intentions;
+  const clientSummary = textField(body.client_summary, "`client_summary`", 2000);
+  if (clientSummary !== undefined) fields.client_summary = clientSummary;
   const color = colorField(body.color);
   if (color !== undefined) fields.color = color;
   const tags = tagsField(body);
@@ -371,7 +375,7 @@ export function parseSectionUpdate(body: Body): SectionFields {
   if (Object.keys(fields).length === 0) {
     throw new AppError(
       "validation",
-      "Send at least one of title, description, goals, intentions, color, tags.",
+      "Send at least one of title, description, goals, intentions, client_summary, color, tags.",
     );
   }
   return fields;

@@ -252,6 +252,7 @@ const createSectionSchema = z.object({
   description: clipped(LONG_TEXT_MAX).optional(),
   goals: clipped(2000).optional(),
   intentions: clipped(2000).optional(),
+  client_summary: clipped(2000).optional(),
   tags: tagsField.optional(),
   color: colorField.optional(),
 });
@@ -263,6 +264,7 @@ const updateSectionSchema = z.object({
   description: clippedOrEmpty(LONG_TEXT_MAX).optional(),
   goals: clippedOrEmpty(2000).optional(),
   intentions: clippedOrEmpty(2000).optional(),
+  client_summary: clippedOrEmpty(2000).optional(),
   tags: tagsField.optional(),
   color: colorField.optional(),
 });
@@ -325,7 +327,15 @@ const TASK_FIELDS = [
   "tags",
   "color",
 ] as const;
-const SECTION_FIELDS = ["title", "description", "goals", "intentions", "tags", "color"] as const;
+const SECTION_FIELDS = [
+  "title",
+  "description",
+  "goals",
+  "intentions",
+  "client_summary",
+  "tags",
+  "color",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Validating what the model sent
@@ -533,6 +543,7 @@ export function describeAction(action: Action, names: NameLookup = {}): string {
         action.description !== undefined && "rewrite the description",
         action.goals !== undefined && "set the goals",
         action.intentions !== undefined && "set the intentions",
+        action.client_summary !== undefined && "set the client summary",
         action.tags !== undefined &&
           (action.tags.length > 0 ? `set tags to ${action.tags.join(", ")}` : "clear the tags"),
         action.color !== undefined &&
@@ -571,8 +582,8 @@ export const ACTION_VOCABULARY = [
   'Each action is an object with a "type". Refs (P1, S2, T3, F4, Q5) are the short names from the context; use only refs that appear there and never invent ids. Fields ending in ? are optional.',
   '- {"type":"create_task","sectionId":"S1","title":"…","description"?:"markdown","status"?:"backlog|available|in_progress|in_review|done|blocked","priority"?:"low|medium|high|critical","complexity"?:"trivial|small|medium|large|epic","tags"?:["…"],"color"?:"red|orange|amber|green|teal|blue|violet|pink|slate","features"?:["…"],"steps"?:["…"]}',
   '- {"type":"update_task","taskId":"T3", plus any of: "title","description","status","priority","complexity","tags","color"}  (only the fields that change)',
-  '- {"type":"create_section","planId"?:"P1","title":"…","description"?:"…","goals"?:"…","intentions"?:"…","tags"?:["…"],"color"?:"…"}',
-  '- {"type":"update_section","sectionId":"S1", plus any of: "title","description","goals","intentions","tags","color"}',
+  '- {"type":"create_section","planId"?:"P1","title":"…","description"?:"…","goals"?:"…","intentions"?:"…","client_summary"?:"short plain Danish summary for the client","tags"?:["…"],"color"?:"…"}',
+  '- {"type":"update_section","sectionId":"S1", plus any of: "title","description","goals","intentions","client_summary","tags","color"}',
   '- {"type":"add_features","taskId":"T3","items":["what the task must satisfy, one requirement each"]}',
   '- {"type":"add_steps","taskId":"T3","featureId"?:"F2","items":["how to do it, one concrete sub-step each"]}',
   '- {"type":"ask_question","taskId":"T3","body":"…","blocking"?:true}  (blocking only when the work cannot go on without the answer)',

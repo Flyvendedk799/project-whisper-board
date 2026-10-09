@@ -52,6 +52,7 @@ export type ExistingSection = {
   tasks: ExistingTask[];
   goals?: string | null;
   intentions?: string | null;
+  client_summary?: string | null;
   tags?: string[] | null;
 };
 
@@ -97,14 +98,15 @@ export type SyncStore = {
     position: number;
     goals?: string;
     intentions?: string;
+    client_summary?: string;
     tags?: string[];
     color?: string;
   }): Promise<{ id: string }>;
   updateSection(id: string, patch: { description: string }): Promise<void>;
-  /** Fills the goals, intentions and tags of a section that is already there. */
+  /** Fills the goals, intentions, client summary and tags of a section that is already there. */
   updateSectionFields?(
     id: string,
-    patch: { goals?: string; intentions?: string; tags?: string[] },
+    patch: { goals?: string; intentions?: string; client_summary?: string; tags?: string[] },
   ): Promise<void>;
   /** Rows come back in the order they were given. */
   createTasks(sectionId: string, tasks: NewTask[]): Promise<Array<{ id: string }>>;
@@ -294,6 +296,7 @@ function sectionExtras(section: PlanMdSection) {
   return {
     ...(section.goals && { goals: section.goals }),
     ...(section.intentions && { intentions: section.intentions }),
+    ...(section.clientSummary && { client_summary: section.clientSummary }),
     ...(tags.length > 0 && { tags }),
     ...(isValidColor(section.color) && { color: section.color.trim() }),
   };
@@ -504,9 +507,17 @@ export async function syncSections(
       touched = true;
     }
 
-    const fields: { goals?: string; intentions?: string; tags?: string[] } = {};
+    const fields: {
+      goals?: string;
+      intentions?: string;
+      client_summary?: string;
+      tags?: string[];
+    } = {};
     if (blank(match.goals) && section.goals) fields.goals = section.goals;
     if (blank(match.intentions) && section.intentions) fields.intentions = section.intentions;
+    if (blank(match.client_summary) && section.clientSummary) {
+      fields.client_summary = section.clientSummary;
+    }
     const haveTags = match.tags ?? [];
     const tags = normalizeTags([...haveTags, ...normalizeTags(section.tags)]);
     if (tags.length > haveTags.length) fields.tags = tags;

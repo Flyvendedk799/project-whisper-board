@@ -112,6 +112,24 @@ describe("tool catalog entries", () => {
   });
 });
 
+describe("section client summary", () => {
+  it("is a documented Danish param on create_section and update_section", () => {
+    for (const name of ["create_section", "update_section"]) {
+      const tool = TOOL_CATALOG.find((entry) => entry.name === name)!;
+      const param = tool.params.find((entry) => entry.name === "client_summary");
+      expect(param, `${name} has client_summary`).toBeDefined();
+      expect(param!.type).toBe("string");
+      expect(param!.required).toBeFalsy();
+      expect(param!.description).toMatch(/DANISH/);
+    }
+  });
+
+  it("is part of the agent guide", () => {
+    expect(MCP_INSTRUCTIONS).toContain("client_summary");
+    expect(MCP_INSTRUCTIONS).toMatch(/DANISH/);
+  });
+});
+
 describe("workspace tools", () => {
   const workspace = TOOL_CATALOG.filter((tool) => tool.group === "Workspace");
 

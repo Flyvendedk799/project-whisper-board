@@ -27,6 +27,7 @@ export type CtxSection = {
   description?: string | null;
   goals?: string | null;
   intentions?: string | null;
+  client_summary?: string | null;
   tags: string[];
 };
 
@@ -172,6 +173,7 @@ function planLines(plan: CtxPlan, refs: RefIndex, audit: boolean): Lines {
         section.tags.length > 0 && section.tags.map((tag) => `#${tag}`).join(" "),
         section.goals?.trim() && `goals: ${oneLine(section.goals, 160)}`,
         section.intentions?.trim() && `intent: ${oneLine(section.intentions, 160)}`,
+        section.client_summary?.trim() && `client summary: ${oneLine(section.client_summary, 160)}`,
         !section.description?.trim() && "no description",
       ].filter(Boolean);
       return `${ref} section ${JSON.stringify(oneLine(section.title, 80))}${

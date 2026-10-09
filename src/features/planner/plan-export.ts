@@ -83,6 +83,7 @@ export function planToDocument(
       ...(section.description?.trim() && { description: section.description.trim() }),
       ...(section.goals?.trim() && { goals: section.goals.trim() }),
       ...(section.intentions?.trim() && { intentions: section.intentions.trim() }),
+      ...(section.client_summary?.trim() && { clientSummary: section.client_summary.trim() }),
       ...(section.tags?.length && { tags: section.tags }),
       ...(section.color?.trim() && { color: section.color.trim() }),
       tasks: sortedTasks(section.tasks ?? []).map(taskToMd),

@@ -2340,6 +2340,7 @@ export type Database = {
           goals: string | null
           intentions: string | null
           tags: string[]
+          client_summary: string | null
         }
         Insert: {
           color?: string | null
@@ -2352,6 +2353,7 @@ export type Database = {
           goals?: string | null
           intentions?: string | null
           tags?: string[]
+          client_summary?: string | null
         }
         Update: {
           color?: string | null
@@ -2364,6 +2366,7 @@ export type Database = {
           goals?: string | null
           intentions?: string | null
           tags?: string[]
+          client_summary?: string | null
         }
         Relationships: [
           {
@@ -2461,6 +2464,98 @@ export type Database = {
             columns: ["uploader_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      plan_section_approvals: {
+        Row: {
+          created_at: string
+          plan_id: string
+          section_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          plan_id: string
+          section_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          plan_id?: string
+          section_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_section_approvals_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_section_approvals_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_section_approvals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      plan_section_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          plan_id: string
+          section_id: string | null
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          plan_id: string
+          section_id?: string | null
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          plan_id?: string
+          section_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_section_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_section_comments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_section_comments_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sections"
             referencedColumns: ["id"]
           }
         ]
@@ -3039,6 +3134,23 @@ export type Database = {
       }
       remove_workspace_member: {
         Args: { _user_id: string; _workspace_id: string }
+        Returns: undefined
+      }
+      plan_client_overview: {
+        Args: { _plan_id: string }
+        Returns: Json
+      }
+      plan_client_progress: {
+        Args: { _plan_ids: string[] }
+        Returns: {
+          plan_id: string
+          section_count: number
+          task_count: number
+          done_task_count: number
+        }[]
+      }
+      set_section_client_summary: {
+        Args: { _section_id: string; _summary: string }
         Returns: undefined
       }
       set_workspace_member_role: {

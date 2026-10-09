@@ -453,6 +453,7 @@ function PlanScreenBody({
                 description: values.description || null,
                 goals: values.goals || null,
                 intentions: values.intentions || null,
+                clientSummary: values.clientSummary || null,
                 color: values.color,
                 tags: values.tags,
               });
@@ -463,6 +464,7 @@ function PlanScreenBody({
                 description: values.description || undefined,
                 goals: values.goals || undefined,
                 intentions: values.intentions || undefined,
+                clientSummary: values.clientSummary || undefined,
                 color: values.color ?? undefined,
                 tags: values.tags,
               });

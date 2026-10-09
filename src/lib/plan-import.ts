@@ -295,7 +295,7 @@ function supabaseSyncStore(supabase: Client, planId: string, actorId: string | n
       const { data, error } = await supabase
         .from("plan_sections")
         .select(
-          "id, title, description, goals, intentions, tags, position, tasks:plan_tasks(id, title, description, acceptance_criteria, labels, color, ai_context, position, steps:plan_task_steps(id, text, position, feature_id), features:plan_task_features(id, text, position), questions:plan_task_questions(id, body))",
+          "id, title, description, goals, intentions, client_summary, tags, position, tasks:plan_tasks(id, title, description, acceptance_criteria, labels, color, ai_context, position, steps:plan_task_steps(id, text, position, feature_id), features:plan_task_features(id, text, position), questions:plan_task_questions(id, body))",
         )
         .eq("plan_id", planId)
         .order("position", { ascending: true });

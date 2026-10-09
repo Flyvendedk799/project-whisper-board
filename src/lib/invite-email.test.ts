@@ -3,10 +3,10 @@ import { inviteAcceptPath, inviteEmail } from "./invite-email";
 
 describe("inviteAcceptPath", () => {
   it("lands on the accept page, with the project when there is one", () => {
-    expect(inviteAcceptPath()).toBe("/invite/accept");
-    expect(inviteAcceptPath(null)).toBe("/invite/accept");
+    expect(inviteAcceptPath()).toBe("/app?invite_prompt=true");
+    expect(inviteAcceptPath(null)).toBe("/app?invite_prompt=true");
     expect(inviteAcceptPath("7c1f0d3e-0000-4000-8000-000000000001")).toBe(
-      "/invite/accept?project=7c1f0d3e-0000-4000-8000-000000000001",
+      "/app/projects/7c1f0d3e-0000-4000-8000-000000000001?invite_prompt=true",
     );
   });
 });

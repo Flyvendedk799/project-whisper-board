@@ -107,6 +107,8 @@ export type PlanMdSection = {
   id?: string;
   goals?: string;
   intentions?: string;
+  /** The plain-language Danish summary clients see. */
+  clientSummary?: string;
   tags?: string[];
   color?: string;
 };
@@ -1244,6 +1246,7 @@ export function planMarkdownCoverage(
         section.description,
         section.goals,
         section.intentions,
+        section.clientSummary,
         ...section.tasks.flatMap((task) => [
           task.title,
           task.description,

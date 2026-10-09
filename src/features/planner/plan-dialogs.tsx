@@ -125,6 +125,8 @@ export type SectionValues = {
   description: string;
   goals: string;
   intentions: string;
+  /** The client layer: a short plain-language summary, in Danish. */
+  clientSummary: string;
   color: string | null;
   tags: string[];
 };
@@ -153,6 +155,7 @@ export function SectionDialog({
   const [description, setDescription] = useState("");
   const [goals, setGoals] = useState("");
   const [intentions, setIntentions] = useState("");
+  const [clientSummary, setClientSummary] = useState("");
   const [color, setColor] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
 
@@ -162,6 +165,7 @@ export function SectionDialog({
     setDescription(section?.description ?? "");
     setGoals(section?.goals ?? "");
     setIntentions(section?.intentions ?? "");
+    setClientSummary(section?.client_summary ?? "");
     setColor(section?.color ?? null);
     setTags(section?.tags ?? []);
   }, [open, section]);
@@ -179,6 +183,7 @@ export function SectionDialog({
                 description: description.trim(),
                 goals: goals.trim(),
                 intentions: intentions.trim(),
+                clientSummary: clientSummary.trim(),
                 color,
                 tags,
               });
@@ -243,6 +248,24 @@ export function SectionDialog({
                 className="resize-y text-sm"
               />
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5 rounded-xl border border-dashed p-3">
+            <Label htmlFor="section-client-summary" className="text-xs text-muted-foreground">
+              Client summary (Danish)
+            </Label>
+            <Textarea
+              id="section-client-summary"
+              value={clientSummary}
+              onChange={(event) => setClientSummary(event.target.value)}
+              placeholder="Kort og letforståeligt: hvad sker der her, og hvor er vi? Det her ser kunden."
+              rows={3}
+              maxLength={2000}
+              className="resize-y text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The only part of this section clients on a shared plan see, with its progress. The
+              fields above stay with you and your agents.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Colour</span>

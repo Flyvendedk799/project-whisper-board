@@ -70,8 +70,24 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 10. **Finish with a result.** Mark features met and tick steps, then `complete_task` (summary, `branch_name`) or
     `create_pull_request`, which opens the PR (head defaults to the plan's work branch) and marks the task done.
 11. **Stuck?** `block_task` with a reason (it becomes a blocking question a person can answer) or `unclaim_task`.
+12. **Keep the client summary current.** On plans clients can see, keep each section's `client_summary` up to date, in Danish
+    (see Client summary below).
 
 `agent_guide` returns this workflow as text. The MCP server also sends it as its `instructions`.
+
+## Client summary
+
+Every section has two layers. The **agency layer** (`description`, `goals`, `intentions`, tags, tasks) is where you and
+the team work and can be as technical as you like. The **client layer** is `client_summary`: the only text a client of a
+client-view plan sees, next to the section title, colour and automatic progress.
+
+- Write it in **Danish**, in plain language, 1-3 short sentences. Example: "Vi har bygget loginsiden, og næste skridt
+  er at teste den."
+- Describe the outcome and progress, not the implementation. No jargon, task ids, branch names, PR numbers or code.
+- Set it with `create_section` / `update_section` (`client_summary`; `""` clears it). It comes back on every section in
+  `get_plan`, and survives Markdown export and import (a `**Client summary**` block).
+- Update it when a section's state meaningfully changes (work starts, a milestone lands, the section is done).
+- It only matters for plans clients can see; on other plans it is harmless and can be left empty.
 
 ## Ids, tags, colours
 
@@ -104,7 +120,8 @@ Key parameters:
 - `ask_question(task_id, body, blocking?)`, `answer_question(task_id, question_id, answer)`, `list_questions(plan_id | task_id, status?)`.
 - `add_task_features(task_id, items[] | text)`, `update_task_feature(task_id, feature_id, met?, text?)`.
 - `add_task_steps(task_id, items[] | text, feature_id?)`: `text` is one step per line, indent two spaces to nest.
-- `create_section(plan_id, title, description?, goals?, intentions?, color?, tags?)`, `update_section(section_id, ...)`.
+- `create_section(plan_id, title, description?, goals?, intentions?, client_summary?, color?, tags?)`, `update_section(section_id, ...)`.
+  `client_summary` is a short plain Danish summary for clients (see Client summary below); `""` or `null` clears it.
 - `create_task(plan_id, section_id, title, description?, priority?, complexity?, tags?, color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id?)`,
   `update_task(task_id, title?, description?, priority?, complexity?, tags?, color?, acceptance_criteria?[], branch_name?, assigned_user_id?)`.
 - `list_people()`: who is in the workspace. `assigned_user_id` takes a `user_id` from it, and a comment mentions someone with
@@ -167,7 +184,7 @@ All paths are under `/api/planner`. Bodies are JSON. Errors are `{ "error": "...
 | `POST plans/:plan_id`                                | `{ description?, github_repo?, github_base?, github_work_mode?, github_work_branch? }` (github / work_target only when missing)                                |
 | `POST plans/:plan_id/import`                         | `{ markdown, mode: sync \| merge \| replace }`                                                                                                                 |
 | `POST plans/:plan_id/status`                         | `{ status }`                                                                                                                                                   |
-| `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, color?, tags?[] }`                                                                                                |
+| `POST plans/:plan_id/sections`                       | `{ title, description?, goals?, intentions?, client_summary?, color?, tags?[] }`                                                                               |
 | `POST sections/:section_id`                          | same fields, all optional                                                                                                                                      |
 | `POST plans/:plan_id/tasks`                          | `{ section_id, title, description?, priority?, complexity?, tags?[], color?, features?[], acceptance_criteria?[], depends_on?[], status?, assigned_user_id? }` |
 | `GET github`                                         | is GitHub connected for the key owner (never the token)                                                                                                        |

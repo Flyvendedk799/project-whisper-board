@@ -34,6 +34,7 @@ function rich(): PlanMdDocument {
         description: "Everything else stands on this.",
         goals: "Sign-in works end to end.",
         intentions: "Keep it boring.\n\n- no new vendors",
+        clientSummary: "Vi har bygget loginsiden, og næste skridt er at teste den.",
         tags: ["infra", "security"],
         color: "#8b5cf6",
         tasks: [
@@ -116,6 +117,9 @@ describe("serializeBoardMarkdown", () => {
     );
     expect(md).toContain("- **Open · blocking** — Which identity provider?");
     expect(md).toContain("  > **Answer:** Not for v1.");
+    expect(md).toContain(
+      "**Client summary**\n\nVi har bygget loginsiden, og næste skridt er at teste den.",
+    );
     expect(md.endsWith("\n")).toBe(true);
   });
 

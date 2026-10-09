@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Eye, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -204,6 +204,24 @@ export function PlanHeader({
 
           <div className="flex items-center gap-2 max-md:w-full">
             {aiMenu}
+            {showClientVisibility ? (
+              <Button
+                asChild
+                type="button"
+                variant="outline"
+                className="h-9 gap-1.5 max-md:w-11 max-md:shrink-0 max-md:px-0"
+              >
+                <Link
+                  to="/app/planner/$planId"
+                  params={{ planId: plan.id }}
+                  search={{ view: "client" }}
+                  title="See this plan the way your client sees it"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  <span className="max-md:sr-only">View client view</span>
+                </Link>
+              </Button>
+            ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

@@ -86,7 +86,7 @@ async function loadPlan(supabase: Db, planId: string) {
       id, title, status, description, workspace_id, github_repo, github_base,
       project:projects(id, title, github_repo, github_default_branch),
       sections:plan_sections(
-        id, title, description, goals, intentions, tags, position,
+        id, title, description, goals, intentions, client_summary, tags, position,
         tasks:plan_tasks(
           id, section_id, title, status, priority, complexity, labels, description,
           acceptance_criteria, position, ai_context, depends_on,
@@ -120,6 +120,7 @@ async function loadPlan(supabase: Db, planId: string) {
       description: section.description,
       goals: section.goals,
       intentions: section.intentions,
+      client_summary: section.client_summary,
       tags: section.tags ?? [],
     })),
     tasks: tasks.map((task) => {

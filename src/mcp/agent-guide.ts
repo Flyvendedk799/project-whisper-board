@@ -63,6 +63,11 @@ export const WORKFLOW_RULES: readonly WorkflowRule[] = [
     body: "Mark the features you met and tick the steps, then complete_task (with a summary and branch_name) or create_pull_request, which opens the PR and marks the task done. Its head branch defaults to the plan's work branch.",
   },
   {
+    id: "client",
+    title: "Keep the client summary current",
+    body: "Every section has a client_summary: a short, plain DANISH summary (1-3 sentences, no jargon, task ids, branch names or code) of what is done and what comes next. On plans that clients can see it is the only text they read, so write it with create_section or update_section, and update it when the section's state meaningfully changes, for example after you finish a task in it.",
+  },
+  {
     id: "stuck",
     title: "If you cannot continue",
     body: "block_task with a reason: it becomes a blocking question a person can answer. Or unclaim_task to put the task back for someone else.",

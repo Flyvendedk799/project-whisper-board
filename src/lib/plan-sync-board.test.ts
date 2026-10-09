@@ -26,6 +26,7 @@ type SectionRow = {
   color?: string;
   goals?: string | null;
   intentions?: string | null;
+  client_summary?: string | null;
   tags?: string[];
 };
 type StepRow = NewStep & { id: string };
@@ -125,6 +126,7 @@ const DOC: PlanMdDocument = {
       description: "Note.",
       goals: "Goal.",
       intentions: "Intent.",
+      clientSummary: "Vi har bygget loginsiden.",
       tags: ["infra"],
       color: "#8b5cf6",
       tasks: [
@@ -173,6 +175,7 @@ describe("appendSections — a board export", () => {
       title: "Foundations",
       goals: "Goal.",
       intentions: "Intent.",
+      client_summary: "Vi har bygget loginsiden.",
       tags: ["infra"],
       color: "#8b5cf6",
     });
@@ -227,6 +230,7 @@ describe("appendSections — a board export", () => {
         ...(section.description && { description: section.description }),
         ...(section.goals && { goals: section.goals }),
         ...(section.intentions && { intentions: section.intentions }),
+        ...(section.client_summary && { clientSummary: section.client_summary }),
         ...(section.tags?.length && { tags: section.tags }),
         ...(section.color && { color: section.color }),
         tasks: board.tasks
@@ -342,8 +346,16 @@ describe("syncSections — a board export", () => {
     expect(board.sections[0]).toMatchObject({
       goals: "Goal.",
       intentions: "Intent.",
+      client_summary: "Vi har bygget loginsiden.",
       tags: ["infra"],
     });
+  });
+
+  it("never overwrites a client summary the section already has", async () => {
+    const board = existingBoard();
+    board.sections[0].client_summary = "Skrevet af et menneske.";
+    await syncSections(board.store, doc(), limits, { refreshNotes: false });
+    expect(board.sections[0].client_summary).toBe("Skrevet af et menneske.");
   });
 
   it("adds the features, steps and questions the task lacks, with the step links", async () => {

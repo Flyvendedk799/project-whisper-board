@@ -117,6 +117,7 @@ function richPlan(): PlanWithSections {
         description: "Everything else stands on this.",
         goals: "Sign-in works end to end.",
         intentions: "Keep it boring.",
+        client_summary: "Vi har bygget loginsiden.",
         tags: ["infra", "security"],
         color: "var(--chart-3)",
         position: 1,
@@ -153,6 +154,10 @@ describe("planToMarkdown", () => {
       **Intentions**
 
       Keep it boring.
+
+      **Client summary**
+
+      Vi har bygget loginsiden.
 
       ### Auth gate
 
@@ -209,9 +214,19 @@ describe("planToMarkdown", () => {
     plan.sections[0].tags = [];
     plan.sections[0].goals = null;
     plan.sections[0].intentions = null;
+    plan.sections[0].client_summary = null;
     const md = planToMarkdown(plan, NOW);
-    expect(md).not.toMatch(/\*\*(Features|Sub-steps|Acceptance|Questions|Goals|Intentions)\*\*/);
+    expect(md).not.toMatch(
+      /\*\*(Features|Sub-steps|Acceptance|Questions|Goals|Intentions|Client summary)\*\*/,
+    );
     expect(md).not.toContain("<details>");
+  });
+
+  it("writes the client summary and reads it back", () => {
+    const md = planToMarkdown(richPlan(), NOW);
+    expect(md).toContain("**Client summary**\n\nVi har bygget loginsiden.");
+    const parsed = parsePlanMarkdown(md);
+    expect(parsed.sections[0].clientSummary).toBe("Vi har bygget loginsiden.");
   });
 
   it("reads back into the same document", () => {

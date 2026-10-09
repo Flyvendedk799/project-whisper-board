@@ -17,7 +17,7 @@
  *
  *   Section description.
  *
- *   **Goals** / **Intentions**
+ *   **Goals** / **Intentions** / **Client summary**
  *
  *   ### Task
  *
@@ -266,6 +266,9 @@ function writeSection(section: PlanMdSection): string[] {
   if (section.description?.trim()) blocks.push(prose(section.description));
   if (section.goals?.trim()) blocks.push(`**Goals**\n\n${prose(section.goals)}`);
   if (section.intentions?.trim()) blocks.push(`**Intentions**\n\n${prose(section.intentions)}`);
+  if (section.clientSummary?.trim()) {
+    blocks.push(`**Client summary**\n\n${prose(section.clientSummary)}`);
+  }
   for (const task of section.tasks) blocks.push(...writeTask(task));
   return blocks;
 }
@@ -401,6 +404,7 @@ type BlockName =
   | "text"
   | "goals"
   | "intentions"
+  | "clientSummary"
   | "features"
   | "steps"
   | "acceptance"
@@ -409,7 +413,7 @@ type BlockName =
 
 const BLOCK_LABELS: Record<Kind, Record<string, BlockName>> = {
   plan: {},
-  section: { goals: "goals", intentions: "intentions" },
+  section: { goals: "goals", intentions: "intentions", "client summary": "clientSummary" },
   task: {
     features: "features",
     requirements: "features",
@@ -459,6 +463,7 @@ function readContainer(
       text: [],
       goals: [],
       intentions: [],
+      clientSummary: [],
       features: [],
       steps: [],
       acceptance: [],
@@ -793,12 +798,14 @@ export function parseBoardMarkdown(source: string): PlanMdDocument {
       const description = joinText(fitted.overflow, joinBody(blocks.text), ...unread);
       const goals = joinBody(blocks.goals);
       const intentions = joinBody(blocks.intentions);
+      const clientSummary = joinBody(blocks.clientSummary);
       const sectionTags = tags ? readTags(tags) : [];
       section = {
         title: fitted.title,
         ...(description && { description }),
         ...(goals && { goals }),
         ...(intentions && { intentions }),
+        ...(clientSummary && { clientSummary }),
         ...(sectionTags.length > 0 && { tags: sectionTags }),
         ...(colour && { color: colour }),
         ...(sectionId && { id: sectionId }),

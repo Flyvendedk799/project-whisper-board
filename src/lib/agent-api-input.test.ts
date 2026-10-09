@@ -168,6 +168,19 @@ describe("sections", () => {
     expect(parseSectionUpdate({ color: null, goals: "" })).toEqual({ color: null, goals: null });
   });
 
+  it("accepts a trimmed client summary and lets update clear it", () => {
+    expect(
+      parseSectionCreate({ title: "x", client_summary: "  Vi har bygget loginsiden.  " }),
+    ).toEqual({ title: "x", client_summary: "Vi har bygget loginsiden." });
+    expect(parseSectionUpdate({ client_summary: "Næste skridt er test." })).toEqual({
+      client_summary: "Næste skridt er test.",
+    });
+    expect(parseSectionUpdate({ client_summary: "" })).toEqual({ client_summary: null });
+    expect(parseSectionUpdate({ client_summary: null })).toEqual({ client_summary: null });
+    expect(problem(() => parseSectionUpdate({ client_summary: 5 }))).toMatch(/must be text/);
+    expect(problem(() => parseSectionUpdate({ client_summary: "x".repeat(2001) }))).toMatch(/2000/);
+  });
+
   it("holds titles and text to the lengths the screen allows", () => {
     expect(problem(() => parseSectionCreate({ title: "x".repeat(101) }))).toMatch(/100/);
     expect(problem(() => parseSectionUpdate({ goals: "x".repeat(5001) }))).toMatch(/5000/);

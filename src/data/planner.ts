@@ -11,6 +11,7 @@ import {
   listTasksByTicket,
 } from "@/lib/planner.functions";
 import { getPlanPullRequests } from "@/lib/plan-pulls.functions";
+import { getClientPlan } from "@/lib/plan-client-view.functions";
 import { getAiSettings } from "@/lib/ai-planner.functions";
 import { listPlanPatches } from "@/lib/plan-patches.functions";
 
@@ -102,4 +103,12 @@ export const userAiSettingsQuery = () =>
     queryKey: qk.aiSettings(),
     queryFn: () => getAiSettings(),
     staleTime: 5 * 60_000,
+  });
+
+/** The plan as its clients see it: the client layer only. */
+export const clientPlanQuery = (planId: string) =>
+  queryOptions({
+    queryKey: [...qk.plan(planId), "client"],
+    queryFn: () => getClientPlan({ data: { planId } }),
+    enabled: Boolean(planId),
   });

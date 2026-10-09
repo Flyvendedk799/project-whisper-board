@@ -555,6 +555,21 @@ export const listPlans = createServerFn({ method: "GET" })
       const { data: plans, error } = await query;
       if (error) throw error;
 
+      // A client may see a shared plan but not its tasks, so their counts come
+      // from a function that answers for the client layer only.
+      const clientProgress = new Map<
+        string,
+        { section_count: number; task_count: number; done_task_count: number }
+      >();
+      if (membership.role !== "admin" && (plans?.length ?? 0) > 0) {
+        const { data: progress, error: progressError } = await supabase.rpc(
+          "plan_client_progress",
+          { _plan_ids: (plans ?? []).map((plan) => plan.id) },
+        );
+        if (progressError) throw progressError;
+        for (const row of progress ?? []) clientProgress.set(row.plan_id, row);
+      }
+
       return {
         plans: (plans ?? []).map((plan) => {
           const sectionCount = Array.isArray(plan.plan_sections)
@@ -562,11 +577,14 @@ export const listPlans = createServerFn({ method: "GET" })
             : 0;
           const tasks = Array.isArray(plan.plan_tasks) ? plan.plan_tasks : [];
           const { plan_sections: _sections, plan_tasks: _tasks, ...rest } = plan;
+          const shared = clientProgress.get(plan.id);
           return {
             ...rest,
-            section_count: sectionCount,
-            task_count: tasks.length,
-            done_task_count: tasks.filter((task) => task.status === "done").length,
+            section_count: shared ? Number(shared.section_count) : sectionCount,
+            task_count: shared ? Number(shared.task_count) : tasks.length,
+            done_task_count: shared
+              ? Number(shared.done_task_count)
+              : tasks.filter((task) => task.status === "done").length,
           };
         }),
       };
@@ -671,6 +689,7 @@ export const createSection = createServerFn({ method: "POST" })
         description: z.string().max(10000).optional(),
         goals: z.string().max(5000).optional(),
         intentions: z.string().max(5000).optional(),
+        clientSummary: z.string().max(2000).optional(),
         color: colorField.optional(),
         tags: tagsField.optional(),
       })
@@ -700,6 +719,7 @@ export const createSection = createServerFn({ method: "POST" })
           description: data.description ?? null,
           goals: data.goals?.trim() || null,
           intentions: data.intentions?.trim() || null,
+          client_summary: data.clientSummary?.trim() || null,
           tags: data.tags ?? [],
           color,
           position,
@@ -728,6 +748,7 @@ export const updateSection = createServerFn({ method: "POST" })
         description: z.string().max(10000).nullable().optional(),
         goals: z.string().max(5000).nullable().optional(),
         intentions: z.string().max(5000).nullable().optional(),
+        clientSummary: z.string().max(2000).nullable().optional(),
         color: colorField.nullable().optional(),
         tags: tagsField.optional(),
       })
@@ -752,6 +773,9 @@ export const updateSection = createServerFn({ method: "POST" })
         }),
         ...(fields.goals !== undefined && { goals: fields.goals?.trim() || null }),
         ...(fields.intentions !== undefined && { intentions: fields.intentions?.trim() || null }),
+        ...(fields.clientSummary !== undefined && {
+          client_summary: fields.clientSummary?.trim() || null,
+        }),
         ...(fields.color !== undefined && { color: fields.color }),
         ...(fields.tags !== undefined && { tags: fields.tags }),
       };

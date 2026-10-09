@@ -153,6 +153,12 @@ const COLOR: ToolParam = {
   type: "string",
   description: "A hex colour like #3b82f6 or a design token like var(--chart-1)",
 };
+const CLIENT_SUMMARY: ToolParam = {
+  name: "client_summary",
+  type: "string",
+  description:
+    "Short plain DANISH summary a client can read: 1-3 sentences on what is done and what comes next, no jargon, task IDs, branch names or code. Clients of a client-view plan only see this, the title and progress. Send an empty string to clear it.",
+};
 const TAGS: ToolParam = {
   name: "tags",
   type: "string[]",
@@ -194,7 +200,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     summary:
       "A plan with its sections, tasks, features, steps and questions, its own files and its work_target.",
     description:
-      "Get a plan with its sections (goals, intentions, tags, colour) and tasks (tags as labels, colour, ai_context, features, steps with feature_id, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
+      "Get a plan with its sections (goals, intentions, client_summary, tags, colour) and tasks (tags as labels, colour, ai_context, features, steps with feature_id, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
     rest: { method: "GET", path: "plans/:plan_id" },
     params: [PLAN_ID],
   },
@@ -800,7 +806,8 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
   {
     name: "create_section",
     group: "Authoring",
-    summary: "Add a section to a plan, with goals, intentions, tags and a colour.",
+    summary:
+      "Add a section to a plan, with goals, intentions, a Danish client summary, tags and a colour.",
     rest: { method: "POST", path: "plans/:plan_id/sections" },
     params: [
       PLAN_ID,
@@ -813,6 +820,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       { name: "description", type: "string", description: "What the section covers" },
       { name: "goals", type: "string", description: "What it should achieve" },
       { name: "intentions", type: "string", description: "Why, and the approach intended" },
+      CLIENT_SUMMARY,
       COLOR,
       TAGS,
     ],
@@ -820,7 +828,8 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
   {
     name: "update_section",
     group: "Authoring",
-    summary: "Change a section's title, description, goals, intentions, colour or tags.",
+    summary:
+      "Change a section's title, description, goals, intentions, client summary, colour or tags.",
     rest: { method: "POST", path: "sections/:section_id" },
     params: [
       { ...SECTION_ID },
@@ -828,6 +837,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       { name: "description", type: "string", description: "New description" },
       { name: "goals", type: "string", description: "New goals" },
       { name: "intentions", type: "string", description: "New intentions" },
+      { ...CLIENT_SUMMARY, description: `New client summary. ${CLIENT_SUMMARY.description}` },
       COLOR,
       TAGS,
     ],
