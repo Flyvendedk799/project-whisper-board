@@ -1414,7 +1414,7 @@ select assert(
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select assert(
   (select count(*) from public.plan_section_comments
-   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 2
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 3
   and (select client_summary from public.plan_sections
        where id = 'eeeeeeee-0000-0000-0000-000000000002') = 'Vi er færdige med første del.'
   and (select count(*) from public.plan_tasks
