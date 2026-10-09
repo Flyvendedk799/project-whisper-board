@@ -55,6 +55,8 @@ import { useServerAction } from "@/lib/use-server-action";
 import {
   addProjectMember,
   inviteClient,
+  listInviteFollowUps,
+  removeProjectMember,
   sendInviteFollowUp,
   setProjectMemberRole,
 } from "@/lib/admin.functions";
@@ -76,7 +78,8 @@ import {
   ROLE_LABEL,
   type ProjectStatus,
 } from "@/data/enums";
-import { formatDate } from "@/lib/utils-format";
+import { formatDate, formatRelative } from "@/lib/utils-format";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 
 /**
@@ -406,9 +409,17 @@ function PeoplePanel({
   pendingInvite: string | null;
   onPendingInviteChange: (email: string | null) => void;
 }) {
-  const { workspaceId } = useAuth();
+  const { user, workspaceId } = useAuth();
   const members = useQuery(projectMembersQuery(projectId));
   const workspaceMembers = useQuery(workspaceMembersQuery(workspaceId));
+  const fetchFollowUps = useServerFn(listInviteFollowUps);
+  // Under the members key, so anything that refreshes the list refreshes this too.
+  const followUps = useQuery({
+    queryKey: [...qk.projectMembers(projectId), "follow-ups"],
+    enabled: canInvite && Boolean(workspaceId),
+    queryFn: () => fetchFollowUps({ data: { workspaceId: workspaceId!, projectId } }),
+  });
+  const followUpByUser = new Map((followUps.data ?? []).map((row) => [row.userId, row] as const));
 
   const setRole = useServerAction(useServerFn(setProjectMemberRole), {
     label: "admin.setProjectMemberRole",
@@ -582,6 +593,9 @@ function PeoplePanel({
                   const canToggle =
                     canManageRoles && (role === "client" || role === "client_admin") && workspaceId;
                   const pending = inviteStatusByUser.get(member.user_id) ?? false;
+                  const followUp = followUpByUser.get(member.user_id);
+                  const displayName =
+                    member.profile?.full_name || member.profile?.email || "this person";
 
                   return (
                     <div key={member.id} className="flex items-center gap-3 p-4 max-md:flex-wrap">
@@ -602,6 +616,11 @@ function PeoplePanel({
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
                           {member.profile?.email}
+                          {pending && followUp
+                            ? ` · Opfølgning sendt ${formatRelative(followUp.lastSentAt)}${
+                                followUp.count > 1 ? ` (${followUp.count}×)` : ""
+                              }`
+                            : ""}
                         </div>
                       </div>
                       <StatusPill>
@@ -612,7 +631,8 @@ function PeoplePanel({
                           workspaceId={workspaceId}
                           projectId={projectId}
                           userId={member.user_id}
-                          name={member.profile?.full_name || member.profile?.email || "invitee"}
+                          name={displayName}
+                          lastSentAt={followUp?.lastSentAt}
                         />
                       )}
                       {canToggle && (
@@ -633,6 +653,15 @@ function PeoplePanel({
                           {role === "client_admin" ? "Make client" : "Make lead"}
                         </Button>
                       )}
+                      {canInvite && workspaceId && member.user_id !== user?.id && (
+                        <RemoveMemberButton
+                          workspaceId={workspaceId}
+                          projectId={projectId}
+                          userId={member.user_id}
+                          name={displayName}
+                          pending={pending}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -651,16 +680,23 @@ function FollowUpButton({
   projectId,
   userId,
   name,
+  lastSentAt,
 }: {
   workspaceId: string;
   projectId: string;
   userId: string;
   name: string;
+  lastSentAt?: string;
 }) {
   const followUp = useServerAction(useServerFn(sendInviteFollowUp), {
     label: "admin.sendInviteFollowUp",
     success: `Opfølgning sendt til ${name}`,
+    invalidate: [qk.projectMembers(projectId)],
   });
+  // Mirrors the server's cooldown: one reminder per person per project a day.
+  const recentlySent = lastSentAt
+    ? Date.now() - new Date(lastSentAt).getTime() < FOLLOW_UP_COOLDOWN_MS
+    : false;
 
   return (
     <Button
@@ -668,12 +704,67 @@ function FollowUpButton({
       variant="outline"
       size="sm"
       className="max-md:order-last max-md:w-full"
-      disabled={followUp.busy}
+      disabled={followUp.busy || recentlySent}
+      title={recentlySent ? "Opfølgning er sendt inden for de seneste 24 timer" : undefined}
       aria-label={`Send opfølgning til ${name}`}
       onClick={() => followUp.fire({ workspaceId, projectId, userId })}
     >
-      {followUp.busy ? "Sender…" : "Send opfølgning"}
+      {followUp.busy ? "Sender…" : recentlySent ? "Opfølgning sendt" : "Send opfølgning"}
     </Button>
+  );
+}
+
+const FOLLOW_UP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/** Cancels a pending invite to the project, or takes a joined person off it. */
+function RemoveMemberButton({
+  workspaceId,
+  projectId,
+  userId,
+  name,
+  pending,
+}: {
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  name: string;
+  pending: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const remove = useServerAction(useServerFn(removeProjectMember), {
+    label: "admin.removeProjectMember",
+    success: pending ? "Invite cancelled" : "Removed from this project",
+    invalidate: [qk.projectMembers(projectId), qk.workspacePeople(workspaceId)],
+    onSuccess: () => setConfirming(false),
+  });
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="max-md:order-last max-md:w-full"
+        disabled={remove.busy}
+        aria-label={`${pending ? "Cancel invite for" : "Remove"} ${name}`}
+        onClick={() => setConfirming(true)}
+      >
+        {pending ? "Cancel invite" : "Remove"}
+      </Button>
+      <ConfirmDeleteDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={pending ? `Cancel ${name}'s invite?` : `Remove ${name} from this project?`}
+        confirmLabel={pending ? "Cancel invite" : "Remove"}
+        busyLabel={pending ? "Cancelling…" : "Removing…"}
+        busy={remove.busy}
+        onConfirm={() => remove.fire({ workspaceId, projectId, userId })}
+      >
+        {pending
+          ? "They are taken off this project and can no longer open it. They stay on the Team page as pending until you revoke the invite there."
+          : "They lose access to this project's tickets and updates. They stay in the workspace and can be added back at any time."}
+      </ConfirmDeleteDialog>
+    </>
   );
 }
 

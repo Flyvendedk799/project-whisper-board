@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { assertWorkspaceAdmin, assertWorkspaceInviter } from "@/lib/workspace.functions";
 import { appUrl } from "@/lib/app-origin";
+import { AppError } from "@/lib/errors";
 import { followUpEmail } from "@/lib/followup-email";
 import { inviteAcceptPath, inviteEmail } from "@/lib/invite-email";
 import { sendAccountEmail } from "@/lib/notifications.functions";
@@ -309,16 +310,25 @@ export const sendInviteFollowUp = createServerFn({ method: "POST" })
       .eq("workspace_id", data.workspaceId)
       .eq("user_id", data.userId)
       .maybeSingle();
-    if (!member) throw new Error("Not found: that person is not on this project");
+    if (!member) {
+      throw new AppError("not_found", "That person is not on this project.", { status: 404 });
+    }
     if (member.role !== "client" && inviterRole !== "admin") {
-      throw new Error("Forbidden: only admins can follow up with that role");
+      throw new AppError("forbidden", "Only admins can follow up with that role.", { status: 403 });
     }
 
     const { data: found, error: userErr } = await a.auth.admin.getUserById(data.userId);
-    if (userErr || !found?.user?.email) throw new Error("Not found: no email for that person");
+    if (userErr || !found?.user?.email) {
+      throw new AppError("not_found", "We have no email address for that person.", {
+        status: 404,
+      });
+    }
     const user = found.user;
     if (user.last_sign_in_at) {
-      throw new Error("They have already joined, so there is nothing to follow up on.");
+      throw new AppError(
+        "already_joined",
+        "They have already joined, so there is nothing to follow up on.",
+      );
     }
 
     const since = new Date(Date.now() - FOLLOW_UP_COOLDOWN_MS).toISOString();
@@ -332,7 +342,11 @@ export const sendInviteFollowUp = createServerFn({ method: "POST" })
       .gte("created_at", since)
       .limit(1);
     if (recent?.length) {
-      throw new Error("A reminder was already sent in the last 24 hours. Give them a little time.");
+      throw new AppError(
+        "follow_up_cooldown",
+        "A reminder was already sent in the last 24 hours. Give them a little time.",
+        { status: 429 },
+      );
     }
 
     const [{ data: sender }, { data: recipient }, { data: workspace }, { data: project }] =
@@ -360,8 +374,97 @@ export const sendInviteFollowUp = createServerFn({ method: "POST" })
       workspaceId: data.workspaceId,
     });
     if (!delivered) {
-      throw new Error("The email couldn't be sent. Check the Outbox for the reason.");
+      throw new AppError("email_failed", "The email couldn't be sent. Please try again.", {
+        status: 502,
+      });
     }
+    return { ok: true };
+  });
+
+/**
+ * When each invited person on a project last got a follow-up, so the people list
+ * can show it. Read here rather than in the browser: the Outbox is admin-only
+ * under RLS, and client leads can send reminders too.
+ */
+export const listInviteFollowUps = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ workspaceId: z.string().uuid(), projectId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    const { data: rows, error } = await admin()
+      .from("outbound_messages")
+      .select("to_user_id, created_at")
+      .eq("workspace_id", data.workspaceId)
+      .eq("template", "invite_followup")
+      .eq("related_id", data.projectId)
+      .eq("status", "sent")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+
+    // Newest first, so the first row seen per person is their latest reminder.
+    const byUser = new Map<string, { userId: string; lastSentAt: string; count: number }>();
+    for (const row of rows ?? []) {
+      if (!row.to_user_id) continue;
+      const seen = byUser.get(row.to_user_id);
+      if (seen) seen.count += 1;
+      else
+        byUser.set(row.to_user_id, {
+          userId: row.to_user_id,
+          lastSentAt: row.created_at,
+          count: 1,
+        });
+    }
+    return [...byUser.values()];
+  });
+
+/**
+ * Takes someone off a project: cancels a pending invite to it, or removes a
+ * person who has joined. They stay in the workspace (and on Team, still pending
+ * if they never signed in); removing them from the workspace is a Team action.
+ */
+export const removeProjectMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        projectId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const a = admin();
+    const inviterRole = await assertWorkspaceInviter(context.userId, data.workspaceId);
+
+    if (data.userId === context.userId) {
+      throw new AppError("self_remove", "You can't remove yourself from a project.");
+    }
+
+    const { data: member } = await a
+      .from("project_members")
+      .select("role")
+      .eq("project_id", data.projectId)
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (!member) {
+      throw new AppError("not_found", "That person is not on this project.", { status: 404 });
+    }
+    if (member.role !== "client" && inviterRole !== "admin") {
+      throw new AppError("forbidden", "Only admins can remove that role.", { status: 403 });
+    }
+
+    const { error } = await a
+      .from("project_members")
+      .delete()
+      .eq("project_id", data.projectId)
+      .eq("workspace_id", data.workspaceId)
+      .eq("user_id", data.userId);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
