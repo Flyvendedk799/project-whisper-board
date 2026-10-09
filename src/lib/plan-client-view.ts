@@ -13,6 +13,29 @@ export type ClientStep = {
   done: boolean;
 };
 
+/** What a task has to deliver, in plain words; `met` is whether it is done. */
+export type ClientFeature = {
+  id: string;
+  text: string;
+  met: boolean;
+};
+
+/**
+ * A question the client can see: one put to them (`awaiting_client` while it is
+ * open) or one they asked the agency (`from_client`). The agency's own and the
+ * agents' questions never appear.
+ */
+export type ClientQuestion = {
+  id: string;
+  body: string;
+  status: "open" | "answered";
+  from_client: boolean;
+  awaiting_client: boolean;
+  answer: string | null;
+  created_at: string;
+  answered_at: string | null;
+};
+
 /** A task as a client reads it: plain wording and a plain status, nothing technical. */
 export type ClientTaskStatus = "todo" | "in_progress" | "waiting" | "done";
 
@@ -23,6 +46,8 @@ export type ClientTask = {
   status: ClientTaskStatus;
   position: number;
   steps: ClientStep[];
+  features: ClientFeature[];
+  questions: ClientQuestion[];
 };
 
 export type ClientSection = {
@@ -57,6 +82,8 @@ export type ClientPerson = {
 export type ClientComment = {
   id: string;
   section_id: string | null;
+  /** Set when the comment is on a single task. */
+  task_id: string | null;
   body: string;
   created_at: string;
   author: ClientPerson | null;
@@ -142,3 +169,14 @@ export const CLIENT_TASK_STATUS_DA: Record<ClientTaskStatus, string> = {
   waiting: "Afventer",
   done: "Færdig",
 };
+
+/** Questions waiting for the client's answer, across the whole plan. */
+export function questionsAwaitingClient(sections: ReadonlyArray<Pick<ClientSection, "tasks">>) {
+  return sections.flatMap((section) =>
+    section.tasks.flatMap((task) =>
+      task.questions
+        .filter((question) => question.awaiting_client)
+        .map((question) => ({ task, question })),
+    ),
+  );
+}

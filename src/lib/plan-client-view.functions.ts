@@ -7,6 +7,7 @@ import { AppError } from "@/lib/errors";
 import { guard } from "@/lib/server-errors";
 import { actorName, deliver, type NotifyTarget } from "@/lib/notifications.functions";
 import { excerptOf } from "@/lib/notify-targets";
+import { clientTaskLink, notifyClientReply } from "@/lib/plan-client-notify";
 import {
   CLIENT_COMMENT_MAX,
   CLIENT_SUMMARY_MAX,
@@ -28,10 +29,6 @@ function adminDb() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-}
-
-function clientViewLink(planId: string) {
-  return `/app/planner/${planId}?view=client`;
 }
 
 function toOverview(value: unknown): ClientPlanOverview {
@@ -63,7 +60,7 @@ export const getClientPlan = createServerFn({ method: "GET" })
       const [comments, approvals] = await Promise.all([
         supabase
           .from("plan_section_comments")
-          .select(`id, section_id, body, created_at, author:profiles(${PERSON})`)
+          .select(`id, section_id, task_id, body, created_at, author:profiles(${PERSON})`)
           .eq("plan_id", data.planId)
           .order("created_at", { ascending: true })
           .returns<ClientComment[]>(),
@@ -125,6 +122,8 @@ async function notifyComment(input: {
   projectId: string | null;
   planId: string;
   planTitle: string;
+  taskId?: string | null;
+  /** The section or task the comment is on, for the notice. */
   sectionTitle: string | null;
   body: string;
 }) {
@@ -170,7 +169,7 @@ async function notifyComment(input: {
         ? `${who} har svaret på planen ${where}`
         : `${who} kommenterede ${where}`,
       body: excerpt || null,
-      link: clientViewLink(input.planId),
+      link: clientTaskLink(input.planId, input.taskId),
       emailSubject: actorIsAgency
         ? `Nyt svar på planen ${input.planTitle}`
         : `${who} kommenterede planen ${input.planTitle}`,
@@ -193,6 +192,8 @@ export const addPlanComment = createServerFn({ method: "POST" })
       .object({
         planId: z.string().uuid(),
         sectionId: z.string().uuid().nullable().optional(),
+        /** A comment on one task; leave the section empty then. */
+        taskId: z.string().uuid().nullable().optional(),
         body: z.string().trim().min(1, "Write a comment first.").max(CLIENT_COMMENT_MAX),
       })
       .parse(input),
@@ -212,7 +213,8 @@ export const addPlanComment = createServerFn({ method: "POST" })
         .from("plan_section_comments")
         .insert({
           plan_id: data.planId,
-          section_id: data.sectionId ?? null,
+          section_id: data.taskId ? null : (data.sectionId ?? null),
+          task_id: data.taskId ?? null,
           author_id: userId,
           body: data.body,
         })
@@ -226,13 +228,15 @@ export const addPlanComment = createServerFn({ method: "POST" })
       }
 
       let sectionTitle: string | null = null;
-      if (data.sectionId) {
+      if (data.sectionId || data.taskId) {
         const { data: overview } = await supabase.rpc("plan_client_overview", {
           _plan_id: data.planId,
         });
-        sectionTitle =
-          toOverview(overview).sections.find((section) => section.id === data.sectionId)?.title ??
-          null;
+        const sections = toOverview(overview).sections;
+        sectionTitle = data.taskId
+          ? (sections.flatMap((section) => section.tasks).find((task) => task.id === data.taskId)
+              ?.title ?? null)
+          : (sections.find((section) => section.id === data.sectionId)?.title ?? null);
       }
       await notifyComment({
         actorId: userId,
@@ -240,6 +244,7 @@ export const addPlanComment = createServerFn({ method: "POST" })
         projectId: plan.project_id,
         planId: plan.id,
         planTitle: plan.title,
+        taskId: data.taskId ?? null,
         sectionTitle,
         body: data.body,
       });
@@ -302,5 +307,94 @@ export const setSectionApproval = createServerFn({ method: "POST" })
         if (error) throw error;
       }
       return { ok: true };
+    }),
+  );
+
+/** A question put to the client: they answer it in their own words. */
+export const answerClientQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        questionId: z.string().uuid(),
+        answer: z.string().trim().min(1, "Skriv et svar først.").max(5000),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("clientPlan.answerQuestion", async () => {
+      const { error } = await context.supabase.rpc("answer_client_question", {
+        _question_id: data.questionId,
+        _answer: data.answer,
+      });
+      if (error) {
+        if (/already answered/i.test(error.message)) {
+          throw new AppError("already_answered", "Det spørgsmål er allerede besvaret.");
+        }
+        if (/forbidden/i.test(error.message) || /not found/i.test(error.message)) {
+          throw new AppError("forbidden", "Du kan ikke svare på det spørgsmål.", { status: 403 });
+        }
+        throw error;
+      }
+
+      // The agency is told. The plan and task are read with the service role:
+      // a client cannot read the questions table, only answer through the RPC.
+      const { data: question } = await adminDb()
+        .from("plan_task_questions")
+        .select("plan_id, task_id")
+        .eq("id", data.questionId)
+        .maybeSingle();
+      if (question) {
+        await notifyClientReply({
+          actorId: context.userId,
+          planId: question.plan_id,
+          taskId: question.task_id,
+          kind: "answered",
+          text: data.answer,
+        });
+      }
+      return { ok: true };
+    }),
+  );
+
+/** The client asks the agency something about a task. */
+export const askClientQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        taskId: z.string().uuid(),
+        body: z.string().trim().min(1, "Skriv dit spørgsmål først.").max(2000),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("clientPlan.askQuestion", async () => {
+      const { data: id, error } = await context.supabase.rpc("ask_client_question", {
+        _task_id: data.taskId,
+        _body: data.body,
+      });
+      if (error) {
+        if (/forbidden/i.test(error.message) || /not found/i.test(error.message)) {
+          throw new AppError("forbidden", "Du kan ikke stille et spørgsmål her.", { status: 403 });
+        }
+        throw error;
+      }
+
+      const { data: task } = await adminDb()
+        .from("plan_tasks")
+        .select("plan_id")
+        .eq("id", data.taskId)
+        .maybeSingle();
+      if (task) {
+        await notifyClientReply({
+          actorId: context.userId,
+          planId: task.plan_id,
+          taskId: data.taskId,
+          kind: "asked",
+          text: data.body,
+        });
+      }
+      return { id };
     }),
   );

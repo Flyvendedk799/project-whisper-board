@@ -4,6 +4,8 @@ import {
   isUuid,
   optionalUuid,
   parseAnswerInput,
+  parseAudienceFilter,
+  parseAudienceInput,
   parseBlockInput,
   parseFeaturesInput,
   parseFeatureUpdate,
@@ -20,6 +22,7 @@ import {
   parseTaskCreate,
   parseTaskUpdate,
   parseWorkTarget,
+  resolveClientBody,
 } from "./agent-api-input";
 import { AppError } from "./errors";
 
@@ -203,7 +206,7 @@ describe("tasks", () => {
     });
     expect(task.sectionId).toBe(ID);
     expect(task.status).toBe("available");
-    expect(task.features).toEqual(["Sign in", "Sign out"]);
+    expect(task.features).toEqual([{ text: "Sign in" }, { text: "Sign out" }]);
     expect(task.dependsOn).toEqual([ID2]);
     expect(task.fields).toMatchObject({
       title: "Build login",
@@ -269,12 +272,44 @@ describe("tasks", () => {
   });
 });
 
+describe("task features with client text", () => {
+  const base = { section_id: ID, title: "Build login" };
+
+  it("takes texts and { text, client_text } entries", () => {
+    const task = parseTaskCreate({
+      ...base,
+      features: [
+        "Sign in",
+        { text: " Sign out ", client_text: "  Man kan logge ud  " },
+        { text: "Remember me", client_text: "" },
+        { text: "  " },
+      ],
+    });
+    expect(task.features).toEqual([
+      { text: "Sign in" },
+      { text: "Sign out", clientText: "Man kan logge ud" },
+      { text: "Remember me" },
+    ]);
+  });
+
+  it("refuses a feature entry that is neither, and a client text over 300", () => {
+    expect(problem(() => parseTaskCreate({ ...base, features: [5] }))).toMatch(/features/);
+    expect(
+      problem(() =>
+        parseTaskCreate({ ...base, features: [{ text: "x", client_text: "x".repeat(301) }] }),
+      ),
+    ).toMatch(/300/);
+  });
+});
+
 describe("questions", () => {
-  it("parses a question, defaulting to non-blocking", () => {
+  it("parses a question, defaulting to non-blocking and to the agency", () => {
     expect(parseQuestionInput({ body: " Which provider? " })).toEqual({
       body: "Which provider?",
       blocking: false,
       agentId: null,
+      audience: "agency",
+      clientBody: null,
     });
     expect(parseQuestionInput({ body: "x", blocking: true, agent_id: ID }).blocking).toBe(true);
     expect(parseQuestionInput({ body: "x", blocking: "yes" }).blocking).toBe(false);
@@ -284,6 +319,74 @@ describe("questions", () => {
     expect(problem(() => parseQuestionInput({ body: "  " }))).toMatch(/required/);
     expect(problem(() => parseQuestionInput({ body: "x".repeat(2001) }))).toMatch(/2000/);
     expect(problem(() => parseQuestionInput({ body: "x", agent_id: "me" }))).toMatch(/agent_id/);
+  });
+
+  it("aims a question at the agent or the client", () => {
+    expect(parseQuestionInput({ body: "x", audience: "agent" })).toMatchObject({
+      audience: "agent",
+      clientBody: null,
+    });
+    expect(parseQuestionInput({ body: "x", audience: null }).audience).toBe("agency");
+    expect(
+      parseQuestionInput({
+        body: "x",
+        audience: "client",
+        client_body: "  Hvilken farve vil du have?  ",
+      }),
+    ).toMatchObject({ audience: "client", clientBody: "Hvilken farve vil du have?" });
+    // A wording sent for another audience is kept, so the question can be sent on later.
+    expect(
+      parseQuestionInput({ body: "x", audience: "agency", client_body: "Hej" }).clientBody,
+    ).toBe("Hej");
+  });
+
+  it("refuses an unknown audience", () => {
+    expect(problem(() => parseQuestionInput({ body: "x", audience: "everyone" }))).toMatch(
+      /audience.*agency, agent, client/,
+    );
+    expect(problem(() => parseQuestionInput({ body: "x", audience: 3 }))).toMatch(/audience/);
+  });
+
+  it("needs a Danish client_body to ask the client", () => {
+    for (const client_body of [undefined, "", "   ", null]) {
+      expect(
+        problem(() => parseQuestionInput({ body: "x", audience: "client", client_body })),
+      ).toMatch(/client_body.*Danish/);
+    }
+    expect(
+      problem(() =>
+        parseQuestionInput({ body: "x", audience: "client", client_body: "y".repeat(2001) }),
+      ),
+    ).toMatch(/2000/);
+  });
+
+  it("re-aims a question: a client wording is required unless it already has one", () => {
+    expect(parseAudienceInput({ audience: "client", client_body: " Hej " })).toEqual({
+      audience: "client",
+      clientBody: "Hej",
+    });
+    expect(parseAudienceInput({ audience: "agency" })).toEqual({
+      audience: "agency",
+      clientBody: undefined,
+    });
+    expect(problem(() => parseAudienceInput({}))).toMatch(/audience.*required/);
+    expect(problem(() => parseAudienceInput({ audience: "nobody" }))).toMatch(/audience/);
+
+    expect(resolveClientBody("client", "Nyt spørgsmål", "Gammelt")).toBe("Nyt spørgsmål");
+    expect(resolveClientBody("client", undefined, " Gammelt ")).toBe("Gammelt");
+    expect(problem(() => resolveClientBody("client", undefined, null))).toMatch(/Danish/);
+    expect(problem(() => resolveClientBody("client", null, "Gammelt"))).toMatch(/Danish/);
+    // Back to the agency leaves the wording alone unless one is sent.
+    expect(resolveClientBody("agency", undefined, "Gammelt")).toBeUndefined();
+    expect(resolveClientBody("agent", "Ny", "Gammelt")).toBe("Ny");
+  });
+
+  it("filters by audience: one, a comma list or all", () => {
+    expect(parseAudienceFilter(null)).toBeNull();
+    expect(parseAudienceFilter("all")).toBeNull();
+    expect(parseAudienceFilter("client")).toEqual(["client"]);
+    expect(parseAudienceFilter("agent, client,agent")).toEqual(["agent", "client"]);
+    expect(problem(() => parseAudienceFilter("client,bots"))).toMatch(/audience/);
   });
 
   it("parses answers and filters", () => {
@@ -305,6 +408,33 @@ describe("questions", () => {
 });
 
 describe("features", () => {
+  it("reads { text, client_text } items next to plain ones", () => {
+    const { features } = parseFeaturesInput({
+      items: [
+        "Reset password",
+        { text: "[x] Sign in", client_text: "  Man kan logge ind " },
+        { text: "Sign out", client_text: "" },
+      ],
+    });
+    expect(features).toEqual([
+      { text: "Reset password", met: false },
+      { text: "Sign in", met: true, clientText: "Man kan logge ind" },
+      { text: "Sign out", met: false },
+    ]);
+  });
+
+  it("puts a top-level client_text on a single feature only", () => {
+    expect(parseFeaturesInput({ text: "Sign in", client_text: "Log ind" }).features).toEqual([
+      { text: "Sign in", met: false, clientText: "Log ind" },
+    ]);
+    expect(problem(() => parseFeaturesInput({ text: "a\nb", client_text: "x" }))).toMatch(
+      /single feature/,
+    );
+    expect(
+      problem(() => parseFeaturesInput({ items: [{ text: "a", client_text: "x".repeat(301) }] })),
+    ).toMatch(/300/);
+  });
+
   it("reads items and pasted bullet lists", () => {
     const { features } = parseFeaturesInput({
       text: "- Sign in\n2. Sign out\n[x] Remember me",
@@ -321,6 +451,7 @@ describe("features", () => {
   it("needs at least one and refuses a flood", () => {
     expect(problem(() => parseFeaturesInput({ text: "  \n " }))).toMatch(/at least one/);
     expect(problem(() => parseFeaturesInput({ items: [1] }))).toMatch(/items/);
+    expect(problem(() => parseFeaturesInput({ items: [{ client_text: "x" }] }))).toMatch(/items/);
     const many = Array.from({ length: 51 }, (_, i) => `feature ${i}`);
     expect(problem(() => parseFeaturesInput({ items: many }))).toMatch(/At most 50/);
   });
@@ -330,6 +461,16 @@ describe("features", () => {
     expect(parseFeatureUpdate({ text: "  new   words " })).toEqual({ text: "new words" });
     expect(problem(() => parseFeatureUpdate({ met: "true" }))).toMatch(/true or false/);
     expect(problem(() => parseFeatureUpdate({}))).toMatch(/met/);
+    expect(parseFeatureUpdate({ client_text: "  Man kan logge ind " })).toEqual({
+      client_text: "Man kan logge ind",
+    });
+    expect(parseFeatureUpdate({ client_text: "" })).toEqual({ client_text: null });
+    expect(parseFeatureUpdate({ client_text: null, met: true })).toEqual({
+      client_text: null,
+      met: true,
+    });
+    expect(problem(() => parseFeatureUpdate({ client_text: 4 }))).toMatch(/must be text/);
+    expect(problem(() => parseFeatureUpdate({ client_text: "x".repeat(301) }))).toMatch(/300/);
   });
 });
 

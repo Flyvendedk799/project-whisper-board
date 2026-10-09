@@ -98,6 +98,7 @@ vi.mock("@/lib/plan-extras.functions", () => {
     askQuestion: vi.fn(async () => ({ id: "q-new" })),
     answerQuestion: ok(),
     dismissQuestion: ok(),
+    setQuestionAudience: ok(),
     setQuestionBlocking: ok(),
     deleteQuestion: ok(),
     addTaskFeatures: created(),

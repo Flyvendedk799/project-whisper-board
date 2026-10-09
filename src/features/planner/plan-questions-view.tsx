@@ -3,6 +3,8 @@ import type { PlanWithSections, QuestionWithPeople, TaskWithAgent } from "@/data
 import { cn } from "@/lib/utils";
 import { sectionColor, sortedTasks, taskHeadline } from "./plan-model";
 import { answererOf, askerOf } from "./question-author";
+import { AUDIENCE_LABEL, AUDIENCES, audienceOf, type Audience } from "./audience-model";
+import { AudienceBadge } from "./question-audience";
 import { OpenQuestion } from "./task-questions";
 import type { PlanActions } from "./use-plan-actions";
 import { timeAgo } from "./plan-model";
@@ -29,6 +31,7 @@ export function PlanQuestionsView({
   onOpenTask: (taskId: string) => void;
 }) {
   const [show, setShow] = useState<"open" | "resolved">("open");
+  const [audience, setAudience] = useState<Audience | "all">("all");
 
   const entries = useMemo(() => {
     const list: Entry[] = [];
@@ -57,7 +60,11 @@ export function PlanQuestionsView({
   const resolved = entries
     .filter((entry) => entry.question.status !== "open")
     .sort((a, b) => b.question.updated_at.localeCompare(a.question.updated_at));
-  const shown = show === "open" ? open : resolved;
+  const openByAudience = (value: Audience) =>
+    open.filter((entry) => audienceOf(entry.question) === value).length;
+  const inAudience = (entry: Entry) =>
+    audience === "all" || audienceOf(entry.question) === audience;
+  const shown = (show === "open" ? open : resolved).filter(inAudience);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-8">
@@ -85,10 +92,35 @@ export function PlanQuestionsView({
           ))}
         </div>
 
+        <div
+          className="flex items-center gap-2 max-md:flex-wrap"
+          role="group"
+          aria-label="Who should answer"
+        >
+          {(["all", ...AUDIENCES] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={audience === value}
+              onClick={() => setAudience(value)}
+              className={cn(
+                "h-[30px] rounded-full border px-3 text-xs max-md:h-10 max-md:px-3.5 max-md:text-[13px]",
+                audience === value ? "border-primary bg-accent" : "bg-card hover:bg-muted/60",
+              )}
+            >
+              {value === "all"
+                ? `Everyone (${open.length})`
+                : `${AUDIENCE_LABEL[value]} (${openByAudience(value)})`}
+            </button>
+          ))}
+        </div>
+
         {shown.length === 0 ? (
           <p className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
             {show === "open"
-              ? "Nothing is waiting for an answer."
+              ? audience === "all"
+                ? "Nothing is waiting for an answer."
+                : `Nothing is waiting for ${AUDIENCE_LABEL[audience].toLowerCase()}.`
               : "No question has been answered yet."}
           </p>
         ) : (
@@ -156,7 +188,8 @@ function ResolvedLine({
           {question.answer}
         </p>
       ) : null}
-      <div className="text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <AudienceBadge question={question} />
         {asker.name} asked · {question.status}
         {answerer ? ` by ${answerer.name}` : ""}
         {question.answered_at ? ` · ${timeAgo(question.answered_at)}` : ""}

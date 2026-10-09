@@ -73,3 +73,45 @@ export function progressSummary(task: {
     blocking_questions: open.filter((question) => question.blocking).length,
   };
 }
+
+/** What `list_client_comments` returns: the client's comments and approvals, with names and titles. */
+export function shapeClientFeedback(input: {
+  comments: ReadonlyArray<{
+    id: string;
+    section_id: string | null;
+    task_id: string | null;
+    author_id: string;
+    body: string;
+    created_at: string;
+  }>;
+  approvals: ReadonlyArray<{ section_id: string; user_id: string; created_at: string }>;
+  names: ReadonlyMap<string, string>;
+  sectionTitles: ReadonlyMap<string, string>;
+  taskTitles: ReadonlyMap<string, string>;
+}) {
+  const person = (id: string) => input.names.get(id) ?? "A teammate";
+  const oldestFirst = <T extends { created_at: string }>(rows: readonly T[]) =>
+    [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return {
+    comments: oldestFirst(input.comments).map((comment) => ({
+      id: comment.id,
+      section_id: comment.section_id,
+      section_title: comment.section_id
+        ? (input.sectionTitles.get(comment.section_id) ?? null)
+        : null,
+      task_id: comment.task_id,
+      task_title: comment.task_id ? (input.taskTitles.get(comment.task_id) ?? null) : null,
+      author_id: comment.author_id,
+      author_name: person(comment.author_id),
+      body: comment.body,
+      created_at: comment.created_at,
+    })),
+    approvals: oldestFirst(input.approvals).map((approval) => ({
+      section_id: approval.section_id,
+      section_title: input.sectionTitles.get(approval.section_id) ?? null,
+      user_id: approval.user_id,
+      user_name: person(approval.user_id),
+      created_at: approval.created_at,
+    })),
+  };
+}

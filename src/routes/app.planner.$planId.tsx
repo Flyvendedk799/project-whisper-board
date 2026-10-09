@@ -30,6 +30,13 @@ function PlanDetailPage() {
       <ClientPlanScreen
         planId={planId}
         preview={isAdmin}
+        openTaskId={task ?? null}
+        onOpenTaskChange={(next) =>
+          void navigate({
+            search: (prev: PlanSearch) => ({ ...prev, task: next ?? undefined }),
+            replace: true,
+          })
+        }
         backHref={
           isAdmin
             ? {

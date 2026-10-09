@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { TaskWithAgent } from "@/data";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { clientPlanQuery } from "@/data/planner";
 import { cn } from "@/lib/utils";
+import { CommentThread } from "./client-plan-screen";
 import type { PlanActions } from "./use-plan-actions";
 
 /**
@@ -22,6 +25,7 @@ export function TaskClientLayer({ task, actions }: { task: TaskWithAgent; action
 
   const shown = Boolean(task.client_title?.trim());
   const steps = task.steps ?? [];
+  const features = task.features ?? [];
 
   const saveTitle = () => {
     const next = title.trim();
@@ -78,6 +82,20 @@ export function TaskClientLayer({ task, actions }: { task: TaskWithAgent; action
         />
       </label>
 
+      {features.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">
+            What it has to deliver, in plain words: this is the client&rsquo;s list of what is still
+            missing
+          </span>
+          <ul className="flex flex-col gap-1.5">
+            {features.map((feature) => (
+              <FeatureClientText key={feature.id} feature={feature} actions={actions} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {steps.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground">Steps, in plain words</span>
@@ -88,7 +106,62 @@ export function TaskClientLayer({ task, actions }: { task: TaskWithAgent; action
           </ul>
         </div>
       ) : null}
+
+      <ClientConversation task={task} />
     </section>
+  );
+}
+
+/** What the client has said on this task, and a place to answer. Only matters on shared plans. */
+function ClientConversation({ task }: { task: TaskWithAgent }) {
+  const query = useQuery(clientPlanQuery(task.plan_id));
+  const comments = (query.data?.comments ?? []).filter((comment) => comment.task_id === task.id);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-muted-foreground">
+        Conversation with the client{comments.length > 0 ? ` (${comments.length})` : ""}. Visible to
+        them on plans shared with clients.
+      </span>
+      <CommentThread
+        planId={task.plan_id}
+        sectionId={null}
+        taskId={task.id}
+        comments={comments}
+        bordered={false}
+      />
+    </div>
+  );
+}
+
+function FeatureClientText({
+  feature,
+  actions,
+}: {
+  feature: NonNullable<TaskWithAgent["features"]>[number];
+  actions: PlanActions;
+}) {
+  const [text, setText] = useState(feature.client_text ?? "");
+  useEffect(() => setText(feature.client_text ?? ""), [feature.id, feature.client_text]);
+
+  return (
+    <li className="flex flex-col gap-1">
+      <span className="truncate text-[11px] text-muted-foreground" title={feature.text}>
+        {feature.text}
+      </span>
+      <Input
+        value={text}
+        maxLength={300}
+        aria-label={`Client wording for: ${feature.text}`}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={() => {
+          const next = text.trim();
+          if (next === (feature.client_text ?? "").trim()) return;
+          actions.editFeature.fire({ featureId: feature.id, clientText: next || null });
+        }}
+        placeholder="Skjult for kunden, indtil du skriver noget"
+        className="h-8 text-sm"
+      />
+    </li>
   );
 }
 

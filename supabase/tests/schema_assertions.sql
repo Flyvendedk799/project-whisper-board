@@ -1267,6 +1267,141 @@ select assert(
   'a task with a client title shows with it and a plain status (blocked reads as waiting), never the agency wording'
 );
 
+-- Questions have an audience. A client sees only those put to them (with the
+-- Danish wording) and the ones they asked themselves.
+reset role;
+insert into public.plan_sections (id, plan_id, title) values
+  ('eeeeeeee-0000-0000-0000-0000000000b1', 'eeeeeeee-0000-0000-0000-000000000050', 'Hidden section');
+insert into public.plan_tasks (id, section_id, plan_id, title) values
+  ('eeeeeeee-0000-0000-0000-0000000000b2', 'eeeeeeee-0000-0000-0000-0000000000b1',
+   'eeeeeeee-0000-0000-0000-000000000050', 'Hidden task');
+insert into public.plan_task_questions
+  (id, task_id, body, audience, client_body, asked_by_user_id)
+values
+  ('eeeeeeee-0000-0000-0000-0000000000a1', 'eeeeeeee-0000-0000-0000-000000000010',
+   'internal: which scopes?', 'agency', null, '11111111-1111-1111-1111-111111111111'),
+  ('eeeeeeee-0000-0000-0000-0000000000a2', 'eeeeeeee-0000-0000-0000-000000000010',
+   'agents only', 'agent', null, '11111111-1111-1111-1111-111111111111'),
+  ('eeeeeeee-0000-0000-0000-0000000000a3', 'eeeeeeee-0000-0000-0000-000000000010',
+   'tech: confirm retention?', 'client', 'Hvor længe må vi gemme oplysningerne?',
+   '11111111-1111-1111-1111-111111111111'),
+  ('eeeeeeee-0000-0000-0000-0000000000a4', 'eeeeeeee-0000-0000-0000-000000000010',
+   'client audience but no Danish wording yet', 'client', null,
+   '11111111-1111-1111-1111-111111111111');
+update public.plan_task_features set client_text = 'Det vi leverer, på almindeligt dansk'
+where task_id = 'eeeeeeee-0000-0000-0000-000000000010';
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*].questions[*]')) q) = 1
+  and (select q->>'body' from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*].questions[*]')) q) = 'Hvor længe må vi gemme oplysningerne?'
+  and public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')::text
+        not ilike '%internal: which scopes%'
+  and public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')::text
+        not ilike '%agents only%'
+  and public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')::text
+        not ilike '%tech: confirm%',
+  'a client sees only the question put to them, in Danish, not the agency''s or the agents'''
+);
+select assert(
+  (select count(*) from public.plan_task_questions) = 0,
+  'and cannot read the questions table directly'
+);
+
+select public.answer_client_question(
+  'eeeeeeee-0000-0000-0000-0000000000a3', '  Op til 12 måneder.  ');
+select assert(
+  (select q->>'answer' from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*].questions[*]')) q
+   where q->>'id' = 'eeeeeeee-0000-0000-0000-0000000000a3') = 'Op til 12 måneder.',
+  'a client can answer a question put to them (trimmed)'
+);
+
+do $
+begin
+  begin
+    perform public.answer_client_question('eeeeeeee-0000-0000-0000-0000000000a3', 'again');
+    raise exception 'FAILED: a question was answered twice';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm = 'Already answered' then
+      raise notice '  ok  a question can only be answered once';
+    else
+      raise;
+    end if;
+  end;
+  begin
+    perform public.answer_client_question('eeeeeeee-0000-0000-0000-0000000000a1', 'x');
+    raise exception 'FAILED: a client answered an agency question';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm = 'Forbidden' then
+      raise notice '  ok  a client cannot answer a question that is not put to them';
+    else
+      raise;
+    end if;
+  end;
+  begin
+    perform public.ask_client_question('eeeeeeee-0000-0000-0000-0000000000b2', 'nope');
+    raise exception 'FAILED: a client asked on a task of a plan they cannot see';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm = 'Forbidden' then
+      raise notice '  ok  a client cannot ask on a plan they cannot see';
+    else
+      raise;
+    end if;
+  end;
+  begin
+    insert into public.plan_section_comments (plan_id, task_id, author_id, body) values
+      ('eeeeeeee-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-0000000000b2',
+       '22222222-2222-2222-2222-222222222222', 'forged');
+    raise exception 'FAILED: a comment was pinned to a task of another plan';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm ilike '%row-level security%' then
+      raise notice '  ok  a comment must be on a task of the same plan';
+    else
+      raise;
+    end if;
+  end;
+end $;
+
+select public.ask_client_question('eeeeeeee-0000-0000-0000-000000000010', '  Kan vi få en tidsplan?  ');
+insert into public.plan_section_comments (plan_id, task_id, author_id, body) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000010',
+   '22222222-2222-2222-2222-222222222222', 'Det her mangler jeg svar på.');
+select assert(
+  (select count(*) from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*].questions[*]')) q
+   where (q->>'from_client')::boolean and q->>'body' = 'Kan vi få en tidsplan?'
+     and q->>'status' = 'open') = 1
+  and (select count(*) from public.plan_section_comments
+       where task_id = 'eeeeeeee-0000-0000-0000-000000000010') = 1
+  and (select count(*) from jsonb_array_elements(jsonb_path_query_array(
+     public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
+     '$.sections[*].tasks[*].features[*]')) f
+   where f->>'text' = 'Det vi leverer, på almindeligt dansk') >= 1,
+  'a client can ask their own question and comment on a task'
+);
+reset role;
+select assert(
+  (select audience from public.plan_task_questions
+   where body = 'Kan vi få en tidsplan?') = 'agency'
+  and (select from_client from public.plan_task_questions
+       where body = 'Kan vi få en tidsplan?'),
+  'the agency receives it as a question for the agency, marked as from the client'
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
 -- Another workspace's user sees none of the client layer.
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(

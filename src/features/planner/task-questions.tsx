@@ -8,6 +8,8 @@ import { questionCounts, QUESTION_ANSWER_MAX, QUESTION_BODY_MAX } from "@/lib/pl
 import { cn } from "@/lib/utils";
 import { timeAgo } from "./plan-model";
 import { answererOf, askerOf } from "./question-author";
+import { audienceOf, type Audience } from "./audience-model";
+import { AudienceBadge, AudiencePicker } from "./question-audience";
 import type { PlanActions } from "./use-plan-actions";
 
 function Who({ name, agent }: { name: string; agent: boolean }) {
@@ -28,7 +30,20 @@ export function OpenQuestion({
   actions: PlanActions;
 }) {
   const [answer, setAnswer] = useState("");
+  const [sending, setSending] = useState(false);
+  const [wording, setWording] = useState(question.client_body ?? "");
   const asker = askerOf(question);
+  const audience = audienceOf(question);
+  const sendToClient = () => {
+    const text = wording.trim();
+    if (!text) return;
+    actions.setAudience.run({ questionId: question.id, audience: "client", clientBody: text }).then(
+      () => setSending(false),
+      () => {
+        // The action already told the user why.
+      },
+    );
+  };
   const submit = () => {
     const text = answer.trim();
     if (!text) return;
@@ -63,9 +78,91 @@ export function OpenQuestion({
           {question.blocking ? "Blocking" : "Needs an answer"}
         </span>
       </div>
-      <div className="text-xs text-muted-foreground">
-        Asked by <Who {...asker} /> · {timeAgo(question.created_at)}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <AudienceBadge question={question} />
+        <span>
+          Asked by <Who {...asker} /> · {timeAgo(question.created_at)}
+        </span>
       </div>
+      {audience === "client" && question.client_body ? (
+        <p className="whitespace-pre-wrap break-words rounded-md bg-info/10 px-2.5 py-1.5 text-[13px] leading-snug">
+          <span className="mb-0.5 block text-xs text-muted-foreground">The client reads</span>
+          {question.client_body}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs max-md:h-9"
+          onClick={() => setSending((value) => !value)}
+        >
+          {audience === "client" ? "Edit client wording" : "Send to client"}
+        </Button>
+        {audience !== "agency" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs max-md:h-9"
+            disabled={actions.setAudience.busy}
+            onClick={() =>
+              actions.setAudience.fire({ questionId: question.id, audience: "agency" })
+            }
+          >
+            Back to agency
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs max-md:h-9"
+            disabled={actions.setAudience.busy}
+            onClick={() => actions.setAudience.fire({ questionId: question.id, audience: "agent" })}
+          >
+            Hand to agents
+          </Button>
+        )}
+      </div>
+      {sending ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-dashed p-2.5">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">
+              The question as the client reads it: plain Danish, no jargon
+            </span>
+            <Textarea
+              value={wording}
+              onChange={(event) => setWording(event.target.value)}
+              rows={3}
+              maxLength={QUESTION_BODY_MAX}
+              placeholder="Hvor længe må vi gemme medarbejdernes oplysninger?"
+              className="resize-y bg-background text-sm"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={!wording.trim() || actions.setAudience.busy}
+              onClick={sendToClient}
+            >
+              {audience === "client" ? "Save wording" : "Send to client"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setSending(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <Textarea
         value={answer}
         onChange={(event) => setAnswer(event.target.value)}
@@ -150,7 +247,8 @@ function ResolvedQuestion({
           {question.answer}
         </p>
       ) : null}
-      <div className="text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <AudienceBadge question={question} />
         <Who {...asker} /> asked · {dismissed ? "dismissed" : "answered"}
         {answerer ? (
           <>
@@ -172,6 +270,8 @@ function ResolvedQuestion({
 export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions: PlanActions }) {
   const [body, setBody] = useState("");
   const [blocking, setBlocking] = useState(false);
+  const [audience, setAudience] = useState<Audience>("agency");
+  const [clientBody, setClientBody] = useState("");
   const questions = task.questions ?? [];
   const open = questions.filter((q) => q.status === "open");
   const resolved = questions.filter((q) => q.status !== "open");
@@ -179,16 +279,27 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
 
   const submit = () => {
     const text = body.trim();
-    if (!text) return;
-    actions.ask.run({ taskId: task.id, body: text, blocking }).then(
-      () => {
-        setBody("");
-        setBlocking(false);
-      },
-      () => {
-        // The action already told the user why.
-      },
-    );
+    const wording = clientBody.trim();
+    if (!text || (audience === "client" && !wording)) return;
+    actions.ask
+      .run({
+        taskId: task.id,
+        body: text,
+        blocking,
+        audience,
+        ...(audience === "client" ? { clientBody: wording } : {}),
+      })
+      .then(
+        () => {
+          setBody("");
+          setClientBody("");
+          setBlocking(false);
+          setAudience("agency");
+        },
+        () => {
+          // The action already told the user why.
+        },
+      );
   };
 
   return (
@@ -227,6 +338,20 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
           maxLength={QUESTION_BODY_MAX}
           className="min-h-[56px] resize-y bg-background text-sm"
         />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">Who should answer?</span>
+          <AudiencePicker value={audience} onChange={setAudience} />
+        </div>
+        {audience === "client" ? (
+          <Textarea
+            value={clientBody}
+            onChange={(event) => setClientBody(event.target.value)}
+            aria-label="The question as the client reads it"
+            placeholder="The same question in plain Danish, as the client will read it…"
+            maxLength={QUESTION_BODY_MAX}
+            className="min-h-[56px] resize-y bg-background text-sm"
+          />
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground max-md:min-h-11 max-md:w-full max-md:text-[13px]">
             <Switch
@@ -241,10 +366,16 @@ export function TaskQuestions({ task, actions }: { task: TaskWithAgent; actions:
             type="button"
             size="sm"
             className="h-8 text-xs max-md:w-full"
-            disabled={!body.trim() || actions.ask.busy}
+            disabled={
+              !body.trim() || (audience === "client" && !clientBody.trim()) || actions.ask.busy
+            }
             onClick={submit}
           >
-            Ask
+            {audience === "client"
+              ? "Ask the client"
+              : audience === "agent"
+                ? "Ask the agents"
+                : "Ask"}
           </Button>
         </div>
       </div>

@@ -11,7 +11,8 @@
  * (`/api/v1`) for a tool whose `rest.api` is `"account"`.
  */
 
-export type ParamType = "string" | "integer" | "boolean" | "string[]";
+/** `"(string | object)[]"` is a list whose entries are texts or small objects, e.g. `{ text, client_text }`. */
+export type ParamType = "string" | "integer" | "boolean" | "string[]" | "(string | object)[]";
 
 /**
  * Which REST API a tool calls. A `planner` key reaches the planner tools only; the `account`
@@ -177,6 +178,19 @@ const CLIENT_TEXT: ToolParam = {
   description:
     "The step as the client reads it: plain DANISH, no jargon (up to 300 characters). A step is shown to clients ONLY when it has a client_text. Send an empty string to clear it.",
 };
+const QUESTION_AUDIENCES = ["agency", "agent", "client"] as const;
+const CLIENT_BODY: ToolParam = {
+  name: "client_body",
+  type: "string",
+  description:
+    "The question as the client reads it: short plain DANISH a non-technical person understands (up to 2000 characters), no jargon, task IDs, branch names or code. REQUIRED and non-empty when the audience is client; the client sees the question ONLY then. Send an empty string to clear it.",
+};
+const FEATURE_CLIENT_TEXT: ToolParam = {
+  name: "client_text",
+  type: "string",
+  description:
+    "The deliverable as the client reads it: plain DANISH, no jargon (up to 300 characters). A feature is shown to clients ONLY when it has a client_text, and it is the client's list of what is still missing. Send an empty string to clear it.",
+};
 const TAGS: ToolParam = {
   name: "tags",
   type: "string[]",
@@ -218,7 +232,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     summary:
       "A plan with its sections, tasks, features, steps and questions, its own files and its work_target.",
     description:
-      "Get a plan with its sections (goals, intentions, client_summary, tags, colour) and tasks (tags as labels, colour, client_title, client_summary, ai_context, features, steps with feature_id and client_text, questions with who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
+      "Get a plan with its sections (goals, intentions, client_summary, tags, colour) and tasks (tags as labels, colour, client_title, client_summary, ai_context, features, features with client_text, steps with feature_id and client_text, questions with audience, client_body, from_client and who asked and answered). `attachments` on the plan are the files shared with agents that belong to the whole plan (a brief, a spec); each task has its own. work_target says where commits go: repo, base, branch, mode and a summary.",
     rest: { method: "GET", path: "plans/:plan_id" },
     params: [PLAN_ID],
   },
@@ -236,7 +250,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Orient",
     summary: "One task in full, with features, steps, questions, files and work_target.",
     description:
-      "Get a task: description, acceptance criteria, tags (labels), colour, client_title and client_summary (what clients read), ai_context, features, steps (with feature_id and client_text), questions (with who asked and answered), the files shared with agents, and the plan's work_target.",
+      "Get a task: description, acceptance criteria, tags (labels), colour, client_title and client_summary (what clients read), ai_context, features (with client_text), steps (with feature_id and client_text), questions (with audience, client_body, from_client, who asked and answered, and the client's answer), the files shared with agents, and the plan's work_target.",
     rest: { method: "GET", path: "tasks/:task_id" },
     params: [TASK_ID],
   },
@@ -248,6 +262,15 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       "List the workspace's people: user_id, name, role, and mention, the exact token to put in a comment to @mention them (it notifies them). Use a user_id as assigned_user_id on create_task or update_task.",
     rest: { method: "GET", path: "people" },
     params: [],
+  },
+  {
+    name: "list_client_comments",
+    group: "Orient",
+    summary: "What the client said: their comments and which sections they approved.",
+    description:
+      "Read the client's feedback on a plan before you work: their comments (on the plan, a section or a task, oldest first, with who wrote them) and the sections they approved. Read-only; clients write these in the app. Their answers to questions put to them are in get_task, not here.",
+    rest: { method: "GET", path: "plans/:plan_id/client-comments" },
+    params: [PLAN_ID],
   },
   {
     name: "list_task_attachments",
@@ -480,7 +503,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Questions",
     summary: "Ask a question about a task. Blocking only if you cannot proceed.",
     description:
-      "Ask a question on a task instead of guessing. A blocking question puts the task in blocked until someone answers (then it goes back where it was); a non-blocking one just asks and you carry on. People can ask too: list_questions shows both.",
+      "Ask a question on a task instead of guessing. A blocking question puts the task in blocked until someone answers (then it goes back where it was); a non-blocking one just asks and you carry on. People can ask too: list_questions shows both. audience says who has to answer: agency (the default: the human operator), agent (another AI agent) or client (the client must decide or answer; needs a Danish client_body, and the client is notified).",
     rest: { method: "POST", path: "tasks/:task_id/questions" },
     params: [
       TASK_ID,
@@ -496,6 +519,14 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         description:
           "True only if you truly cannot continue without the answer. Defaults to false.",
       },
+      {
+        name: "audience",
+        type: "string",
+        enum: QUESTION_AUDIENCES,
+        description:
+          "Who answers: agency (default, the human operator), agent (hand it to another AI agent) or client (only for what the client must decide or answer; needs client_body)",
+      },
+      CLIENT_BODY,
       AGENT_ID,
     ],
   },
@@ -504,8 +535,11 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Questions",
     summary: "Questions on a plan or a task, with who asked and who answered.",
     description:
-      "List questions with who asked and who answered. Pass plan_id for a whole plan (open ones by default) or task_id for one task (all by default).",
-    rest: { method: "GET", path: "plans/:plan_id/questions?status= or tasks/:task_id/questions" },
+      "List questions with who asked and who answered. Pass plan_id for a whole plan (open ones by default) or task_id for one task (all by default). audience narrows it to the questions for the agency, the agents or the client. Each question has audience, client_body and from_client (the client asked it).",
+    rest: {
+      method: "GET",
+      path: "plans/:plan_id/questions?status=&audience= or tasks/:task_id/questions",
+    },
     params: [
       { name: "plan_id", type: "string", description: "All questions on this plan" },
       { name: "task_id", type: "string", description: "Questions on this task" },
@@ -515,6 +549,36 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         enum: ["open", "answered", "dismissed", "all"],
         description: "Defaults to open for a plan and all for a task",
       },
+      {
+        name: "audience",
+        type: "string",
+        description:
+          "Only questions for this audience: agency, agent, client, a comma list like agent,client, or all (the default)",
+      },
+    ],
+  },
+  {
+    name: "set_question_audience",
+    group: "Questions",
+    summary: "Aim an open question at the agency, an agent or the client (and back).",
+    description:
+      "Re-aim an open question: agency (the human operator, the default), agent (another AI agent) or client. Switching to client needs a plain-Danish client_body (sent now, or already on the question) and notifies the client; use this instead of asking again. Switch it back to agency any time. answer_question works for any audience.",
+    rest: { method: "POST", path: "questions/:question_id/audience" },
+    params: [
+      {
+        name: "question_id",
+        type: "string",
+        required: true,
+        description: "The ID of the question (from get_task or list_questions)",
+      },
+      {
+        name: "audience",
+        type: "string",
+        required: true,
+        enum: QUESTION_AUDIENCES,
+        description: "Who has to answer now: agency, agent or client",
+      },
+      CLIENT_BODY,
     ],
   },
   {
@@ -563,19 +627,25 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Features and steps",
     summary: "Add features (requirements) to a task.",
     description:
-      "Add features to the end of a task's feature list: what the task must deliver. Pass items (one per feature) or text (one per line; bullets, numbers and [ ] are understood).",
+      "Add features to the end of a task's feature list: what the task must deliver. Pass items (one per feature) or text (one per line; bullets, numbers and [ ] are understood). An item can also be { text, client_text } to give that feature its plain-Danish wording; a client sees a feature ONLY when it has client_text (set it later with update_task_feature).",
     rest: { method: "POST", path: "tasks/:task_id/features" },
     params: [
       TASK_ID,
-      { name: "items", type: "string[]", description: "One feature per entry" },
+      {
+        name: "items",
+        type: "(string | object)[]",
+        description:
+          "One feature per entry: a text, or { text, client_text? } to also set the plain-Danish client text",
+      },
       { name: "text", type: "string", description: "Features, one per line" },
+      FEATURE_CLIENT_TEXT,
       AGENT_ID,
     ],
   },
   {
     name: "update_task_feature",
     group: "Features and steps",
-    summary: "Mark a feature met when the work satisfies it, or reword it.",
+    summary: "Mark a feature met when the work satisfies it, reword it, or set its client text.",
     rest: { method: "POST", path: "tasks/:task_id/features/:feature_id" },
     params: [
       TASK_ID,
@@ -587,6 +657,10 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       },
       { name: "met", type: "boolean", description: "True when the work satisfies it" },
       { name: "text", type: "string", description: "New wording" },
+      {
+        ...FEATURE_CLIENT_TEXT,
+        description: `New client text. ${FEATURE_CLIENT_TEXT.description}`,
+      },
     ],
   },
   {
@@ -615,7 +689,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       TASK_ID,
       {
         name: "items",
-        type: "string[]",
+        type: "(string | object)[]",
         description:
           "One step per entry: a text, or { text, client_text?, depth?, done? } to also set the plain-Danish client text",
       },
@@ -872,7 +946,7 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
     group: "Authoring",
     summary: "Add a task to a section, with features, tags, a colour and dependencies.",
     description:
-      "Add a task to a section of a plan. features is the list of things it must deliver; depends_on lists task IDs in the same plan that must be done first. status is backlog or available (the default). On a plan clients can see, always set client_title (short plain Danish): a task without one is hidden from clients.",
+      "Add a task to a section of a plan. features is the list of things it must deliver (each a text, or { text, client_text } with the plain-Danish wording a client sees; a feature without client_text stays hidden from clients); depends_on lists task IDs in the same plan that must be done first. status is backlog or available (the default). On a plan clients can see, always set client_title (short plain Danish): a task without one is hidden from clients.",
     rest: { method: "POST", path: "plans/:plan_id/tasks" },
     params: [
       PLAN_ID,
@@ -892,8 +966,9 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
       COLOR,
       {
         name: "features",
-        type: "string[]",
-        description: "What the task must deliver, one per entry",
+        type: "(string | object)[]",
+        description:
+          "What the task must deliver, one per entry: a text, or { text, client_text? } with the plain-Danish client text",
       },
       {
         name: "acceptance_criteria",

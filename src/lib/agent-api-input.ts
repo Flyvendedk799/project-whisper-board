@@ -43,6 +43,8 @@ export const MAX_PROGRESS_NOTE = 5000;
 const MAX_STEPS_PER_CALL = 100;
 /** Longest plain-language text of a step a client reads. */
 const STEP_CLIENT_TEXT_MAX = 300;
+/** Longest plain-language wording of a feature (a deliverable) a client reads. */
+export const FEATURE_CLIENT_TEXT_MAX = 300;
 
 // ---------------------------------------------------------------------------
 // Scalars
@@ -447,7 +449,39 @@ export interface TaskCreate {
   fields: TaskFields & { title: string };
   status: (typeof CREATE_STATUSES)[number];
   dependsOn: string[];
-  features: string[];
+  /** What the task must deliver, each with the optional plain-Danish wording for clients. */
+  features: Array<{ text: string; clientText?: string }>;
+}
+
+/**
+ * `features` on a new task: a list of texts, one multi-line text, or entries
+ * `{ text, client_text }` (plain Danish for the client; shown only when set).
+ */
+function createFeatures(value: unknown): TaskCreate["features"] {
+  if (value === undefined || value === null) return [];
+  const entries = typeof value === "string" ? value.split(/\r?\n/) : value;
+  if (!Array.isArray(entries)) {
+    throw new AppError("validation", "`features` is a list of texts or { text, client_text }.");
+  }
+  const features: TaskCreate["features"] = [];
+  for (const entry of entries as unknown[]) {
+    if (typeof entry === "string") {
+      const text = entry.trim();
+      if (text) features.push({ text });
+    } else if (entry && typeof entry === "object" && typeof (entry as Body).text === "string") {
+      const text = ((entry as Body).text as string).trim();
+      if (!text) continue;
+      const clientText = textField(
+        (entry as Body).client_text,
+        "`client_text`",
+        FEATURE_CLIENT_TEXT_MAX,
+      );
+      features.push({ text, ...(clientText && { clientText }) });
+    } else {
+      throw new AppError("validation", "`features` is a list of texts or { text, client_text }.");
+    }
+  }
+  return features;
 }
 
 export function parseTaskCreate(body: Body): TaskCreate {
@@ -457,11 +491,11 @@ export function parseTaskCreate(body: Body): TaskCreate {
   if (!sectionId) throw new AppError("validation", "`section_id` says which section it goes in.");
   const status = enumField(body.status, CREATE_STATUSES, "`status`") ?? "available";
 
-  const features = lineList(body.features, "`features`") ?? [];
+  const features = createFeatures(body.features);
   if (features.length > MAX_FEATURES) {
     throw new AppError("validation", `At most ${MAX_FEATURES} features per task.`);
   }
-  if (features.some((feature) => feature.length > FEATURE_TEXT_MAX)) {
+  if (features.some((feature) => feature.text.length > FEATURE_TEXT_MAX)) {
     throw new AppError("validation", `A feature is at most ${FEATURE_TEXT_MAX} characters.`);
   }
   return {
@@ -511,16 +545,67 @@ export function parseCommentInput(body: Body): {
   };
 }
 
+/** Who has to answer a question: the agency (the default, the human operator), an agent, or the client. */
+export const QUESTION_AUDIENCES = ["agency", "agent", "client"] as const;
+export type QuestionAudience = (typeof QUESTION_AUDIENCES)[number];
+
+const CLIENT_BODY_REQUIRED =
+  "A question for the client needs a `client_body`: write the question in plain Danish so a non-technical person understands it.";
+
+function audienceField(value: unknown): QuestionAudience | undefined {
+  return enumField(value, QUESTION_AUDIENCES, "`audience`") as QuestionAudience | undefined;
+}
+
+function clientBodyField(value: unknown): string | null | undefined {
+  return textField(value, "`client_body`", QUESTION_BODY_MAX);
+}
+
+/**
+ * The `client_body` to store when a question is aimed at someone. A question can
+ * only go to the client with a non-empty Danish wording: the one just sent, or
+ * else the one it already has. For the other audiences a sent wording is kept
+ * (so the question can be sent on later) and an absent one leaves it alone.
+ */
+export function resolveClientBody(
+  audience: QuestionAudience,
+  sent: string | null | undefined,
+  existing: string | null | undefined,
+): string | null | undefined {
+  if (audience === "client") {
+    const body = sent === undefined ? existing?.trim() || null : sent;
+    if (!body) throw new AppError("validation", CLIENT_BODY_REQUIRED);
+    return body;
+  }
+  return sent;
+}
+
 export function parseQuestionInput(body: Body): {
   body: string;
   blocking: boolean;
   agentId: string | null;
+  audience: QuestionAudience;
+  clientBody: string | null;
 } {
+  const audience = audienceField(body.audience ?? undefined) ?? "agency";
   return {
     body: requireText(body.body, "`body` (the question)", QUESTION_BODY_MAX),
     blocking: body.blocking === true,
     agentId: optionalUuid(body.agent_id, "`agent_id`"),
+    audience,
+    clientBody: resolveClientBody(audience, clientBodyField(body.client_body), null) ?? null,
   };
+}
+
+/** `set_question_audience`: re-aim an open question; `clientBody` is undefined when none was sent. */
+export function parseAudienceInput(body: Body): {
+  audience: QuestionAudience;
+  clientBody: string | null | undefined;
+} {
+  const audience = audienceField(body.audience);
+  if (!audience) {
+    throw new AppError("validation", `\`audience\` is required: ${QUESTION_AUDIENCES.join(", ")}.`);
+  }
+  return { audience, clientBody: clientBodyField(body.client_body) };
 }
 
 export function parseAnswerInput(body: Body): { answer: string; agentId: string | null } {
@@ -541,6 +626,25 @@ export function parseQuestionFilter(raw: string | null, fallback: QuestionStatus
   return raw as QuestionStatusFilter;
 }
 
+/** `?audience=` on a question list: one audience, a comma list, or `all` (no filter). */
+export function parseAudienceFilter(raw: string | null): QuestionAudience[] | null {
+  if (!raw || raw.trim() === "all") return null;
+  const wanted = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const unknown = wanted.filter(
+    (value) => !(QUESTION_AUDIENCES as readonly string[]).includes(value),
+  );
+  if (unknown.length > 0 || wanted.length === 0) {
+    throw new AppError(
+      "validation",
+      `\`audience\` is ${QUESTION_AUDIENCES.join(", ")}, a comma list of them, or all.`,
+    );
+  }
+  return [...new Set(wanted)] as QuestionAudience[];
+}
+
 /** A blocking reason becomes the question a person sees, so it has to fit one. */
 export function parseBlockInput(body: Body): { reason: string | null; agentId: string | null } {
   return {
@@ -553,23 +657,52 @@ export function parseBlockInput(body: Body): { reason: string | null; agentId: s
 // Features
 // ---------------------------------------------------------------------------
 
-/** `text` may be a pasted block of bullets; `items` is one feature per entry. */
+/** A feature to add, with the plain-Danish wording clients read when it has one. */
+export type FeatureInput = ParsedFeature & { clientText?: string };
+
+/**
+ * `text` may be a pasted block of bullets; `items` is one feature per entry,
+ * each a text or `{ text, client_text }` (the feature in plain Danish for the
+ * client, who sees a feature only when it is set).
+ */
 export function parseFeaturesInput(body: Body): {
-  features: ParsedFeature[];
+  features: FeatureInput[];
   agentId: string | null;
 } {
-  const features: ParsedFeature[] = [];
+  const features: FeatureInput[] = [];
   if (body.text !== undefined) {
     if (typeof body.text !== "string") throw new AppError("validation", "`text` must be text.");
     features.push(...parseFeatureList(body.text.slice(0, 20000)));
   }
   if (body.items !== undefined) {
-    if (!Array.isArray(body.items) || !body.items.every((item) => typeof item === "string")) {
-      throw new AppError("validation", "`items` is a list of feature texts.");
+    const problem = new AppError(
+      "validation",
+      "`items` is a list of feature texts or { text, client_text }.",
+    );
+    if (!Array.isArray(body.items)) throw problem;
+    for (const item of body.items as unknown[]) {
+      if (typeof item === "string") {
+        features.push(...parseFeatureList(item));
+      } else if (item && typeof item === "object" && typeof (item as Body).text === "string") {
+        const entry = item as Body;
+        const [first] = parseFeatureList(entry.text as string);
+        if (!first) continue;
+        const clientText = textField(entry.client_text, "`client_text`", FEATURE_CLIENT_TEXT_MAX);
+        features.push({ ...first, ...(clientText && { clientText }) });
+      } else {
+        throw problem;
+      }
     }
-    for (const item of body.items as string[]) {
-      features.push(...parseFeatureList(item));
+  }
+  const clientText = textField(body.client_text, "`client_text`", FEATURE_CLIENT_TEXT_MAX);
+  if (clientText) {
+    if (features.length !== 1) {
+      throw new AppError(
+        "validation",
+        "`client_text` goes with a single feature. Give each feature in `items` its own { text, client_text }, or set it later with update_task_feature.",
+      );
     }
+    features[0].clientText = clientText;
   }
   if (features.length === 0) throw new AppError("validation", "Send at least one feature.");
   if (features.length > MAX_FEATURES) {
@@ -578,8 +711,12 @@ export function parseFeaturesInput(body: Body): {
   return { features, agentId: optionalUuid(body.agent_id, "`agent_id`") };
 }
 
-export function parseFeatureUpdate(body: Body): { met?: boolean; text?: string } {
-  const patch: { met?: boolean; text?: string } = {};
+export function parseFeatureUpdate(body: Body): {
+  met?: boolean;
+  text?: string;
+  client_text?: string | null;
+} {
+  const patch: { met?: boolean; text?: string; client_text?: string | null } = {};
   if (body.met !== undefined) {
     if (typeof body.met !== "boolean") throw new AppError("validation", "`met` is true or false.");
     patch.met = body.met;
@@ -587,8 +724,10 @@ export function parseFeatureUpdate(body: Body): { met?: boolean; text?: string }
   if (body.text !== undefined) {
     patch.text = requireText(body.text, "`text`", FEATURE_TEXT_MAX).replace(/\s+/g, " ");
   }
+  const clientText = textField(body.client_text, "`client_text`", FEATURE_CLIENT_TEXT_MAX);
+  if (clientText !== undefined) patch.client_text = clientText;
   if (Object.keys(patch).length === 0) {
-    throw new AppError("validation", "Send `met` and/or `text`.");
+    throw new AppError("validation", "Send `met`, `text` and/or `client_text`.");
   }
   return patch;
 }

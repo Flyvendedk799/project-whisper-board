@@ -16,6 +16,8 @@ import {
   optionalString,
   optionalUuid,
   parseAnswerInput,
+  parseAudienceFilter,
+  parseAudienceInput,
   parseBlockInput,
   mergePlanUpdate,
   parseCommentInput,
@@ -32,11 +34,13 @@ import {
   parseTaskCreate,
   parseTaskUpdate,
   parseWorkTarget,
+  resolveClientBody,
 } from "@/lib/agent-api-input";
 import {
   byPosition,
   progressSummary,
   questionAuthorIds,
+  shapeClientFeedback,
   withQuestionAuthors,
   type QuestionRow,
   type WhoNames,
@@ -69,6 +73,7 @@ import {
   workspaceMemberRoles,
 } from "@/lib/notifications.functions";
 import { planTaskLink } from "@/lib/notify-targets";
+import { notifyClientQuestion } from "@/lib/plan-client-notify";
 import { mentionLabel, mentionsToPlainText, mentionToken } from "@/lib/mentions";
 
 type Admin = SupabaseClient<Database>;
@@ -541,16 +546,62 @@ export async function handlePlannerRequest(
       const planQuestionsMatch = path.match(/^plans\/([^/]+)\/questions$/);
       if (planQuestionsMatch) {
         await planInWorkspace(admin, planQuestionsMatch[1], workspaceId);
-        const filter = parseQuestionFilter(new URL(request.url).searchParams.get("status"), "open");
+        const params = new URL(request.url).searchParams;
+        const filter = parseQuestionFilter(params.get("status"), "open");
+        const audiences = parseAudienceFilter(params.get("audience"));
         let query = admin
           .from("plan_task_questions")
           .select("*, task:plan_tasks(id, title, status)")
           .eq("plan_id", planQuestionsMatch[1])
           .order("created_at", { ascending: true });
         if (filter !== "all") query = query.eq("status", filter);
+        if (audiences) query = query.in("audience", audiences);
         const { data: rows, error } = await query;
         if (error) throw error;
         return Response.json(await decorateQuestions(admin, workspaceId, rows ?? []));
+      }
+
+      // What the client said about the plan: their comments (on the plan, a section or a task) and
+      // which sections they approved. Read-only; the client writes these in the app.
+      const clientCommentsMatch = path.match(/^plans\/([^/]+)\/client-comments$/);
+      if (clientCommentsMatch) {
+        const plan = await planInWorkspace(admin, clientCommentsMatch[1], workspaceId);
+        const [comments, approvals, sections, tasks] = await Promise.all([
+          admin
+            .from("plan_section_comments")
+            .select("id, section_id, task_id, author_id, body, created_at")
+            .eq("plan_id", plan.id)
+            .order("created_at", { ascending: true }),
+          admin
+            .from("plan_section_approvals")
+            .select("section_id, user_id, created_at")
+            .eq("plan_id", plan.id)
+            .order("created_at", { ascending: true }),
+          admin.from("plan_sections").select("id, title").eq("plan_id", plan.id),
+          admin.from("plan_tasks").select("id, title").eq("plan_id", plan.id),
+        ]);
+        if (comments.error) throw comments.error;
+        if (approvals.error) throw approvals.error;
+        const userIds = [
+          ...new Set([
+            ...(comments.data ?? []).map((comment) => comment.author_id),
+            ...(approvals.data ?? []).map((approval) => approval.user_id),
+          ]),
+        ];
+        const { data: profiles } = userIds.length
+          ? await admin.from("profiles").select("id, full_name").in("id", userIds)
+          : { data: [] };
+        return Response.json(
+          shapeClientFeedback({
+            comments: comments.data ?? [],
+            approvals: approvals.data ?? [],
+            names: new Map(
+              (profiles ?? []).map((profile) => [profile.id, profile.full_name ?? "A teammate"]),
+            ),
+            sectionTitles: new Map((sections.data ?? []).map((row) => [row.id, row.title])),
+            taskTitles: new Map((tasks.data ?? []).map((row) => [row.id, row.title])),
+          }),
+        );
       }
 
       // The plan's pull requests in merge order, read from GitHub now.
@@ -677,13 +728,16 @@ export async function handlePlannerRequest(
       const taskQuestionsMatch = path.match(/^tasks\/([^/]+)\/questions$/);
       if (taskQuestionsMatch) {
         if (!(await taskInWorkspace(admin, taskQuestionsMatch[1], workspaceId))) return notFound();
-        const filter = parseQuestionFilter(new URL(request.url).searchParams.get("status"), "all");
+        const params = new URL(request.url).searchParams;
+        const filter = parseQuestionFilter(params.get("status"), "all");
+        const audiences = parseAudienceFilter(params.get("audience"));
         let query = admin
           .from("plan_task_questions")
           .select("*")
           .eq("task_id", taskQuestionsMatch[1])
           .order("created_at", { ascending: true });
         if (filter !== "all") query = query.eq("status", filter);
+        if (audiences) query = query.in("audience", audiences);
         const { data: rows, error } = await query;
         if (error) throw error;
         return Response.json(await decorateQuestions(admin, workspaceId, rows ?? []));
@@ -1024,9 +1078,10 @@ export async function handlePlannerRequest(
           const { data: rows, error: featureError } = await admin
             .from("plan_task_features")
             .insert(
-              input.features.map((text, index) => ({
+              input.features.map((feature, index) => ({
                 task_id: task.id,
-                text,
+                text: feature.text,
+                client_text: feature.clientText ?? null,
                 source: "agent",
                 position: index + 1,
               })),
@@ -1480,6 +1535,8 @@ export async function handlePlannerRequest(
             body: input.body,
             blocking: input.blocking,
             asked_by_agent_id: agentId,
+            audience: input.audience,
+            client_body: input.clientBody,
           })
           .select()
           .single();
@@ -1487,13 +1544,70 @@ export async function handlePlannerRequest(
         await logAgentEvent(admin, task, "question_asked", {
           agentId,
           detail: input.body.slice(0, 200),
-          metadata: { blocking: input.blocking },
+          metadata: { blocking: input.blocking, audience: input.audience },
         });
+        if (input.audience === "client" && input.clientBody) {
+          await notifyClientQuestion({
+            actorId,
+            planId: task.plan_id,
+            taskId: task.id,
+            clientBody: input.clientBody,
+          });
+        }
         const [decorated] = await decorateQuestions(admin, workspaceId, [question]);
         return Response.json(
           { ...decorated, task_status: await currentStatus(admin, task.id) },
           { status: 201 },
         );
+      }
+
+      // Aim an open question at the agency, an agent or the client. Sending it to the client needs a
+      // Danish `client_body` (sent now, or already on the question) and tells the client.
+      const audienceMatch = path.match(/^questions\/([^/]+)\/audience$/);
+      if (audienceMatch) {
+        const { data: question } = await admin
+          .from("plan_task_questions")
+          .select("id, task_id, status, audience, client_body")
+          .eq("id", audienceMatch[1])
+          .maybeSingle();
+        const task = question ? await taskInWorkspace(admin, question.task_id, workspaceId) : null;
+        if (!question || !task)
+          throw new AppError("not_found", "Question not found.", { status: 404 });
+        if (question.status !== "open") {
+          throw new AppError("conflict", `That question is already ${question.status}.`, {
+            status: 409,
+          });
+        }
+        const input = parseAudienceInput(await readJson(request));
+        const clientBody = resolveClientBody(
+          input.audience,
+          input.clientBody,
+          question.client_body,
+        );
+        const { data: updated, error } = await admin
+          .from("plan_task_questions")
+          .update({
+            audience: input.audience,
+            ...(clientBody !== undefined && { client_body: clientBody }),
+          })
+          .eq("id", question.id)
+          .select()
+          .single();
+        if (error) throw error;
+        await logAgentEvent(admin, task, "task_updated", {
+          detail: `Question aimed at ${input.audience}`,
+          metadata: { audience: input.audience },
+        });
+        if (input.audience === "client" && question.audience !== "client" && updated.client_body) {
+          await notifyClientQuestion({
+            actorId,
+            planId: task.plan_id,
+            taskId: task.id,
+            clientBody: updated.client_body,
+          });
+        }
+        const [decorated] = await decorateQuestions(admin, workspaceId, [updated]);
+        return Response.json({ ...decorated, task_status: await currentStatus(admin, task.id) });
       }
 
       // Answer or dismiss a question. Answering the last blocking one puts the task back where it was.
@@ -1595,6 +1709,7 @@ export async function handlePlannerRequest(
               task_id: task.id,
               text: feature.text,
               met: feature.met,
+              client_text: feature.clientText ?? null,
               source: "agent",
               position: ++position,
             })),

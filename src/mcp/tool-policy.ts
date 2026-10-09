@@ -83,6 +83,7 @@ export const HOSTED_TOOL_POLICY: Record<string, ToolPolicy> = {
   view_plan_attachment: { scopes: [R], annotations: readOnly },
   read_attachment_text: { scopes: [R], annotations: readOnly },
   list_questions: { scopes: [R], annotations: readOnly },
+  list_client_comments: { scopes: [R], annotations: readOnly },
 
   claim_task: { scopes: [R, W], annotations: writeLocal },
   start_task: { scopes: [R, W], annotations: writeLocal },
@@ -94,6 +95,7 @@ export const HOSTED_TOOL_POLICY: Record<string, ToolPolicy> = {
   ask_question: { scopes: [R, W], annotations: writeLocal },
   answer_question: { scopes: [R, W], annotations: writeLocal },
   dismiss_question: { scopes: [R, W], annotations: writeLocal },
+  set_question_audience: { scopes: [R, W], annotations: writeLocal },
   add_task_features: { scopes: [R, W], annotations: writeLocal },
   update_task_feature: { scopes: [R, W], annotations: writeLocal },
   add_task_step: { scopes: [R, W], annotations: writeLocal },

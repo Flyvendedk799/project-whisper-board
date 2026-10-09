@@ -31,6 +31,7 @@ function buildActions() {
     answer: action(),
     dismiss: action(),
     setBlocking: action(),
+    setAudience: action(),
     addFeatures: action(),
     editFeature: action(),
     addStep: action(),
@@ -99,6 +100,31 @@ describe("TaskQuestions", () => {
       taskId: "t1",
       body: "Is SSO in scope?",
       blocking: true,
+      audience: "agency",
+    });
+  });
+
+  it("asks the client only with a Danish wording, and sends an existing question on to them", async () => {
+    const user = userEvent.setup();
+    const actions = actionsMock();
+    render(<TaskQuestions task={task()} actions={actions} />);
+
+    await user.type(screen.getByLabelText("Ask a question"), "Retention period?");
+    await user.click(screen.getByRole("radio", { name: "Client" }));
+    // Without the client's wording the question cannot go to them.
+    expect(screen.getByRole("button", { name: "Ask the client" })).toBeDisabled();
+    await user.type(
+      screen.getByLabelText("The question as the client reads it"),
+      "Hvor længe må vi gemme oplysningerne?",
+    );
+    await user.click(screen.getByRole("button", { name: "Ask the client" }));
+
+    expect(actions.ask.run).toHaveBeenCalledWith({
+      taskId: "t1",
+      body: "Retention period?",
+      blocking: false,
+      audience: "client",
+      clientBody: "Hvor længe må vi gemme oplysningerne?",
     });
   });
 

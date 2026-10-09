@@ -36,6 +36,7 @@ import {
   dismissQuestion,
   reorderTaskFeatures,
   reorderTaskSteps,
+  setQuestionAudience,
   setQuestionBlocking,
   setStepFeature,
   updateTaskFeature,
@@ -161,10 +162,21 @@ export function usePlanActions(planId: string) {
   });
   const ask = useServerAction(useServerFn(askQuestion), {
     label: "questions.ask",
-    success: (_result: unknown, input: { taskId: string; body: string; blocking?: boolean }) =>
+    success: (
+      _result: unknown,
+      input: {
+        taskId: string;
+        body: string;
+        blocking?: boolean;
+        audience?: "agency" | "agent" | "client";
+        clientBody?: string;
+      },
+    ) =>
       input.blocking
         ? "Question asked. The task is blocked until it is answered"
-        : "Question asked",
+        : input.audience === "client"
+          ? "Question sent to the client"
+          : "Question asked",
     invalidate: refresh,
   });
   const answer = useServerAction(useServerFn(answerQuestion), {
@@ -174,6 +186,23 @@ export function usePlanActions(planId: string) {
   });
   const dismiss = useServerAction(useServerFn(dismissQuestion), {
     label: "questions.dismiss",
+    invalidate: refresh,
+  });
+  const setAudience = useServerAction(useServerFn(setQuestionAudience), {
+    label: "questions.setAudience",
+    success: (
+      _result: unknown,
+      input: {
+        questionId: string;
+        audience: "agency" | "agent" | "client";
+        clientBody?: string;
+      },
+    ) =>
+      input.audience === "client"
+        ? "Sent to the client"
+        : input.audience === "agent"
+          ? "Handed to the agents"
+          : "Back with the agency",
     invalidate: refresh,
   });
   const setBlocking = useServerAction(useServerFn(setQuestionBlocking), {
@@ -548,6 +577,7 @@ export function usePlanActions(planId: string) {
     ask,
     answer,
     dismiss,
+    setAudience,
     setBlocking,
     removeQuestion,
     addFeatures,

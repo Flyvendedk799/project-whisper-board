@@ -109,6 +109,12 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
     withPolicy(ports, "get_task", () => planner.get(`tasks/${task_id}`)),
   );
 
+  tool("list_client_comments", ({ plan_id }: { plan_id: string }) =>
+    withPolicy(ports, "list_client_comments", () =>
+      planner.get(`plans/${plan_id}/client-comments`),
+    ),
+  );
+
   tool("list_people", () => withPolicy(ports, "list_people", () => planner.get("people")));
 
   tool("list_task_attachments", ({ task_id }: { task_id: string }) =>
@@ -296,17 +302,23 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
       task_id,
       body,
       blocking,
+      audience,
+      client_body,
       agent_id,
     }: {
       task_id: string;
       body: string;
       blocking?: boolean;
+      audience?: string;
+      client_body?: string;
       agent_id?: string;
     }) =>
       withPolicy(ports, "ask_question", () =>
         planner.post(`tasks/${task_id}/questions`, {
           body,
           blocking,
+          audience,
+          client_body,
           agent_id: resolveAgent(agent_id),
         }),
       ),
@@ -314,9 +326,22 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
 
   tool(
     "list_questions",
-    ({ plan_id, task_id, status }: { plan_id?: string; task_id?: string; status?: string }) =>
+    ({
+      plan_id,
+      task_id,
+      status,
+      audience,
+    }: {
+      plan_id?: string;
+      task_id?: string;
+      status?: string;
+      audience?: string;
+    }) =>
       withPolicy(ports, "list_questions", () => {
-        const query = status ? `?status=${encodeURIComponent(status)}` : "";
+        const params = new URLSearchParams();
+        if (status) params.set("status", status);
+        if (audience) params.set("audience", audience);
+        const query = params.size > 0 ? `?${params}` : "";
         if (task_id) return planner.get(`tasks/${task_id}/questions${query}`);
         if (plan_id) return planner.get(`plans/${plan_id}/questions${query}`);
         throw new Error("Pass plan_id or task_id.");
@@ -341,6 +366,22 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
           answer,
           agent_id: resolveAgent(agent_id),
         }),
+      ),
+  );
+
+  tool(
+    "set_question_audience",
+    ({
+      question_id,
+      audience,
+      client_body,
+    }: {
+      question_id: string;
+      audience: string;
+      client_body?: string;
+    }) =>
+      withPolicy(ports, "set_question_audience", () =>
+        planner.post(`questions/${question_id}/audience`, { audience, client_body }),
       ),
   );
 

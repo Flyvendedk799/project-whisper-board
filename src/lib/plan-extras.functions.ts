@@ -12,6 +12,7 @@ import {
 } from "@/lib/plan-fields";
 import { MAX_STEP_DEPTH, STEP_TEXT_MAX } from "@/lib/plan-markdown";
 import type { Database } from "@/integrations/supabase/types";
+import { notifyClientQuestion } from "@/lib/plan-client-notify";
 
 /**
  * Questions, feature lists and the richer sub-step operations.
@@ -71,6 +72,19 @@ const questionBody = z
       .max(QUESTION_BODY_MAX, `Keep the question under ${QUESTION_BODY_MAX} characters.`),
   );
 
+export const QUESTION_AUDIENCES = ["agency", "agent", "client"] as const;
+const audienceField = z.enum(QUESTION_AUDIENCES);
+
+/** The question as the client reads it: plain Danish, required before it can go to them. */
+const clientBodyField = z
+  .string()
+  .transform((value) => value.trim())
+  .pipe(
+    z
+      .string()
+      .max(QUESTION_BODY_MAX, `Keep the client wording under ${QUESTION_BODY_MAX} characters.`),
+  );
+
 export const askQuestion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
@@ -80,6 +94,14 @@ export const askQuestion = createServerFn({ method: "POST" })
         body: questionBody,
         /** A blocking question holds the task in "blocked" until it is answered. */
         blocking: z.boolean().optional(),
+        /** Who has to answer. The agency (the person running the plan) unless said otherwise. */
+        audience: audienceField.optional(),
+        /** What the client reads. Required when the audience is the client. */
+        clientBody: clientBodyField.optional(),
+      })
+      .refine((value) => value.audience !== "client" || Boolean(value.clientBody), {
+        message: "Write the question for the client in Danish first.",
+        path: ["clientBody"],
       })
       .parse(input),
   )
@@ -95,19 +117,85 @@ export const askQuestion = createServerFn({ method: "POST" })
           body: data.body,
           blocking: data.blocking ?? false,
           asked_by_user_id: userId,
+          audience: data.audience ?? "agency",
+          client_body: data.clientBody || null,
         })
         .select("id")
         .single();
       if (error) throw error;
+
+      if (data.audience === "client" && data.clientBody) {
+        await notifyClientQuestion({
+          actorId: userId,
+          planId: task.plan_id,
+          taskId: task.id,
+          clientBody: data.clientBody,
+        });
+      }
 
       await logEvent(supabase, userId, {
         planId: task.plan_id,
         taskId: task.id,
         kind: "question_asked",
         newValue: data.body.slice(0, 200),
-        metadata: { blocking: data.blocking ?? false },
+        metadata: { blocking: data.blocking ?? false, audience: data.audience ?? "agency" },
       });
       return { id: question.id };
+    }),
+  );
+
+/**
+ * Re-aim a question: to the agency (the default), to the agents, or to the
+ * client. Sending it to the client needs the Danish wording they will read, and
+ * tells them. Everything else about the question stays as it was.
+ */
+export const setQuestionAudience = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) =>
+    z
+      .object({
+        questionId: z.string().uuid(),
+        audience: audienceField,
+        clientBody: clientBodyField.optional(),
+      })
+      .parse(input),
+  )
+  .handler(({ data, context }) =>
+    guard("questions.setAudience", async () => {
+      const { supabase, userId } = context;
+      const { data: existing } = await supabase
+        .from("plan_task_questions")
+        .select("id, task_id, plan_id, client_body, audience, status")
+        .eq("id", data.questionId)
+        .maybeSingle();
+      const question = requireFound(existing, "question");
+
+      const clientBody = data.clientBody || question.client_body?.trim() || "";
+      if (data.audience === "client" && !clientBody) {
+        throw new AppError(
+          "client_body_required",
+          "Write the question for the client in Danish first.",
+        );
+      }
+
+      const { error } = await supabase
+        .from("plan_task_questions")
+        .update({
+          audience: data.audience,
+          ...(data.clientBody ? { client_body: data.clientBody } : {}),
+        })
+        .eq("id", data.questionId);
+      if (error) throw error;
+
+      if (data.audience === "client" && question.audience !== "client") {
+        await notifyClientQuestion({
+          actorId: userId,
+          planId: question.plan_id,
+          taskId: question.task_id,
+          clientBody,
+        });
+      }
+      return { ok: true };
     }),
   );
 
@@ -295,6 +383,8 @@ export const updateTaskFeature = createServerFn({ method: "POST" })
         featureId: z.string().uuid(),
         text: featureText.optional(),
         met: z.boolean().optional(),
+        /** The deliverable in plain Danish; clients see a feature only when this is set. */
+        clientText: z.string().max(300).nullable().optional(),
       })
       .parse(input),
   )
@@ -304,6 +394,7 @@ export const updateTaskFeature = createServerFn({ method: "POST" })
       const patch: Database["public"]["Tables"]["plan_task_features"]["Update"] = {
         ...(data.text !== undefined && { text: data.text }),
         ...(data.met !== undefined && { met: data.met }),
+        ...(data.clientText !== undefined && { client_text: data.clientText?.trim() || null }),
       };
       if (Object.keys(patch).length === 0) return { ok: true };
       const { error } = await supabase

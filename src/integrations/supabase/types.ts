@@ -2519,6 +2519,7 @@ export type Database = {
           id: string
           plan_id: string
           section_id: string | null
+          task_id: string | null
         }
         Insert: {
           author_id: string
@@ -2527,6 +2528,7 @@ export type Database = {
           id?: string
           plan_id: string
           section_id?: string | null
+          task_id?: string | null
         }
         Update: {
           author_id?: string
@@ -2535,6 +2537,7 @@ export type Database = {
           id?: string
           plan_id?: string
           section_id?: string | null
+          task_id?: string | null
         }
         Relationships: [
           {
@@ -2623,6 +2626,7 @@ export type Database = {
           task_id: string
           text: string
           updated_at: string
+          client_text: string | null
         }
         Insert: {
           created_at?: string
@@ -2634,6 +2638,7 @@ export type Database = {
           task_id: string
           text: string
           updated_at?: string
+          client_text?: string | null
         }
         Update: {
           created_at?: string
@@ -2645,6 +2650,7 @@ export type Database = {
           task_id?: string
           text?: string
           updated_at?: string
+          client_text?: string | null
         }
         Relationships: [
           {
@@ -2679,6 +2685,9 @@ export type Database = {
           status: string
           task_id: string
           updated_at: string
+          audience: string
+          client_body: string | null
+          from_client: boolean
         }
         Insert: {
           answer?: string | null
@@ -2695,6 +2704,9 @@ export type Database = {
           status?: string
           task_id: string
           updated_at?: string
+          audience?: string
+          client_body?: string | null
+          from_client?: boolean
         }
         Update: {
           answer?: string | null
@@ -2711,6 +2723,9 @@ export type Database = {
           status?: string
           task_id?: string
           updated_at?: string
+          audience?: string
+          client_body?: string | null
+          from_client?: boolean
         }
         Relationships: [
           {
@@ -3157,6 +3172,14 @@ export type Database = {
           task_count: number
           done_task_count: number
         }[]
+      }
+      answer_client_question: {
+        Args: { _question_id: string; _answer: string }
+        Returns: undefined
+      }
+      ask_client_question: {
+        Args: { _task_id: string; _body: string }
+        Returns: string
       }
       set_section_client_summary: {
         Args: { _section_id: string; _summary: string }

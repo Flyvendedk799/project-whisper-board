@@ -15,6 +15,7 @@ import {
   type CatalogTool,
 } from "./tool-catalog";
 import { toolDescription, toolShape } from "./tool-schema";
+import { HOSTED_TOOL_POLICY } from "./tool-policy";
 
 const root = process.cwd();
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
@@ -96,6 +97,8 @@ describe("tool catalog entries", () => {
       "ask_question",
       "list_questions",
       "answer_question",
+      "set_question_audience",
+      "list_client_comments",
       "add_task_features",
       "update_task_feature",
       "add_task_steps",
@@ -163,6 +166,90 @@ describe("task and step client text", () => {
       expect(skill).toContain(name);
     }
     expect(skill).toMatch(/not carried by Markdown/);
+  });
+});
+
+describe("question audience", () => {
+  const tool = (name: string) => TOOL_CATALOG.find((entry) => entry.name === name)!;
+  const param = (name: string, key: string) =>
+    tool(name).params.find((entry) => entry.name === key);
+
+  it("ask_question takes an optional audience and a Danish client_body", () => {
+    const audience = param("ask_question", "audience");
+    expect(audience?.enum).toEqual(["agency", "agent", "client"]);
+    expect(audience?.required).toBeFalsy();
+    const body = param("ask_question", "client_body");
+    expect(body?.required).toBeFalsy();
+    expect(body?.description).toMatch(/DANISH/);
+    expect(body?.description).toMatch(/REQUIRED/);
+    expect(toolShape("ask_question").audience.safeParse("client").success).toBe(true);
+    expect(toolShape("ask_question").audience.safeParse("everyone").success).toBe(false);
+  });
+
+  it("list_questions filters by audience", () => {
+    expect(param("list_questions", "audience")?.required).toBeFalsy();
+    expect(tool("list_questions").rest?.path).toContain("audience=");
+  });
+
+  it("set_question_audience re-aims a question", () => {
+    const entry = tool("set_question_audience");
+    expect(entry.group).toBe("Questions");
+    expect(entry.rest).toEqual({ method: "POST", path: "questions/:question_id/audience" });
+    expect(param("set_question_audience", "question_id")?.required).toBe(true);
+    expect(param("set_question_audience", "audience")?.required).toBe(true);
+    expect(param("set_question_audience", "audience")?.enum).toEqual(["agency", "agent", "client"]);
+    expect(param("set_question_audience", "client_body")?.required).toBeFalsy();
+    expect(param("set_question_audience", "client_body")?.description).toMatch(/DANISH/);
+  });
+
+  it("is explained in the agent guide and the skill", () => {
+    for (const text of [MCP_INSTRUCTIONS, skill]) {
+      expect(text).toContain("set_question_audience");
+      expect(text).toContain("client_body");
+      expect(text).toContain("list_client_comments");
+    }
+    expect(MCP_INSTRUCTIONS).toMatch(/agency is the default/);
+    expect(skill).toMatch(/Agency is the default/);
+    expect(skill).toMatch(/complete and current, not shorter/);
+    expect(MCP_INSTRUCTIONS).toMatch(/complete and current, not shorter/);
+  });
+});
+
+describe("feature client text", () => {
+  const param = (tool: string, name: string) =>
+    TOOL_CATALOG.find((entry) => entry.name === tool)!.params.find((entry) => entry.name === name);
+
+  it("client_text is an optional Danish param on add_task_features and update_task_feature", () => {
+    for (const tool of ["add_task_features", "update_task_feature"]) {
+      const found = param(tool, "client_text");
+      expect(found, `${tool} has client_text`).toBeDefined();
+      expect(found!.required).toBeFalsy();
+      expect(found!.description).toMatch(/DANISH/);
+      expect(found!.description).toMatch(/only when/i);
+    }
+  });
+
+  it("items and features accept texts and { text, client_text } objects over MCP", () => {
+    for (const [tool, name] of [
+      ["add_task_features", "items"],
+      ["add_task_steps", "items"],
+      ["create_task", "features"],
+    ] as const) {
+      expect(param(tool, name)?.type).toBe("(string | object)[]");
+      const schema = toolShape(tool)[name];
+      expect(schema.safeParse(["a", { text: "b", client_text: "c" }]).success).toBe(true);
+      expect(schema.safeParse([1]).success).toBe(false);
+    }
+  });
+});
+
+describe("list_client_comments", () => {
+  it("is a read-only Orient tool on plans/:plan_id/client-comments", () => {
+    const entry = toolByName("list_client_comments");
+    expect(entry.group).toBe("Orient");
+    expect(entry.rest).toEqual({ method: "GET", path: "plans/:plan_id/client-comments" });
+    expect(entry.params.map((p) => p.name)).toEqual(["plan_id"]);
+    expect(HOSTED_TOOL_POLICY.list_client_comments.annotations.readOnlyHint).toBe(true);
   });
 });
 
