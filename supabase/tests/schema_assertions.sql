@@ -561,24 +561,26 @@ where id = 'eeeeeeee-0000-0000-0000-000000000001';
 
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+-- The agency layer (tasks, steps, files) is closed to clients even on a plan
+-- shared with them; they get the client layer through plan_client_overview().
 select assert(
-  (select count(*) from public.plan_task_attachments) = 2,
-  'a project-member client reads the plan''s attachments when clients_can_view'
+  (select count(*) from public.plan_task_attachments) = 0,
+  'a project-member client does not read the plan''s attachments, even when shared'
 );
 select assert(
-  (select count(*) from public.plan_task_steps) = 1,
-  'and its steps'
+  (select count(*) from public.plan_task_steps) = 0,
+  'nor its steps'
 );
 update public.plan_task_attachments set shared_with_agents = false
 where id = 'eeeeeeee-0000-0000-0000-000000000020';
+reset role;
 select assert(
-  not (select shared_with_agents from public.plan_task_attachments
-       where id = 'eeeeeeee-0000-0000-0000-000000000020'),
-  'a project-member client who can view the plan can change files like an admin'
+  (select shared_with_agents from public.plan_task_attachments
+   where id = 'eeeeeeee-0000-0000-0000-000000000020'),
+  'and cannot change files on it'
 );
--- Restore for later uploader checks.
-update public.plan_task_attachments set shared_with_agents = true
-where id = 'eeeeeeee-0000-0000-0000-000000000020';
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(
@@ -975,8 +977,8 @@ select assert(
 );
 select assert(
   (select count(*) from public.plan_tasks
-   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') >= 1,
-  'and can read that plan''s tasks'
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 0,
+  'but cannot read that plan''s tasks (agency layer)'
 );
 reset role;
 
@@ -1030,8 +1032,9 @@ where id = 'eeeeeeee-0000-0000-0000-000000000001';
 -- ---------------------------------------------------------------------------
 \echo 'client plan edit'
 -- ---------------------------------------------------------------------------
--- can_edit_plan mirrors can_view_plan. Clients with view may mutate; without, not.
--- Creating a plan stays admin-only.
+-- can_edit_plan still mirrors can_view_plan: it gates the client layer (summary,
+-- comments, approvals). The agency layer needs can_edit_plan_work, which is
+-- workspace admins only. Creating a plan stays admin-only.
 
 select assert(
   public.can_edit_plan('eeeeeeee-0000-0000-0000-000000000001',
@@ -1049,33 +1052,52 @@ select assert(
   'can_edit_plan stays true for the workspace admin'
 );
 
--- Visible plan: client can update title and a task.
+select assert(
+  not public.can_edit_plan_work('eeeeeeee-0000-0000-0000-000000000001',
+                                '22222222-2222-2222-2222-222222222222'),
+  'but a client cannot edit the agency layer of it'
+);
+select assert(
+  public.can_edit_plan_work('eeeeeeee-0000-0000-0000-000000000001',
+                            '11111111-1111-1111-1111-111111111111'),
+  'while the workspace admin can'
+);
+
+-- Visible plan: a client changes none of the plan, its tasks or its sections.
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 update public.plans set title = 'Delivery (client edit)'
 where id = 'eeeeeeee-0000-0000-0000-000000000001';
-select assert(
-  (select title from public.plans
-   where id = 'eeeeeeee-0000-0000-0000-000000000001') = 'Delivery (client edit)',
-  'a client with view access can update the plan'
-);
 update public.plan_tasks set title = 'Ship it (client)'
 where id = 'eeeeeeee-0000-0000-0000-000000000010';
+do $$
+begin
+  begin
+    insert into public.plan_sections (id, plan_id, title, position) values
+      ('eeeeeeee-0000-0000-0000-000000000070', 'eeeeeeee-0000-0000-0000-000000000001',
+       'Client section', 99);
+    raise exception 'FAILED: a client inserted a section';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm ilike '%row-level security%' then
+      raise notice '  ok  a client cannot add sections';
+    else
+      raise;
+    end if;
+  end;
+end $$;
+reset role;
 select assert(
-  (select title from public.plan_tasks
-   where id = 'eeeeeeee-0000-0000-0000-000000000010') = 'Ship it (client)',
-  'and can update that plan''s tasks'
-);
-insert into public.plan_sections (id, plan_id, title, position) values
-  ('eeeeeeee-0000-0000-0000-000000000070', 'eeeeeeee-0000-0000-0000-000000000001',
-   'Client section', 99);
-select assert(
-  (select count(*) from public.plan_sections
-   where id = 'eeeeeeee-0000-0000-0000-000000000070') = 1,
-  'and can insert sections on a visible plan'
+  (select title from public.plans
+   where id = 'eeeeeeee-0000-0000-0000-000000000001') <> 'Delivery (client edit)'
+  and (select title from public.plan_tasks
+       where id = 'eeeeeeee-0000-0000-0000-000000000010') <> 'Ship it (client)',
+  'a client with view access cannot edit the plan or its tasks'
 );
 
 -- Hidden from this client (other project): no update.
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 update public.plans set title = 'should not stick'
 where id = 'eeeeeeee-0000-0000-0000-000000000050';
 reset role;
@@ -1119,6 +1141,121 @@ select assert(
   (select title from public.plans
    where id = 'eeeeeeee-0000-0000-0000-000000000001') = 'Delivery',
   'the workspace admin can still update the plan'
+);
+reset role;
+
+-- ---------------------------------------------------------------------------
+\echo 'client layer'
+-- ---------------------------------------------------------------------------
+-- A client of a shared plan sees per section a summary and progress through
+-- plan_client_overview(), can write the summary, comment and approve, and
+-- nothing else. The Delivery plan is shared with the client at this point.
+
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  jsonb_array_length(public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')->'sections') = 1
+  and (public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')
+       ->'sections'->0->>'task_count')::int = 1
+  and (public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')
+       ->'sections'->0->>'done_task_count')::int = 1,
+  'a client gets the shared plan''s sections with progress from plan_client_overview'
+);
+select assert(
+  (select task_count from public.plan_client_progress(
+     array['eeeeeeee-0000-0000-0000-000000000001'::uuid])) = 1,
+  'and plan_client_progress counts its tasks without exposing them'
+);
+select assert(
+  (select count(*) from public.plan_sections
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 0
+  and (select count(*) from public.plan_task_comments) = 0
+  and (select count(*) from public.plan_events
+       where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 0,
+  'while the sections, task notes and activity behind it stay closed'
+);
+
+select public.set_section_client_summary(
+  'eeeeeeee-0000-0000-0000-000000000002', '  Vi er færdige med første del.  ');
+select assert(
+  public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')
+    ->'sections'->0->>'client_summary' = 'Vi er færdige med første del.',
+  'a client can write a section''s summary (trimmed)'
+);
+
+insert into public.plan_section_comments (plan_id, section_id, author_id, body) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   '22222222-2222-2222-2222-222222222222', 'Ser godt ud.'),
+  ('eeeeeeee-0000-0000-0000-000000000001', null,
+   '22222222-2222-2222-2222-222222222222', 'Hvornår er det hele klar?');
+insert into public.plan_section_approvals (plan_id, section_id, user_id) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   '22222222-2222-2222-2222-222222222222');
+select assert(
+  (select count(*) from public.plan_section_comments
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 2
+  and (select count(*) from public.plan_section_approvals
+       where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 1,
+  'a client can comment on a section or the whole plan, and approve a section'
+);
+
+do $$
+begin
+  begin
+    insert into public.plan_section_comments (plan_id, author_id, body) values
+      ('eeeeeeee-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'spoof');
+    raise exception 'FAILED: a client commented as someone else';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm ilike '%row-level security%' then
+      raise notice '  ok  a client cannot comment as someone else';
+    else
+      raise;
+    end if;
+  end;
+  begin
+    insert into public.plan_section_comments (plan_id, author_id, body) values
+      ('eeeeeeee-0000-0000-0000-000000000050', '22222222-2222-2222-2222-222222222222', 'nope');
+    raise exception 'FAILED: a client commented on a plan they cannot see';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm ilike '%row-level security%' then
+      raise notice '  ok  a client cannot comment on a plan they cannot see';
+    else
+      raise;
+    end if;
+  end;
+  begin
+    perform public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000050');
+    raise exception 'FAILED: a client read the overview of a plan they cannot see';
+  exception when others then
+    if sqlerrm like 'FAILED%' then raise; end if;
+    if sqlerrm = 'Forbidden' then
+      raise notice '  ok  the overview of an unshared plan is refused';
+    else
+      raise;
+    end if;
+  end;
+end $$;
+
+-- Another workspace's user sees none of the client layer.
+set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select assert(
+  (select count(*) from public.plan_section_comments) = 0
+  and (select count(*) from public.plan_section_approvals) = 0,
+  'another workspace sees none of the comments or approvals'
+);
+
+-- The agency sees it all.
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select assert(
+  (select count(*) from public.plan_section_comments
+   where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') = 2
+  and (select client_summary from public.plan_sections
+       where id = 'eeeeeeee-0000-0000-0000-000000000002') = 'Vi er færdige med første del.'
+  and (select count(*) from public.plan_tasks
+       where plan_id = 'eeeeeeee-0000-0000-0000-000000000001') >= 1,
+  'the workspace admin sees the comments, the summary and the agency layer'
 );
 reset role;
 
