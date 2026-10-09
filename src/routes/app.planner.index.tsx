@@ -28,6 +28,7 @@ import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { useServerAction } from "@/lib/use-server-action";
 import { CardActionsMenu, CardCorner } from "@/components/card-actions-menu";
+import { ClientVisibilityBadge } from "@/features/planner/client-visibility";
 import { CopyIdButton } from "@/features/planner/copy-id-button";
 import { PlanDeleteDialog } from "@/features/planner/plan-delete-dialog";
 import { qk } from "@/data/keys";
@@ -266,9 +267,12 @@ function PlannerIndexPage() {
                       >
                         <article className="flex h-full min-h-[150px] flex-col gap-2 rounded-[14px] border bg-card p-5 transition-all group-hover:border-foreground/25 group-hover:shadow-md max-md:min-h-[120px] max-md:p-4 max-md:active:bg-muted/40">
                           <div className="flex items-center justify-between gap-2 pr-14 max-md:pr-12">
-                            <StatusPill tone={PLAN_TONE[status]}>
-                              {PLAN_STATUS_LABEL[status]}
-                            </StatusPill>
+                            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <StatusPill tone={PLAN_TONE[status]}>
+                                {PLAN_STATUS_LABEL[status]}
+                              </StatusPill>
+                              {isAdmin ? <ClientVisibilityBadge plan={plan} /> : null}
+                            </span>
                             <span className="text-xs tabular-nums text-muted-foreground">
                               {Math.round(percent)}%
                             </span>

@@ -13,6 +13,7 @@ import type { PlanStatus, PlanWithSections } from "@/data";
 import { PLAN_STATUS_LABEL } from "@/data/enums";
 import { repoWebUrl } from "@/lib/github-url";
 import { workTargetOf } from "@/lib/plan-fields";
+import { ClientVisibilityBadge } from "./client-visibility";
 import { CopyIdButton } from "./copy-id-button";
 import { cn } from "@/lib/utils";
 import {
@@ -63,9 +64,12 @@ export function PlanHeader({
   actions,
   aiMenu,
   layout,
+  showClientVisibility = false,
 }: {
   plan: PlanWithSections;
   actions: PlanHeaderActions;
+  /** Agency view: mark whether the project's clients can see this plan. */
+  showClientVisibility?: boolean;
   /**
    * The board's current view. The columns view already shows every section side
    * by side, so the roadmap strip would only repeat it (and scroll sideways):
@@ -156,6 +160,9 @@ export function PlanHeader({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              {showClientVisibility ? (
+                <ClientVisibilityBadge plan={plan} onClick={actions.onOpenSettings} />
+              ) : null}
             </div>
             {plan.description ? <PlanDescription planId={plan.id} text={plan.description} /> : null}
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted-foreground max-md:break-all max-md:text-[13px]">

@@ -8,6 +8,7 @@ import { QueryState } from "@/components/query-state";
 import { useAuth } from "@/components/auth-provider";
 import { planListQuery } from "@/data/planner";
 import { PLAN_STATUS_TONE, type PlanListItem } from "@/data";
+import { ClientVisibilityBadge } from "@/features/planner/client-visibility";
 
 export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
   const { workspaceId, isAdmin } = useAuth();
@@ -64,7 +65,10 @@ export function ProjectAiPlansTab({ projectId }: { projectId: string }) {
                       <h3 className="min-w-0 break-words font-semibold leading-tight group-hover:text-primary">
                         {plan.title}
                       </h3>
-                      <StatusPill tone={PLAN_STATUS_TONE[plan.status]}>{plan.status}</StatusPill>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                        {isAdmin ? <ClientVisibilityBadge plan={plan} /> : null}
+                        <StatusPill tone={PLAN_STATUS_TONE[plan.status]}>{plan.status}</StatusPill>
+                      </div>
                     </div>
 
                     {plan.description && (

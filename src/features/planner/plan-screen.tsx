@@ -140,7 +140,7 @@ function PlanScreenBody({
   onDeleting: (deleting: boolean) => void;
   onDeleted?: (plan: { projectId: string | null }) => void | Promise<void>;
 }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const isMobile = useIsMobile();
   const meId = user?.id ?? null;
   const media = usePlanMedia();
@@ -261,6 +261,7 @@ function PlanScreenBody({
       <PlanHeader
         plan={plan}
         layout={layout}
+        showClientVisibility={isAdmin}
         aiMenu={<PlanAiMenu plan={plan} selectedTaskIds={hasActiveFilters(filters) ? order : []} />}
         actions={{
           onNewTask: openNewTask,
