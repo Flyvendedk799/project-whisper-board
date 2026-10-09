@@ -1323,7 +1323,7 @@ select assert(
   'a client can answer a question put to them (trimmed)'
 );
 
-do $
+do $$
 begin
   begin
     perform public.answer_client_question('eeeeeeee-0000-0000-0000-0000000000a3', 'again');
@@ -1371,7 +1371,7 @@ begin
       raise;
     end if;
   end;
-end $;
+end $$;
 
 select public.ask_client_question('eeeeeeee-0000-0000-0000-000000000010', '  Kan vi få en tidsplan?  ');
 insert into public.plan_section_comments (plan_id, task_id, author_id, body) values
