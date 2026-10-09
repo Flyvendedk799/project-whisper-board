@@ -651,26 +651,26 @@ begin
 end $$;
 
 set local role authenticated;
-set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select assert(
   (select count(*) from public.plan_task_attachments where task_id is null) = 1,
-  'a workspace member reads the plan''s own files'
+  'a workspace admin reads the plan''s own files'
 );
 insert into public.plan_task_attachments
   (id, plan_id, uploader_id, storage_path, file_name, mime_type, size_bytes)
 values ('eeeeeeee-0000-0000-0000-000000000041', 'eeeeeeee-0000-0000-0000-000000000001',
-        '22222222-2222-2222-2222-222222222222',
-        '22222222-2222-2222-2222-222222222222/eeeeeeee-0000-0000-0000-000000000001/plan/b-spec.pdf',
+        '11111111-1111-1111-1111-111111111111',
+        '11111111-1111-1111-1111-111111111111/eeeeeeee-0000-0000-0000-000000000001/plan/b-spec.pdf',
         'spec.pdf', 'application/pdf', 4096);
 select assert(
   (select count(*) from public.plan_task_attachments where task_id is null) = 2,
-  'and any member can add one'
+  'and can add one'
 );
 delete from public.plan_task_attachments where id = 'eeeeeeee-0000-0000-0000-000000000040';
 select assert(
   (select count(*) from public.plan_task_attachments
    where id = 'eeeeeeee-0000-0000-0000-000000000040') = 0,
-  'a project-member client who can view the plan can delete files like an admin'
+  'and can delete files'
 );
 -- Put the admin''s plan file back for later isolation checks.
 reset role;
@@ -683,6 +683,10 @@ values ('eeeeeeee-0000-0000-0000-000000000040', 'eeeeeeee-0000-0000-0000-0000000
 on conflict (id) do nothing;
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select assert(
+  (select count(*) from public.plan_task_attachments where task_id is null) = 0,
+  'a project-member client does not see the plan''s own files either'
+);
 
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select assert(
@@ -1156,14 +1160,14 @@ set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select assert(
   jsonb_array_length(public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')->'sections') = 1
   and (public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')
-       ->'sections'->0->>'task_count')::int = 1
+       ->'sections'->0->>'task_count')::int = 3
   and (public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')
        ->'sections'->0->>'done_task_count')::int = 1,
   'a client gets the shared plan''s sections with progress from plan_client_overview'
 );
 select assert(
   (select task_count from public.plan_client_progress(
-     array['eeeeeeee-0000-0000-0000-000000000001'::uuid])) = 1,
+     array['eeeeeeee-0000-0000-0000-000000000001'::uuid])) = 3,
   'and plan_client_progress counts its tasks without exposing them'
 );
 select assert(
@@ -1249,7 +1253,7 @@ select assert(
   'a task with no client title is not part of what a client sees'
 );
 update public.plan_tasks
-set client_title = 'Første del er klar', status = 'in_progress'
+set client_title = 'Første del er klar'
 where id = 'eeeeeeee-0000-0000-0000-000000000010';
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
@@ -1257,10 +1261,10 @@ select assert(
   (select count(*) from jsonb_array_elements(jsonb_path_query_array(
      public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001'),
      '$.sections[*].tasks[*]')) t
-   where t->>'title' = 'Første del er klar' and t->>'status' = 'in_progress') = 1
+   where t->>'title' = 'Første del er klar' and t->>'status' = 'waiting') = 1
   and position(lower(:'agency_title') in lower(
         public.plan_client_overview('eeeeeeee-0000-0000-0000-000000000001')::text)) = 0,
-  'a task with a client title shows with it and a plain status, never the agency wording'
+  'a task with a client title shows with it and a plain status (blocked reads as waiting), never the agency wording'
 );
 
 -- Another workspace's user sees none of the client layer.
