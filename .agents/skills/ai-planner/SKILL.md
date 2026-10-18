@@ -42,7 +42,7 @@ planner tool. A planner key gets a 403 from them that says so. The MCP server fi
 
 ## Workflow (follow this)
 
-1. **Read before you touch anything.** `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
+1. **Read before you touch anything.** Task id known: `get_task` directly. Otherwise `list_plans` -> `get_plan` -> `list_available_tasks` -> `get_task`.
    A task carries description, acceptance criteria, features, steps, open questions, shared files and tags.
    The plan carries `work_target` and its own shared files (a brief, a spec) that apply to every task: they are
    `attachments` on the plan in `get_plan`, and `list_plan_attachments` / `view_plan_attachment` open them

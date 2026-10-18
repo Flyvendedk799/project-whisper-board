@@ -293,6 +293,11 @@ describe("workspace tools", () => {
     expect(toolShape("create_ticket").priority.safeParse("critical").success).toBe(false);
   });
 
+  it("assigns through update_task, not complete_task", () => {
+    expect(toolShape("update_task").assigned_user_id.isOptional()).toBe(true);
+    expect(toolShape("complete_task")).not.toHaveProperty("assigned_user_id");
+  });
+
   it("requires what the API requires", () => {
     expect(toolShape("create_ticket").project_id.isOptional()).toBe(false);
     expect(toolShape("create_ticket").title.isOptional()).toBe(false);
@@ -352,6 +357,32 @@ describe("the agent guide", () => {
   it("is numbered rule by rule", () => {
     expect(MCP_INSTRUCTIONS).toContain(`${WORKFLOW_RULES.length}. `);
     expect(new Set(WORKFLOW_RULES.map((rule) => rule.id)).size).toBe(WORKFLOW_RULES.length);
+  });
+
+  it("fits the instructions well inside the 4096 characters clients keep", () => {
+    expect(MCP_INSTRUCTIONS.length).toBeLessThanOrEqual(3600);
+  });
+
+  it("puts every rule in the instructions, claiming first", () => {
+    for (const rule of WORKFLOW_RULES) expect(MCP_INSTRUCTIONS).toContain(rule.brief);
+    expect(MCP_INSTRUCTIONS.split("\n")[1]).toMatch(/^1\. Claim a task before working on it\./);
+  });
+
+  it("keeps the rules agents without the skill must see", () => {
+    for (const phrase of [
+      "Never work on a task you did not claim",
+      "Task id known: get_task directly",
+      "block_task",
+      "unclaim_task",
+      "client_body in plain DANISH",
+      "ONLY with a client_title",
+      "complete_task",
+      "create_pull_request",
+      "base: commit on the base branch, no pull request",
+      "agent_guide has the full workflow",
+    ]) {
+      expect(MCP_INSTRUCTIONS).toContain(phrase);
+    }
   });
 });
 
