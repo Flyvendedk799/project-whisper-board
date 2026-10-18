@@ -443,11 +443,6 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         description: "Pull request URL; its number is read from it so the board shows PR #n",
       },
       { name: "branch_name", type: "string", description: "The branch the work is on" },
-      {
-        name: "assigned_user_id",
-        type: "string",
-        description: "Assign it to a teammate (a user_id from list_people); they are notified",
-      },
     ],
   },
   {
@@ -1018,6 +1013,11 @@ export const TOOL_CATALOG: readonly CatalogTool[] = [
         description: "Replaces the acceptance criteria",
       },
       { name: "branch_name", type: "string", description: "The branch the work is on" },
+      {
+        name: "assigned_user_id",
+        type: "string",
+        description: "Assign it to a teammate (a user_id from list_people); they are notified",
+      },
     ],
   },
 

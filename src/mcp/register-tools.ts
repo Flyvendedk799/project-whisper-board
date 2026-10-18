@@ -260,15 +260,25 @@ export function registerPlannerTools(server: McpServer, ports: PlannerToolPorts)
       branch_name?: string;
     }) =>
       withPolicy(ports, "complete_task", async () => {
+        let commentError: unknown;
         if (summary) {
           await planner
             .post(`tasks/${task_id}/comment`, {
               body: `COMPLETED: ${summary}`,
               agent_id: resolveAgent(),
             })
-            .catch(console.error);
+            .catch((error: unknown) => {
+              commentError = error;
+            });
         }
-        return planner.post(`tasks/${task_id}/complete`, { pr_url, branch_name });
+        const task = await planner.post(`tasks/${task_id}/complete`, { pr_url, branch_name });
+        if (!commentError) return task;
+        return {
+          ...(task as object),
+          warnings: [
+            `The task is done, but the summary comment was not saved (${(commentError as Error).message}). Post it with add_task_comment.`,
+          ],
+        };
       }),
   );
 
