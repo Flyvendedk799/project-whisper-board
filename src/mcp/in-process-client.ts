@@ -20,6 +20,17 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * The route the handlers match on. Tool paths can carry a query string
+ * (`tickets?status=open`); the handlers read it from `request.url`, but they route on the
+ * splat, which the HTTP routes pass without a query. Matching `tickets?status=open` finds no
+ * route and answers 404, so every filtered call failed on the hosted MCP.
+ */
+function routePath(path: string): string {
+  const query = path.indexOf("?");
+  return query === -1 ? path : path.slice(0, query);
+}
+
 function plannerRequest(method: "GET" | "POST", path: string, body?: unknown): Request {
   const url = `https://boared.local/api/planner/${path.replace(/^\//, "")}`;
   return new Request(url, {
@@ -41,10 +52,12 @@ function accountRequest(method: string, path: string, init?: RequestInit): Reque
 export function createInProcessPlannerPort(principal: IntegrationPrincipal): PlannerApiPort {
   return {
     get: async (path) =>
-      readJsonResponse(await handlePlannerRequest(plannerRequest("GET", path), principal, path)),
+      readJsonResponse(
+        await handlePlannerRequest(plannerRequest("GET", path), principal, routePath(path)),
+      ),
     post: async (path, body) =>
       readJsonResponse(
-        await handlePlannerRequest(plannerRequest("POST", path, body), principal, path),
+        await handlePlannerRequest(plannerRequest("POST", path, body), principal, routePath(path)),
       ),
   };
 }
@@ -52,13 +65,15 @@ export function createInProcessPlannerPort(principal: IntegrationPrincipal): Pla
 export function createInProcessAccountPort(principal: IntegrationPrincipal): AccountApiPort {
   return {
     get: async (path) =>
-      readJsonResponse(await handleAccountRequest(accountRequest("GET", path), principal, path)),
+      readJsonResponse(
+        await handleAccountRequest(accountRequest("GET", path), principal, routePath(path)),
+      ),
     request: async (path, init) =>
       readJsonResponse(
         await handleAccountRequest(
           accountRequest(init?.method ?? "GET", path, init),
           principal,
-          path,
+          routePath(path),
         ),
       ),
   };
