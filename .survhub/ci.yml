@@ -1,0 +1,58 @@
+# Runs on ServerHoster (in Docker on the VPS), not GitHub Actions.
+# Replaces the verify and e2e jobs of .github/workflows/ci.yml.
+# Triggers: pushes to main and pull requests into main. Other branches run
+# once they have a pull request (or add them under "Other branches" on the
+# pipeline).
+#
+# The Playwright image has Node and Chromium's system libraries. The browser
+# itself is installed into the shared cache for whatever @playwright/test
+# version npm resolves, so the image tag does not have to match exactly.
+image: mcr.microsoft.com/playwright:v1.63.0-noble
+timeoutMinutes: 30
+memoryMb: 4096
+cpus: 2
+# The self-hosted Supabase API is served from the site's own origin, so the
+# URL is SITE_URL. Both values are public client values; the e2e smoke runs
+# without signing in.
+secrets:
+  - SITE_URL
+  - VITE_SUPABASE_PUBLISHABLE_KEY
+env:
+  PLAYWRIGHT_BROWSERS_PATH: /cache/ms-playwright
+steps:
+  # package-lock.json resolves from public npm (bun.lock pins Lovable's private
+  # mirror). A fresh `npm install --no-package-lock`, which the GitHub workflow
+  # used, fails with ERESOLVE since @tanstack/react-start started asking for
+  # vite 8, so install exactly what the lockfile pins.
+  - name: Install
+    run: npm ci
+  - name: Typecheck
+    run: npm run typecheck
+  - name: Lint
+    run: npm run lint
+  - name: Test
+    run: npm run test
+  - name: Build
+    run: npm run build
+  # A budget, not a report: a size regression fails the build.
+  - name: Check bundle budget
+    run: |
+      BUDGET_KB=2200
+      DIR=$(ls -d .output/public dist/client 2>/dev/null | head -1)
+      if [ -z "$DIR" ]; then
+        echo "No client build output in .output/public or dist/client." >&2
+        exit 1
+      fi
+      TOTAL=$(find "$DIR" -name '*.js' -printf '%s\n' | awk '{s+=$1} END {printf "%d", s/1024}')
+      echo "Total JS in $DIR: ${TOTAL} KB of ${BUDGET_KB} KB budget"
+      find "$DIR" -name '*.js' -printf '%s\t%p\n' | sort -rn | head -12 | awk '{printf "%8.1f KB  %s\n", $1/1024, $2}'
+      if [ "$TOTAL" -gt "$BUDGET_KB" ]; then
+        echo "Client JS is ${TOTAL} KB, over the ${BUDGET_KB} KB budget." >&2
+        exit 1
+      fi
+  - name: Browser smoke
+    run: |
+      npx playwright install chromium
+      export VITE_SUPABASE_URL="$SITE_URL" SUPABASE_URL="$SITE_URL"
+      export SUPABASE_PUBLISHABLE_KEY="$VITE_SUPABASE_PUBLISHABLE_KEY"
+      npm run e2e
