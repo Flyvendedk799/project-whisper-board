@@ -20,10 +20,12 @@ secrets:
 env:
   PLAYWRIGHT_BROWSERS_PATH: /cache/ms-playwright
 steps:
-  # bun.lock pins packages to Lovable's private registry mirror. Resolve from
-  # public npm instead, as the GitHub workflow did.
+  # package-lock.json resolves from public npm (bun.lock pins Lovable's private
+  # mirror). A fresh `npm install --no-package-lock`, which the GitHub workflow
+  # used, fails with ERESOLVE since @tanstack/react-start started asking for
+  # vite 8, so install exactly what the lockfile pins.
   - name: Install
-    run: npm install --no-package-lock --registry=https://registry.npmjs.org
+    run: npm ci
   - name: Typecheck
     run: npm run typecheck
   - name: Lint
